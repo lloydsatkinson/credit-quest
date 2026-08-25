@@ -14,9 +14,14 @@ const fallback: CreditProfile = {
 
 export function OffersClient() {
   const [profile, setProfile] = useState(fallback);
+
   useEffect(() => {
     const saved = localStorage.getItem("creditquest-profile");
-    if (saved) try { setProfile(JSON.parse(saved)); } catch { /* keep fallback */ }
+    if (!saved) return;
+    const timer = window.setTimeout(() => {
+      try { setProfile(JSON.parse(saved)); } catch { /* keep fallback */ }
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, []);
 
   const mode = getAgeMode(profile.dateOfBirth);

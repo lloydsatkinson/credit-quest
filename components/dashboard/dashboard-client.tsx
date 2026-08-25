@@ -31,10 +31,13 @@ export function DashboardClient() {
   useEffect(() => {
     const saved = localStorage.getItem("creditquest-profile");
     const savedCompleted = localStorage.getItem("creditquest-completed");
-    if (saved) {
-      try { setProfile(JSON.parse(saved)); } catch { /* keep demo profile */ }
-    }
-    if (savedCompleted) setCompleted(Number(savedCompleted) || 0);
+    const timer = window.setTimeout(() => {
+      if (saved) {
+        try { setProfile(JSON.parse(saved)); } catch { /* keep demo profile */ }
+      }
+      if (savedCompleted) setCompleted(Number(savedCompleted) || 0);
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, []);
 
   const result = useMemo(() => {
