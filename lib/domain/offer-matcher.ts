@@ -15,3 +15,9 @@ export function getOffersForMission(
     (offer) => offer.active && offer.category === mission.referralCategory && age >= offer.minAge,
   );
 }
+
+export function getMarketplaceOffers(profile: CreditProfile, now = new Date()): OfferDefinition[] {
+  const age = getAgeYears(profile.dateOfBirth, now);
+  if (age < 18) return [];
+  return OFFER_CATALOGUE.filter((offer) => offer.active && age >= offer.minAge);
+}
