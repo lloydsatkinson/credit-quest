@@ -15,10 +15,6 @@ jobs:
         with:
           node-version: 22
       - run: npm install
-      - uses: actions/upload-artifact@v4
-        with:
-          name: package-lock
-          path: package-lock.json
       - run: npm audit --omit=dev --audit-level=high
       - run: npm run lint
       - run: npm test
