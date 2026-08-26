@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { AccountsClient } from "@/components/accounts/accounts-client";
 import type { ProviderDefinition, UserAccount } from "@/lib/domain/types";
 import { listUserAccounts } from "@/lib/server/account-repository";
-import { listProviders } from "@/lib/server/action-repository";
+import { listAccountProviders } from "@/lib/server/action-repository";
 import { getSupabasePublicEnv } from "@/lib/supabase/env";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
@@ -17,7 +17,7 @@ export default async function AccountsPage() {
     if (!user) redirect("/login?next=%2Faccounts");
     [accounts, providers] = await Promise.all([
       listUserAccounts(supabase, user.id),
-      listProviders(supabase),
+      listAccountProviders(supabase),
     ]);
   }
 
