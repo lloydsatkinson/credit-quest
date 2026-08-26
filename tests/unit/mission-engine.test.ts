@@ -7,6 +7,7 @@ const clean: CreditProfile = {
   housingStatus: "rent", electoralRoll: true, utilisationPct: 20, missedPaymentsLast12m: 0,
   hardApplicationsLast6m: 0, hasRevolvingCredit: true, hasDirectDebitForCredit: true,
 };
+const now = new Date("2026-08-26T12:00:00Z");
 
 describe("mission ranking", () => {
   it("prioritises electoral roll when it is the main gap", () => {
@@ -50,5 +51,22 @@ describe("mission ranking", () => {
 
     expect(missions).toContain("application-cooldown");
     expect(missions).not.toContain("build-revolving-history");
+  });
+
+  it("does not return a completed mission even when profile eligibility still matches", () => {
+    const progress = { "reduce-utilisation": { state: "completed" as const } };
+    const missions = rankMissions({ ...clean, utilisationPct: 60 }, now, progress);
+    expect(missions.some((item) => item.mission.slug === "reduce-utilisation")).toBe(false);
+  });
+
+  it("keeps a started mission ahead of other eligible missions", () => {
+    const profile = {
+      ...clean,
+      electoralRoll: false,
+      utilisationPct: 60,
+      hasDirectDebitForCredit: false,
+    };
+    const progress = { "set-up-direct-debit": { state: "started" as const } };
+    expect(getNextBestMission(profile, now, progress)?.mission.slug).toBe("set-up-direct-debit");
   });
 });
