@@ -82,6 +82,7 @@ describe("mission ranking", () => {
       questScoreDelta: 0,
       priorityWeight: 1,
       safeModeAllowed: true,
+      scope: "profile",
       isEligible: () => false,
     };
 
@@ -103,6 +104,7 @@ describe("mission ranking", () => {
       questScoreDelta: 0,
       priorityWeight: 1,
       safeModeAllowed: false,
+      scope: "profile",
       isEligible: () => true,
     };
     const stressed = { ...clean, missedPaymentsLast12m: 2, hardApplicationsLast6m: 4 };
