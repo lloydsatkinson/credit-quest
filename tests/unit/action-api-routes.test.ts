@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { accountInputSchema } from "@/app/api/accounts/route";
 import { accountUpdateSchema } from "@/app/api/accounts/[id]/route";
+import { canUseLegacyMissionAction } from "@/app/api/missions/[slug]/route";
+import { MISSION_CATALOGUE } from "@/lib/data/missions";
 
 describe("account api validation", () => {
   const valid = {
@@ -35,5 +37,19 @@ describe("account api validation", () => {
   it("allows a partial owner-account update but no user id override", () => {
     expect(accountUpdateSchema.safeParse({ nickname: "Travel card" }).success).toBe(true);
     expect(accountUpdateSchema.safeParse({ nickname: "Travel card", userId: "someone-else" }).success).toBe(false);
+  });
+});
+
+describe("legacy mission api boundary", () => {
+  const bySlug = Object.fromEntries(MISSION_CATALOGUE.map((mission) => [mission.slug, mission]));
+
+  it("rejects account-scoped missions from the legacy route", () => {
+    expect(canUseLegacyMissionAction(bySlug["reduce-utilisation"], "start")).toBe(false);
+    expect(canUseLegacyMissionAction(bySlug["set-up-direct-debit"], "complete")).toBe(false);
+  });
+
+  it("does not allow electoral roll to complete directly", () => {
+    expect(canUseLegacyMissionAction(bySlug["register-electoral-roll"], "complete")).toBe(false);
+    expect(canUseLegacyMissionAction(bySlug["register-electoral-roll"], "start")).toBe(true);
   });
 });
