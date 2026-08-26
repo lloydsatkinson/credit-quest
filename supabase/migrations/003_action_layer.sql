@@ -43,6 +43,10 @@ create table if not exists public.user_accounts (
     check (source in ('manual','open_banking'))
 );
 
+-- Phase A of the production cutover is deliberately additive. Keep the
+-- existing (user_id, mission_slug) primary key so the currently deployed
+-- V2.0a route can continue to upsert profile missions until the new app is
+-- live. 004 switches the primary key to the mission-instance id.
 alter table public.user_missions
   add column if not exists id uuid default gen_random_uuid(),
   add column if not exists subject_type text not null default 'profile',
@@ -55,11 +59,10 @@ where id is null;
 alter table public.user_missions
   alter column id set not null;
 
-alter table public.user_missions
-  drop constraint if exists user_missions_pkey;
-
-alter table public.user_missions
-  add constraint user_missions_pkey primary key (id);
+-- A non-partial unique id is enough for Action Layer foreign keys during the
+-- additive phase; it becomes the primary key in 004.
+create unique index if not exists user_missions_id_unique
+  on public.user_missions(id);
 
 alter table public.user_missions
   drop constraint if exists user_missions_subject_type_check;
@@ -84,14 +87,6 @@ alter table public.user_missions
 alter table public.user_missions
   add constraint user_missions_subject_id_fkey
   foreign key (subject_id) references public.user_accounts(id) on delete cascade;
-
-create unique index if not exists user_missions_profile_unique
-  on public.user_missions(user_id, mission_slug)
-  where subject_type = 'profile';
-
-create unique index if not exists user_missions_account_unique
-  on public.user_missions(user_id, mission_slug, subject_id)
-  where subject_type = 'account';
 
 create table if not exists public.action_registry (
   id uuid primary key default gen_random_uuid(),
