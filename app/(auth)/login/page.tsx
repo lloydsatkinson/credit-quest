@@ -1,12 +1,41 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [message, setMessage] = useState("");
+  const { replace } = useRouter();
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get("code");
+    if (!code) return;
+
+    const requestedNext = params.get("next");
+    const next = requestedNext?.startsWith("/") && !requestedNext.startsWith("//")
+      ? requestedNext
+      : "/onboarding";
+    let cancelled = false;
+
+    async function finishMagicLinkSignIn() {
+      try {
+        setMessage("Signing you in…");
+        const supabase = createBrowserSupabaseClient();
+        const { error } = await supabase.auth.exchangeCodeForSession(code as string);
+        if (error) throw error;
+        if (!cancelled) replace(next);
+      } catch {
+        if (!cancelled) setMessage("That sign-in link could not be completed. Please request a new one.");
+      }
+    }
+
+    void finishMagicLinkSignIn();
+    return () => { cancelled = true; };
+  }, [replace]);
 
   async function submit(event: FormEvent) {
     event.preventDefault();
