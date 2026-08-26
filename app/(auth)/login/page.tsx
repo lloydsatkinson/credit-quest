@@ -1,54 +1,32 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { FormEvent, useState } from "react";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [message, setMessage] = useState("");
-  const { replace } = useRouter();
-
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const code = params.get("code");
-    if (!code) return;
-
-    const requestedNext = params.get("next");
-    const next = requestedNext?.startsWith("/") && !requestedNext.startsWith("//")
-      ? requestedNext
-      : "/onboarding";
-    let cancelled = false;
-
-    async function finishMagicLinkSignIn() {
-      try {
-        setMessage("Signing you in…");
-        const supabase = createBrowserSupabaseClient();
-        const { error } = await supabase.auth.exchangeCodeForSession(code as string);
-        if (error) throw error;
-        if (!cancelled) replace(next);
-      } catch {
-        if (!cancelled) setMessage("That sign-in link could not be completed. Please request a new one.");
-      }
-    }
-
-    void finishMagicLinkSignIn();
-    return () => { cancelled = true; };
-  }, [replace]);
 
   async function submit(event: FormEvent) {
     event.preventDefault();
     try {
       const supabase = createBrowserSupabaseClient();
+      const callback = new URL("/auth/callback", window.location.origin);
+      callback.searchParams.set("next", "/onboarding");
       const { error } = await supabase.auth.signInWithOtp({
         email,
-        options: { emailRedirectTo: `${window.location.origin}/onboarding` },
+        options: { emailRedirectTo: callback.toString() },
       });
       if (error) throw error;
       setMessage("Check your email for your secure sign-in link.");
-    } catch {
-      setMessage("Supabase is not configured yet. You can continue in demo mode while V1 is being set up.");
+    } catch (error) {
+      const authError = error as { status?: number; code?: string };
+      if (authError?.status === 429 || authError?.code === "over_email_send_rate_limit") {
+        setMessage("Too many sign-in emails were requested. Please wait a little and try again.");
+      } else {
+        setMessage("We could not send a sign-in link right now. Please try again.");
+      }
     }
   }
 
