@@ -1,6 +1,6 @@
 import { MISSION_CATALOGUE } from "@/lib/data/missions";
 import { assessSafety } from "@/lib/domain/safety";
-import type { CreditProfile, MissionProgressMap, RankedMission } from "@/lib/domain/types";
+import type { CreditProfile, MissionDefinition, MissionProgressMap, RankedMission } from "@/lib/domain/types";
 
 function missionPriority(profile: CreditProfile, slug: string, base: number): number {
   if (slug === "reduce-utilisation" && (profile.utilisationPct ?? 0) > 50) return 100;
@@ -27,6 +27,29 @@ function isAvailableByProgress(slug: string, progress: MissionProgressMap, now: 
     return new Date(current.nextReviewAt) <= now;
   }
   return true;
+}
+
+export function canStartMission(
+  profile: CreditProfile,
+  mission: MissionDefinition,
+  now = new Date(),
+): { allowed: true } | { allowed: false; reason: string } {
+  const safety = assessSafety(profile);
+  if (safety.mode === "safe_mode" && !mission.safeModeAllowed) {
+    return {
+      allowed: false,
+      reason: "This mission is paused while Credit Quest prioritises financial stability.",
+    };
+  }
+
+  if (!mission.isEligible(profile, now)) {
+    return {
+      allowed: false,
+      reason: "This mission is not currently eligible for your profile.",
+    };
+  }
+
+  return { allowed: true };
 }
 
 export function rankMissions(
