@@ -3,7 +3,8 @@ import { z } from "zod";
 import { MISSION_CATALOGUE } from "@/lib/data/missions";
 import { canStartMission } from "@/lib/domain/mission-engine";
 import { completeMission, startMission } from "@/lib/domain/mission-lifecycle";
-import type { CreditProfile, MissionProgress } from "@/lib/domain/types";
+import type { MissionDefinition, MissionProgress } from "@/lib/domain/types";
+import { getUserProfile, updateUserProfile } from "@/lib/server/profile-repository";
 import { getSupabasePublicEnv } from "@/lib/supabase/env";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
@@ -14,12 +15,20 @@ const missionActionSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("dismiss") }).strict(),
 ]);
 
+type LegacyMissionAction = z.infer<typeof missionActionSchema>["action"];
+
 const eventNameByAction = {
   start: "mission_started",
   complete: "mission_completed",
   defer: "mission_deferred",
   dismiss: "mission_dismissed",
 } as const;
+
+export function canUseLegacyMissionAction(mission: MissionDefinition, action: LegacyMissionAction): boolean {
+  if (mission.scope === "account") return false;
+  if (mission.slug === "register-electoral-roll" && action === "complete") return false;
+  return true;
+}
 
 export async function POST(
   request: Request,
@@ -31,6 +40,9 @@ export async function POST(
   const { slug } = await context.params;
   const mission = MISSION_CATALOGUE.find((item) => item.slug === slug);
   if (!mission) return NextResponse.json({ error: "Unknown mission" }, { status: 404 });
+  if (!canUseLegacyMissionAction(mission, parsed.data.action)) {
+    return NextResponse.json({ error: "Use the Mission Action Layer for this action" }, { status: 409 });
+  }
 
   const env = getSupabasePublicEnv();
   if (!env) {
@@ -41,34 +53,15 @@ export async function POST(
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Sign in required" }, { status: 401 });
 
-  const { data: row, error: profileReadError } = await supabase
-    .from("profiles")
-    .select("*")
-    .eq("user_id", user.id)
-    .maybeSingle();
-
-  if (profileReadError) return NextResponse.json({ error: "Could not load profile" }, { status: 500 });
-  if (!row) return NextResponse.json({ error: "Profile not found" }, { status: 404 });
-
-  const profile: CreditProfile = {
-    userId: row.user_id,
-    dateOfBirth: row.date_of_birth,
-    employmentStatus: row.employment_status,
-    incomeBand: row.income_band,
-    housingStatus: row.housing_status,
-    electoralRoll: row.electoral_roll,
-    utilisationPct: row.utilisation_pct === null ? null : Number(row.utilisation_pct),
-    missedPaymentsLast12m: row.missed_payments_last_12m,
-    hardApplicationsLast6m: row.hard_applications_last_6m,
-    hasRevolvingCredit: row.has_revolving_credit,
-    hasDirectDebitForCredit: row.has_direct_debit_for_credit,
-  };
+  const profile = await getUserProfile(supabase, user.id).catch(() => null);
+  if (!profile) return NextResponse.json({ error: "Profile not found" }, { status: 404 });
 
   const { data: missionRow, error: missionReadError } = await supabase
     .from("user_missions")
-    .select("state, started_at, completed_at, next_review_at")
+    .select("id,state,started_at,completed_at,next_review_at")
     .eq("user_id", user.id)
     .eq("mission_slug", mission.slug)
+    .eq("subject_type", "profile")
     .maybeSingle();
 
   if (missionReadError) return NextResponse.json({ error: "Could not load mission" }, { status: 500 });
@@ -124,34 +117,36 @@ export async function POST(
   }
 
   if (nextProfile !== profile) {
-    const { error: profileWriteError } = await supabase
-      .from("profiles")
-      .update({
-        electoral_roll: nextProfile.electoralRoll,
-        has_direct_debit_for_credit: nextProfile.hasDirectDebitForCredit,
-        has_revolving_credit: nextProfile.hasRevolvingCredit,
-        updated_at: now.toISOString(),
-      })
-      .eq("user_id", user.id);
-
-    if (profileWriteError) return NextResponse.json({ error: "Could not update profile" }, { status: 500 });
+    try {
+      await updateUserProfile(supabase, user.id, {
+        electoralRoll: nextProfile.electoralRoll,
+        hasDirectDebitForCredit: nextProfile.hasDirectDebitForCredit,
+        hasRevolvingCredit: nextProfile.hasRevolvingCredit,
+      }, now);
+    } catch {
+      return NextResponse.json({ error: "Could not update profile" }, { status: 500 });
+    }
   }
 
-  const { error: missionWriteError } = await supabase
-    .from("user_missions")
-    .upsert({
-      user_id: user.id,
-      mission_slug: mission.slug,
-      state: nextProgress.state,
-      started_at: nextProgress.startedAt ?? null,
-      completed_at: nextProgress.completedAt ?? null,
-      next_review_at: nextProgress.nextReviewAt ?? null,
-      deferred_at: nextProgress.state === "deferred" ? now.toISOString() : null,
-      dismissed_at: nextProgress.state === "dismissed" ? now.toISOString() : null,
-      updated_at: now.toISOString(),
-    });
+  const missionPayload = {
+    user_id: user.id,
+    mission_slug: mission.slug,
+    subject_type: "profile",
+    subject_id: null,
+    state: nextProgress.state,
+    started_at: nextProgress.startedAt ?? null,
+    completed_at: nextProgress.completedAt ?? null,
+    next_review_at: nextProgress.nextReviewAt ?? null,
+    deferred_at: nextProgress.state === "deferred" ? now.toISOString() : null,
+    dismissed_at: nextProgress.state === "dismissed" ? now.toISOString() : null,
+    updated_at: now.toISOString(),
+  };
 
-  if (missionWriteError) return NextResponse.json({ error: "Could not update mission" }, { status: 500 });
+  const missionWrite = missionRow?.id
+    ? await supabase.from("user_missions").update(missionPayload).eq("id", missionRow.id).eq("user_id", user.id)
+    : await supabase.from("user_missions").insert(missionPayload);
+
+  if (missionWrite.error) return NextResponse.json({ error: "Could not update mission" }, { status: 500 });
 
   await supabase.from("events").insert({
     user_id: user.id,
