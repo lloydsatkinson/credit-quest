@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { deactivateUserAccount, updateUserAccount } from "@/lib/server/account-repository";
+import { syncTrackedAccountProfileSignals } from "@/lib/server/account-signal-service";
 import { getSupabasePublicEnv } from "@/lib/supabase/env";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
@@ -35,6 +36,7 @@ export async function PATCH(
   try {
     const account = await updateUserAccount(supabase, user.id, id, parsed.data);
     if (!account) return NextResponse.json({ error: "Account not found" }, { status: 404 });
+    await syncTrackedAccountProfileSignals(supabase, user.id);
     return NextResponse.json({ account });
   } catch {
     return NextResponse.json({ error: "Could not update account" }, { status: 500 });
@@ -55,6 +57,7 @@ export async function DELETE(
   try {
     const deactivated = await deactivateUserAccount(supabase, user.id, id);
     if (!deactivated) return NextResponse.json({ error: "Account not found" }, { status: 404 });
+    await syncTrackedAccountProfileSignals(supabase, user.id);
     return new NextResponse(null, { status: 204 });
   } catch {
     return NextResponse.json({ error: "Could not remove account" }, { status: 500 });
