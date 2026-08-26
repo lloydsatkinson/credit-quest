@@ -1,4 +1,6 @@
 import { cleanup, render, screen } from "@testing-library/react";
+import { existsSync } from "node:fs";
+import { resolve } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { ActionScreen } from "@/components/actions/action-screen";
 
@@ -25,5 +27,9 @@ describe("ActionScreen", () => {
     expect(screen.getByText(/does not mean the mission is complete/i)).not.toBeNull();
     expect(screen.queryByText(/mission completed/i)).toBeNull();
     expect(screen.getByRole("button", { name: /continue to GOV\.UK/i })).not.toBeNull();
+  });
+
+  it("provides a protected mission action page", () => {
+    expect(existsSync(resolve(process.cwd(), "app/actions/[missionInstanceId]/page.tsx"))).toBe(true);
   });
 });
