@@ -57,6 +57,17 @@ export async function listProviders(supabase: SupabaseClient): Promise<ProviderD
   return (data ?? []).map((row) => mapProviderRow(row as Record<string, unknown>));
 }
 
+export async function listAccountProviders(supabase: SupabaseClient): Promise<ProviderDefinition[]> {
+  const { data, error } = await supabase
+    .from("providers")
+    .select("*")
+    .eq("active", true)
+    .in("provider_type", ["bank", "card_issuer"])
+    .order("display_name");
+  if (error) throw error;
+  return (data ?? []).map((row) => mapProviderRow(row as Record<string, unknown>));
+}
+
 export async function getProviderById(
   supabase: SupabaseClient,
   id: string | null,
