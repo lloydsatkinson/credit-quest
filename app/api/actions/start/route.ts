@@ -5,6 +5,7 @@ import {
   listPendingActionAttempts,
 } from "@/lib/server/action-repository";
 import { resolveOwnedMissionAction } from "@/lib/server/action-service";
+import { recordServerEvent } from "@/lib/server/event-repository";
 import { updateMissionInstanceState } from "@/lib/server/mission-repository";
 import { getSupabasePublicEnv } from "@/lib/supabase/env";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
@@ -48,6 +49,15 @@ export async function POST(request: Request) {
         missionSlug: context.mission.slug,
         fallbackUsed: context.resolvedAction.fallbackUsed,
       },
+    });
+
+    await recordServerEvent(supabase, user.id, "action_started", {
+      missionSlug: context.mission.slug,
+      missionInstanceId: context.instance.id,
+      actionId: context.actionDefinition.id,
+      accountType: context.account?.accountType ?? null,
+      fallbackUsed: context.resolvedAction.fallbackUsed,
+      resumedExistingAttempt: Boolean(existing),
     });
 
     return NextResponse.json({
