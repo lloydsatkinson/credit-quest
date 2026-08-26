@@ -1,6 +1,6 @@
 import { MISSION_CATALOGUE } from "@/lib/data/missions";
 import { assessSafety } from "@/lib/domain/safety";
-import type { CreditProfile, RankedMission } from "@/lib/domain/types";
+import type { CreditProfile, MissionProgressMap, RankedMission } from "@/lib/domain/types";
 
 function missionPriority(profile: CreditProfile, slug: string, base: number): number {
   if (slug === "reduce-utilisation" && (profile.utilisationPct ?? 0) > 50) return 100;
@@ -18,20 +18,43 @@ function reasonFor(profile: CreditProfile, slug: string): string {
   }
 }
 
-export function rankMissions(profile: CreditProfile, now = new Date()): RankedMission[] {
+function isAvailableByProgress(slug: string, progress: MissionProgressMap, now: Date): boolean {
+  const current = progress[slug];
+  if (!current) return true;
+  if (["completed", "dismissed", "no_longer_eligible"].includes(current.state)) return false;
+  if (["deferred", "cooldown", "in_review"].includes(current.state)) {
+    if (!current.nextReviewAt) return false;
+    return new Date(current.nextReviewAt) <= now;
+  }
+  return true;
+}
+
+export function rankMissions(
+  profile: CreditProfile,
+  now = new Date(),
+  progress: MissionProgressMap = {},
+): RankedMission[] {
   const safety = assessSafety(profile);
 
   return MISSION_CATALOGUE
     .filter((mission) => safety.mode !== "safe_mode" || mission.safeModeAllowed)
     .filter((mission) => mission.isEligible(profile, now))
-    .map((mission) => ({
-      mission,
-      priorityScore: missionPriority(profile, mission.slug, mission.priorityWeight),
-      reasons: [reasonFor(profile, mission.slug)],
-    }))
+    .filter((mission) => isAvailableByProgress(mission.slug, progress, now))
+    .map((mission) => {
+      const startedBoost = progress[mission.slug]?.state === "started" ? 1000 : 0;
+      return {
+        mission,
+        priorityScore: missionPriority(profile, mission.slug, mission.priorityWeight) + startedBoost,
+        reasons: [reasonFor(profile, mission.slug)],
+      };
+    })
     .sort((a, b) => b.priorityScore - a.priorityScore || a.mission.slug.localeCompare(b.mission.slug));
 }
 
-export function getNextBestMission(profile: CreditProfile, now = new Date()): RankedMission | null {
-  return rankMissions(profile, now)[0] ?? null;
+export function getNextBestMission(
+  profile: CreditProfile,
+  now = new Date(),
+  progress: MissionProgressMap = {},
+): RankedMission | null {
+  return rankMissions(profile, now, progress)[0] ?? null;
 }
