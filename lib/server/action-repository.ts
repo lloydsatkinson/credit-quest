@@ -57,6 +57,13 @@ export function isAttemptReadyToResume(attempt: ActionAttempt, now = new Date())
   return new Date(attempt.nextReviewAt) <= now;
 }
 
+export function findPendingAttemptForMission(
+  attempts: ActionAttempt[],
+  missionInstanceId: string,
+): ActionAttempt | null {
+  return attempts.find((attempt) => attempt.missionInstanceId === missionInstanceId) ?? null;
+}
+
 export async function listProviders(supabase: SupabaseClient): Promise<ProviderDefinition[]> {
   const { data, error } = await supabase.from("providers").select("*").eq("active", true).order("display_name");
   if (error) throw error;
