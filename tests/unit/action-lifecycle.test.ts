@@ -105,4 +105,27 @@ describe("action lifecycle", () => {
     expect(result.attemptStatus).toBe("self_confirmed");
     expect(result.missionState).toBe("completed");
   });
+
+  it("puts a completed provider product step into review rather than claiming an account exists", () => {
+    const result = applyActionResponse({
+      missionSlug: "build-revolving-history",
+      response: "completed",
+      now,
+    });
+    expect(result.attemptStatus).toBe("submitted");
+    expect(result.missionState).toBe("in_review");
+    expect(result.profilePatch).toEqual({});
+    expect(result.nextReviewAt).toBe("2026-09-25T12:00:00.000Z");
+  });
+
+  it("completes revolving history only after the user confirms an account was opened", () => {
+    const result = applyActionResponse({
+      missionSlug: "build-revolving-history",
+      response: "confirmed_account_opened",
+      now,
+    });
+    expect(result.attemptStatus).toBe("verified");
+    expect(result.missionState).toBe("completed");
+    expect(result.profilePatch).toEqual({ hasRevolvingCredit: true });
+  });
 });
