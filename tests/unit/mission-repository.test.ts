@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { shouldMarkNoLongerEligible } from "@/lib/server/mission-repository";
+import { mergeMissionSyncResults, shouldMarkNoLongerEligible } from "@/lib/server/mission-repository";
 import type { CreditProfile, MissionInstance, UserAccount } from "@/lib/domain/types";
 
 const profile: CreditProfile = {
@@ -62,5 +62,28 @@ describe("mission persistence eligibility", () => {
   it("closes electoral roll only when the profile confirms registration", () => {
     expect(shouldMarkNoLongerEligible(instance("register-electoral-roll"), profile, [])).toBe(false);
     expect(shouldMarkNoLongerEligible(instance("register-electoral-roll"), { ...profile, electoralRoll: true }, [])).toBe(true);
+  });
+});
+
+describe("mission sync history", () => {
+  it("retains a completed mission even after its eligibility condition is resolved", () => {
+    const completed: MissionInstance = {
+      ...instance("register-electoral-roll"),
+      state: "completed",
+      completedAt: "2026-08-26T12:10:00.000Z",
+    };
+
+    expect(mergeMissionSyncResults([completed], [])).toEqual([completed]);
+  });
+
+  it("uses a newly synchronized state instead of the older stored version", () => {
+    const stored = instance("application-cooldown");
+    const updated: MissionInstance = {
+      ...stored,
+      state: "no_longer_eligible",
+      nextReviewAt: null,
+    };
+
+    expect(mergeMissionSyncResults([stored], [updated])).toEqual([updated]);
   });
 });
