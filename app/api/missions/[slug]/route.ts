@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { MISSION_CATALOGUE } from "@/lib/data/missions";
+import { canStartMission } from "@/lib/domain/mission-engine";
 import { completeMission, startMission } from "@/lib/domain/mission-lifecycle";
 import type { CreditProfile, MissionProgress } from "@/lib/domain/types";
 import { getSupabasePublicEnv } from "@/lib/supabase/env";
@@ -89,6 +90,14 @@ export async function POST(
   }
 
   const now = new Date();
+
+  if (parsed.data.action === "start") {
+    const startAccess = canStartMission(profile, mission, now);
+    if (!startAccess.allowed) {
+      return NextResponse.json({ error: startAccess.reason }, { status: 409 });
+    }
+  }
+
   let nextProfile = profile;
   let nextProgress: MissionProgress;
 
