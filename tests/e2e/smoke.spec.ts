@@ -1,8 +1,9 @@
 import { expect, test, type Page } from "@playwright/test";
 
 async function completeOnboarding(page: Page, dateOfBirth: string, electoralRoll = true) {
-  await page.goto("/onboarding");
+  await page.goto("/onboarding", { waitUntil: "networkidle" });
   await page.getByTestId("dob").fill(dateOfBirth);
+  await expect(page.getByTestId("next")).toBeEnabled();
   await page.getByTestId("next").click();
 
   await page.getByLabel("Employment status").selectOption("employed");
@@ -29,7 +30,7 @@ async function completeOnboarding(page: Page, dateOfBirth: string, electoralRoll
 }
 
 test("adult can complete onboarding, receive a mission, and see a relevant referral", async ({ page }) => {
-  await page.goto("/login");
+  await page.goto("/login", { waitUntil: "networkidle" });
   await expect(page.getByText("Build better credit habits, one move at a time.")).toBeVisible();
   await page.getByRole("link", { name: "Continue in demo mode" }).click();
   await completeOnboarding(page, "1990-01-01", true);
@@ -63,13 +64,13 @@ test("17-year-old gets education mode with no credit-product referral", async ({
   await expect(page.getByText("Your next best move")).toBeVisible();
   await expect(page.getByRole("link", { name: "Check eligibility with provider" })).toHaveCount(0);
 
-  await page.goto("/offers");
+  await page.goto("/offers", { waitUntil: "networkidle" });
   await expect(page.getByText("Learn now. Products can wait.")).toBeVisible();
   await expect(page.getByRole("button", { name: "Check eligibility with provider" })).toHaveCount(0);
 });
 
 test("PWA manifest exposes install assets", async ({ page, request }) => {
-  await page.goto("/");
+  await page.goto("/", { waitUntil: "networkidle" });
   const manifest = await request.get("/manifest.webmanifest");
   expect(manifest.ok()).toBeTruthy();
   const body = await manifest.json();
