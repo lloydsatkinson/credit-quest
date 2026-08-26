@@ -1,5 +1,5 @@
-import { fireEvent, render, screen } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { OnboardingForm } from "@/components/onboarding/onboarding-form";
 
 const push = vi.fn();
@@ -7,6 +7,8 @@ const push = vi.fn();
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push }),
 }));
+
+afterEach(() => cleanup());
 
 function goToWorkStep() {
   render(<OnboardingForm />);
