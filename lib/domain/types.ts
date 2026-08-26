@@ -1,7 +1,17 @@
 export type JourneyStage = "setup" | "stabilise" | "build" | "optimise" | "maintain";
 export type ImpactLevel = "low" | "medium" | "high";
 export type AgeMode = "education" | "adult";
-export type MissionState = "not_started" | "started" | "completed" | "dismissed" | "deferred";
+export type MissionState =
+  | "eligible"
+  | "shown"
+  | "not_started"
+  | "started"
+  | "completed"
+  | "deferred"
+  | "dismissed"
+  | "in_review"
+  | "cooldown"
+  | "no_longer_eligible";
 
 export interface CreditProfile {
   userId: string;
@@ -9,13 +19,27 @@ export interface CreditProfile {
   employmentStatus: "employed" | "self_employed" | "student" | "unemployed" | "other";
   incomeBand: "under_15k" | "15_30k" | "30_50k" | "50k_plus" | "not_applicable";
   housingStatus: "owner" | "mortgage" | "rent" | "family" | "other";
-  electoralRoll: boolean;
+  electoralRoll: boolean | null;
   utilisationPct: number | null;
-  missedPaymentsLast12m: number;
-  hardApplicationsLast6m: number;
-  hasRevolvingCredit: boolean;
-  hasDirectDebitForCredit: boolean;
+  missedPaymentsLast12m: number | null;
+  hardApplicationsLast6m: number | null;
+  hasRevolvingCredit: boolean | null;
+  hasDirectDebitForCredit: boolean | null;
 }
+
+export interface MissionProgress {
+  state: MissionState;
+  startedAt?: string | null;
+  completedAt?: string | null;
+  nextReviewAt?: string | null;
+}
+
+export type MissionProgressMap = Record<string, MissionProgress | undefined>;
+
+export type CompletionEffect =
+  | { type: "set_profile_value"; field: "electoralRoll"; value: true }
+  | { type: "set_profile_value"; field: "hasDirectDebitForCredit"; value: true }
+  | { type: "set_profile_value"; field: "hasRevolvingCredit"; value: true };
 
 export interface MissionDefinition {
   id: string;
@@ -27,6 +51,9 @@ export interface MissionDefinition {
   impact: ImpactLevel;
   questScoreDelta: number;
   priorityWeight: number;
+  safeModeAllowed: boolean;
+  reviewPeriodDays?: number;
+  completionEffect?: CompletionEffect;
   referralCategory?: "credit_builder_card";
   isEligible(profile: CreditProfile, now: Date): boolean;
 }
