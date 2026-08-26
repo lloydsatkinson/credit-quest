@@ -14,7 +14,25 @@ The first incremental V2 release strengthens the decisioning foundation before t
 - Users aged 16–17 remain education-only and receive no credit-product referrals.
 - Affiliate commission remains outside mission ranking and safety logic.
 
-Later V2 releases will add Barrier Diagnosis, Credit Passport, Application Readiness / **Can I Apply Yet?**, the TikTok-inspired vertical Quest Feed, Decline Recovery, richer mission coverage and external-data integrations. Those features are not claimed as shipped in V2.0a.
+## V2.0b — Mission Action Layer Phase 1
+
+Phase 1 makes the current mission catalogue executable without pretending Credit Quest has integrations that do not exist yet.
+
+- Missions resolve to a secure internal, official-government, provider-configured, or controlled referral action.
+- The browser supplies a mission-instance ID, never an arbitrary external destination URL; the server resolves and revalidates the destination against the configured provider allowlist.
+- Manual **My accounts** supports multiple credit cards/accounts so direct-debit and utilisation missions can target the correct account.
+- Account records keep only minimal user-entered data such as provider, optional nickname/last four, balance/limit where relevant, and direct-debit status. Credit Quest does not ask for or store banking passwords or full card numbers.
+- The official electoral-roll journey uses the GOV.UK registration service. Submitting a registration moves the mission to `in_review`; it does **not** immediately set the customer as registered.
+- Direct-debit completion updates only the targeted card/account.
+- Utilisation actions calculate a planning target where balance and limit are known, but a click or self-confirmation alone does not complete the mission.
+- Application cooldown is an internal timed state rather than an external provider action.
+- Revolving-history product journeys remain age/Safe-Mode gated, lender-owned and separate from mission ranking. Clicking or applying never auto-completes the mission.
+- Pending external actions are resumable when the customer returns to the dashboard.
+- Action analytics are best-effort and are written only after the relevant core state change succeeds.
+
+Open Banking, CRA ingestion, payment initiation, lender eligibility APIs, provider scraping and automatic form filling are **not** part of Phase 1. The account/action model is designed so those capabilities can be added later through adapters without rebuilding mission selection.
+
+Later V2 releases will add Barrier Diagnosis, Credit Passport, Application Readiness / **Can I Apply Yet?**, the TikTok-inspired vertical Quest Feed, Decline Recovery, richer mission coverage and external-data integrations. Those features are not claimed as shipped here.
 
 ## Product boundaries
 
@@ -24,6 +42,7 @@ Later V2 releases will add Barrier Diagnosis, Credit Passport, Application Readi
 - The **Credit Quest Score** is an internal progress indicator. It is not an Experian, Equifax or TransUnion score and does not predict lender approval.
 - Credit Quest is an enhanced introducer: lenders own eligibility, underwriting and the credit application.
 - Affiliate commission is never used by the mission-ranking engine.
+- Starting an action, clicking an outbound link or submitting a third-party form is not treated as proof that a mission is complete unless the mission's verification rules support that conclusion.
 
 ## Stack
 
@@ -48,15 +67,14 @@ Without Supabase environment variables the app runs in **demo mode**, using brow
 
 ## Environment variables
 
-Copy `.env.example` to `.env.local` and provide:
+Copy `.env.example` to `.env.local` and provide the public Supabase project settings used by the web application:
 
 ```text
 NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
-SUPABASE_SERVICE_ROLE_KEY=
 ```
 
-The service-role key must stay server-side and must never be exposed with a `NEXT_PUBLIC_` prefix.
+Any service-role or admin credential used for database administration must remain server/admin-side and must never be exposed with a `NEXT_PUBLIC_` prefix.
 
 ## Supabase local setup
 
@@ -67,7 +85,13 @@ npx supabase start
 npx supabase db reset
 ```
 
-The base migration is at `supabase/migrations/001_initial_schema.sql`. V2.0a adds `supabase/migrations/002_v2_product_integrity.sql`. RLS verification guidance is in `supabase/tests/rls.sql`.
+Migrations:
+
+- `supabase/migrations/001_initial_schema.sql` — base schema.
+- `supabase/migrations/002_v2_product_integrity.sql` — V2.0a lifecycle/product-integrity changes.
+- `supabase/migrations/003_action_layer.sql` — providers, manual accounts, target-aware mission instances, action registry, action attempts and Action Layer RLS.
+
+RLS verification guidance is in `supabase/tests/rls.sql`.
 
 ## Verification
 
@@ -80,31 +104,37 @@ npm run test:e2e
 npm run build
 ```
 
+The repository CI workflow runs the same audit/lint/unit/E2E/build gates for `main`, pull requests and the active Action Layer feature branch.
+
 ## Core architecture
 
-The decision flow is intentionally one-way:
+The decision flow remains intentionally one-way:
 
 ```text
-profile
+profile + minimal account state
   ↓
 safety assessment
   ↓
-Credit Quest Score + mission eligibility/ranking
+Credit Quest Score + deterministic mission eligibility/ranking
   ↓
-next-best mission
+target-aware next-best mission instance
   ↓
-offer matching (optional, age-gated and safety-gated)
+server-side Action Registry resolution
+  ↓
+internal / official / provider / referral action
+  ↓
+return + verification/self-confirmation rules
 ```
 
-Offer data never flows back into safety or mission ranking. This keeps user benefit separate from commercial value.
+Commercial offer data never flows back into safety, mission ranking or Action Registry priority. This keeps user benefit separate from commercial value.
 
-## Demo affiliate data
+## Demo and configured provider data
 
-All provider and affiliate records committed to source control are fictional demonstration data. Replace them only with properly approved provider/network relationships and compliant disclosure copy before any public launch.
+Commercial provider and affiliate records committed for demonstration remain fictional unless explicitly replaced through an approved provider/network relationship. The GOV.UK electoral-roll destination is an intentionally configured official government route, not a fictional partner integration.
 
 ## Future extension points
 
-The V2 architecture is designed for later additions including Barrier Diagnosis, Credit Passport, Application Readiness, the vertical Quest Feed, Decline Recovery, Open Banking, CRA data, lender eligibility APIs, Product Fit, premium scenario analysis and an AI coach. External data should be normalised into the structured profile before deterministic decision engines consume it.
+The V2 architecture is designed for later additions including Barrier Diagnosis, Credit Passport, Application Readiness, the vertical Quest Feed, Decline Recovery, Open Banking, CRA data, lender eligibility APIs, Product Fit, premium scenario analysis and an AI coach. External data should be normalised into the structured profile/account model before deterministic decision engines consume it.
 
 ## Design and implementation docs
 
@@ -112,3 +142,5 @@ The V2 architecture is designed for later additions including Barrier Diagnosis,
 - `docs/superpowers/plans/2026-08-25-credit-quest-v1-implementation.md`
 - `docs/superpowers/specs/2026-08-26-credit-quest-v2-design.md`
 - `docs/superpowers/plans/2026-08-26-credit-quest-v2-0a-product-integrity.md`
+- `docs/superpowers/specs/2026-08-26-credit-quest-action-layer-phase-1-design.md`
+- `docs/superpowers/plans/2026-08-26-credit-quest-action-layer-phase-1-implementation.md`
