@@ -46,7 +46,8 @@ export function shouldMarkNoLongerEligible(
     }
   }
 
-  const account = accounts.find((item) => item.id === instance.subject.accountId);
+  const accountId = instance.subject.accountId;
+  const account = accounts.find((item) => item.id === accountId);
   if (!account || !account.active) return true;
 
   if (instance.missionSlug === "set-up-direct-debit") {
