@@ -1,3 +1,4 @@
+import { calculateAccountUtilisation } from "@/lib/domain/account-missions";
 import type {
   ActionAttemptStatus,
   CreditProfile,
@@ -40,6 +41,28 @@ function baseOutcome(
   };
 }
 
+export function applyUtilisationEvidence(
+  outcome: ActionOutcome,
+  account: UserAccount,
+): ActionOutcome {
+  const utilisation = calculateAccountUtilisation(account);
+  if (utilisation !== null && utilisation <= 30) {
+    return {
+      ...outcome,
+      attemptStatus: "self_confirmed",
+      missionState: "completed",
+      nextReviewAt: null,
+    };
+  }
+
+  return {
+    ...outcome,
+    attemptStatus: "returned",
+    missionState: "started",
+    nextReviewAt: null,
+  };
+}
+
 export function applyActionResponse({
   missionSlug,
   response,
@@ -78,8 +101,6 @@ export function applyActionResponse({
 
   if (missionSlug === "reduce-utilisation") {
     if (response === "completed" || response === "submitted") {
-      // The attempt can be self-confirmed, but the mission stays open until
-      // updated account evidence proves utilisation is at or below the target.
       return baseOutcome("self_confirmed", "started");
     }
     return baseOutcome("returned", "started");
@@ -94,8 +115,6 @@ export function applyActionResponse({
 
   if (missionSlug === "build-revolving-history") {
     if (response === "completed" || response === "submitted") {
-      // A product click/application is lender-owned and cannot prove that a
-      // suitable account was opened and responsibly managed.
       return baseOutcome("self_confirmed", "in_review", addDays(now, 30));
     }
     return baseOutcome("returned", "started");
