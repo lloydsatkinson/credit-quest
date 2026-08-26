@@ -1,9 +1,9 @@
 import { cleanup, render, screen } from "@testing-library/react";
-import { existsSync } from "node:fs";
-import { resolve } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
+import ActionPage from "@/app/actions/[missionInstanceId]/page";
 import { ActionScreen } from "@/components/actions/action-screen";
 
+void ActionPage;
 afterEach(cleanup);
 
 describe("ActionScreen", () => {
@@ -30,6 +30,6 @@ describe("ActionScreen", () => {
   });
 
   it("provides a protected mission action page", () => {
-    expect(existsSync(resolve(process.cwd(), "app/actions/[missionInstanceId]/page.tsx"))).toBe(true);
+    expect(typeof ActionPage).toBe("function");
   });
 });
