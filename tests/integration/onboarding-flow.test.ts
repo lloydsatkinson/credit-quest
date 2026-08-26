@@ -28,6 +28,24 @@ describe("progressive onboarding", () => {
     expect(result.profile.incomeBand).toBe("not_applicable");
   });
 
+  it("preserves unknown credit-file answers instead of converting them to zero or false", () => {
+    const result = normaliseOnboardingAnswers({
+      ...answers,
+      electoralRoll: null,
+      utilisationPct: null,
+      missedPaymentsLast12m: null,
+      hardApplicationsLast6m: null,
+      hasRevolvingCredit: null,
+      hasDirectDebitForCredit: null,
+    }, "u1", now);
+
+    expect(result.profile.electoralRoll).toBeNull();
+    expect(result.profile.missedPaymentsLast12m).toBeNull();
+    expect(result.profile.hardApplicationsLast6m).toBeNull();
+    expect(result.profile.hasRevolvingCredit).toBeNull();
+    expect(result.profile.hasDirectDebitForCredit).toBeNull();
+  });
+
   it("rejects under-16 date of birth", () => {
     expect(() => normaliseOnboardingAnswers({ ...answers, dateOfBirth: "2011-08-26" }, "u1", now)).toThrow(/age 16/i);
   });
