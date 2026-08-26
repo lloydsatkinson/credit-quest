@@ -1,7 +1,9 @@
-import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { cleanup, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it } from "vitest";
 import { NextMissionCard } from "@/components/dashboard/next-mission-card";
 import type { RankedMission } from "@/lib/domain/types";
+
+afterEach(() => cleanup());
 
 const rankedMission: RankedMission = {
   priorityScore: 90,
