@@ -3,7 +3,10 @@ import { accountInputSchema } from "@/app/api/accounts/route";
 import { accountUpdateSchema } from "@/app/api/accounts/[id]/route";
 import { actionResolveSchema } from "@/app/api/actions/resolve/route";
 import { actionStartSchema } from "@/app/api/actions/start/route";
-import { actionAttemptResponseSchema } from "@/app/api/actions/attempts/[id]/route";
+import {
+  actionAttemptResponseSchema,
+  actionEvidenceAllowedForMission,
+} from "@/app/api/actions/attempts/[id]/route";
 import { canUseLegacyMissionAction } from "@/app/api/missions/[slug]/route";
 import { MISSION_CATALOGUE } from "@/lib/data/missions";
 import { isMissionInstanceActionable } from "@/lib/server/action-service";
@@ -70,6 +73,16 @@ describe("mission action api validation", () => {
       response: "completed",
       destinationUrl: "https://evil.example",
     }).success).toBe(false);
+  });
+
+  it("allows balance or limit evidence only for the utilisation mission", () => {
+    const evidence = { response: "completed" as const, balanceMinor: 28000, creditLimitMinor: 100000 };
+    expect(actionEvidenceAllowedForMission("reduce-utilisation", evidence)).toBe(true);
+    expect(actionEvidenceAllowedForMission("set-up-direct-debit", evidence)).toBe(false);
+    expect(actionEvidenceAllowedForMission("register-electoral-roll", evidence)).toBe(false);
+    expect(actionEvidenceAllowedForMission("build-revolving-history", evidence)).toBe(false);
+    expect(actionEvidenceAllowedForMission("application-cooldown", evidence)).toBe(false);
+    expect(actionEvidenceAllowedForMission("set-up-direct-debit", { response: "completed" })).toBe(true);
   });
 });
 
