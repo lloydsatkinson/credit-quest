@@ -3,6 +3,7 @@ import { accountInputSchema } from "@/app/api/accounts/route";
 import { accountUpdateSchema } from "@/app/api/accounts/[id]/route";
 import { actionResolveSchema } from "@/app/api/actions/resolve/route";
 import { actionStartSchema } from "@/app/api/actions/start/route";
+import { actionAttemptResponseSchema } from "@/app/api/actions/attempts/[id]/route";
 import { canUseLegacyMissionAction } from "@/app/api/missions/[slug]/route";
 import { MISSION_CATALOGUE } from "@/lib/data/missions";
 
@@ -54,6 +55,19 @@ describe("mission action api validation", () => {
     const malicious = { ...valid, destinationUrl: "https://evil.example/phish" };
     expect(actionResolveSchema.safeParse(malicious).success).toBe(false);
     expect(actionStartSchema.safeParse(malicious).success).toBe(false);
+  });
+
+  it("accepts only explicit return confirmation and utilisation evidence fields", () => {
+    expect(actionAttemptResponseSchema.safeParse({ response: "submitted" }).success).toBe(true);
+    expect(actionAttemptResponseSchema.safeParse({
+      response: "completed",
+      balanceMinor: 28000,
+      creditLimitMinor: 100000,
+    }).success).toBe(true);
+    expect(actionAttemptResponseSchema.safeParse({
+      response: "completed",
+      destinationUrl: "https://evil.example",
+    }).success).toBe(false);
   });
 });
 
