@@ -12,6 +12,7 @@ const rankedMission: RankedMission = {
     id: "m1", slug: "register-electoral-roll", title: "Get on the electoral roll",
     description: "Register at your current address.", rationale: "It helps lenders verify your address.",
     stage: "setup", impact: "high", questScoreDelta: 10, priorityWeight: 90, safeModeAllowed: true,
+    scope: "profile",
     isEligible: () => true,
   },
 };
