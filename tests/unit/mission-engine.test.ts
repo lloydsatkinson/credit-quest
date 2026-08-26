@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { getNextBestMission, rankMissions } from "@/lib/domain/mission-engine";
-import type { CreditProfile } from "@/lib/domain/types";
+import { canStartMission, getNextBestMission, rankMissions } from "@/lib/domain/mission-engine";
+import type { CreditProfile, MissionDefinition } from "@/lib/domain/types";
 
 const clean: CreditProfile = {
   userId: "u1", dateOfBirth: "1990-01-01", employmentStatus: "employed", incomeBand: "30_50k",
@@ -68,5 +68,48 @@ describe("mission ranking", () => {
     };
     const progress = { "set-up-direct-debit": { state: "started" as const } };
     expect(getNextBestMission(profile, now, progress)?.mission.slug).toBe("set-up-direct-debit");
+  });
+
+  it("rejects a direct start when the mission is not eligible", () => {
+    const mission: MissionDefinition = {
+      id: "m-test",
+      slug: "test-ineligible",
+      title: "Test",
+      description: "Test",
+      rationale: "Test",
+      stage: "build",
+      impact: "low",
+      questScoreDelta: 0,
+      priorityWeight: 1,
+      safeModeAllowed: true,
+      isEligible: () => false,
+    };
+
+    expect(canStartMission(clean, mission, now)).toEqual({
+      allowed: false,
+      reason: "This mission is not currently eligible for your profile.",
+    });
+  });
+
+  it("rejects a borrowing-oriented direct start while safe mode is active", () => {
+    const mission: MissionDefinition = {
+      id: "m-test",
+      slug: "test-borrowing",
+      title: "Test",
+      description: "Test",
+      rationale: "Test",
+      stage: "build",
+      impact: "low",
+      questScoreDelta: 0,
+      priorityWeight: 1,
+      safeModeAllowed: false,
+      isEligible: () => true,
+    };
+    const stressed = { ...clean, missedPaymentsLast12m: 2, hardApplicationsLast6m: 4 };
+
+    expect(canStartMission(stressed, mission, now)).toEqual({
+      allowed: false,
+      reason: "This mission is paused while Credit Quest prioritises financial stability.",
+    });
   });
 });
