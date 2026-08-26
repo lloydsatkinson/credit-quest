@@ -6,6 +6,8 @@ import { actionStartSchema } from "@/app/api/actions/start/route";
 import { actionAttemptResponseSchema } from "@/app/api/actions/attempts/[id]/route";
 import { canUseLegacyMissionAction } from "@/app/api/missions/[slug]/route";
 import { MISSION_CATALOGUE } from "@/lib/data/missions";
+import { isMissionInstanceActionable } from "@/lib/server/action-service";
+import type { MissionInstance } from "@/lib/domain/types";
 
 describe("account api validation", () => {
   const valid = {
@@ -68,6 +70,29 @@ describe("mission action api validation", () => {
       response: "completed",
       destinationUrl: "https://evil.example",
     }).success).toBe(false);
+  });
+});
+
+describe("review-due mission action availability", () => {
+  const base: MissionInstance = {
+    id: "11111111-1111-4111-8111-111111111111",
+    userId: "u1",
+    missionSlug: "application-cooldown",
+    subject: { kind: "profile" },
+    state: "cooldown",
+    startedAt: "2026-08-01T12:00:00.000Z",
+    completedAt: null,
+    nextReviewAt: "2026-08-26T12:00:00.000Z",
+  };
+
+  it("keeps cooldown blocked before review but allows it once due", () => {
+    expect(isMissionInstanceActionable(base, new Date("2026-08-26T11:59:59.000Z"))).toBe(false);
+    expect(isMissionInstanceActionable(base, new Date("2026-08-26T12:00:00.000Z"))).toBe(true);
+  });
+
+  it("never reopens terminal states", () => {
+    expect(isMissionInstanceActionable({ ...base, state: "completed" }, new Date("2026-09-01T12:00:00.000Z"))).toBe(false);
+    expect(isMissionInstanceActionable({ ...base, state: "dismissed" }, new Date("2026-09-01T12:00:00.000Z"))).toBe(false);
   });
 });
 
