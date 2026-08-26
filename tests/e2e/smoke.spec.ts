@@ -38,6 +38,31 @@ test("17-year-old gets education mode with no credit-product referral", async ({
   await expect(page.getByRole("button", { name: "Check eligibility with provider" })).toHaveCount(0);
 });
 
+test("unemployed users are not asked to choose an income band", async ({ page }) => {
+  await page.goto("/onboarding");
+  await page.getByTestId("dob").fill("1990-01-01");
+  await page.getByTestId("next").click();
+
+  const workSelect = page.getByRole("combobox").first();
+  await workSelect.selectOption("unemployed");
+
+  await expect(page.getByRole("combobox")).toHaveCount(1);
+});
+
+test("revolving credit amount input is clearly labelled as a percentage", async ({ page }) => {
+  await page.goto("/onboarding");
+  await page.getByTestId("dob").fill("1990-01-01");
+  await page.getByTestId("next").click();
+  await page.getByTestId("next").click();
+  await page.getByTestId("next").click();
+  await page.getByTestId("next").click();
+
+  await page.getByRole("button", { name: "Yes" }).click();
+
+  await expect(page.getByText("Credit utilisation (%)", { exact: true })).toBeVisible();
+  await expect(page.getByText(/enter 30/i)).toBeVisible();
+});
+
 test("PWA manifest exposes install assets", async ({ page, request }) => {
   await page.goto("/");
   const manifest = await request.get("/manifest.webmanifest");
