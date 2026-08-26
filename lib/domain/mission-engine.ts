@@ -1,4 +1,5 @@
 import { MISSION_CATALOGUE } from "@/lib/data/missions";
+import { assessSafety } from "@/lib/domain/safety";
 import type { CreditProfile, RankedMission } from "@/lib/domain/types";
 
 function missionPriority(profile: CreditProfile, slug: string, base: number): number {
@@ -10,7 +11,7 @@ function reasonFor(profile: CreditProfile, slug: string): string {
   switch (slug) {
     case "register-electoral-roll": return "Your profile says you are not currently registered on the electoral roll.";
     case "reduce-utilisation": return `Your current utilisation is about ${profile.utilisationPct ?? 0}%.`;
-    case "application-cooldown": return `You reported ${profile.hardApplicationsLast6m} hard applications in the last six months.`;
+    case "application-cooldown": return `You reported ${profile.hardApplicationsLast6m ?? 0} hard applications in the last six months.`;
     case "set-up-direct-debit": return "You have revolving credit but no direct debit set up for it.";
     case "build-revolving-history": return "You do not currently have revolving credit history.";
     default: return "This action matches the information in your profile.";
@@ -18,7 +19,10 @@ function reasonFor(profile: CreditProfile, slug: string): string {
 }
 
 export function rankMissions(profile: CreditProfile, now = new Date()): RankedMission[] {
+  const safety = assessSafety(profile);
+
   return MISSION_CATALOGUE
+    .filter((mission) => safety.mode !== "safe_mode" || mission.safeModeAllowed)
     .filter((mission) => mission.isEligible(profile, now))
     .map((mission) => ({
       mission,
