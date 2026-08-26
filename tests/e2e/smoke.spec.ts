@@ -4,13 +4,26 @@ async function completeOnboarding(page: Page, dateOfBirth: string, electoralRoll
   await page.goto("/onboarding");
   await page.getByTestId("dob").fill(dateOfBirth);
   await page.getByTestId("next").click();
+
+  await page.getByLabel("Employment status").selectOption("employed");
+  await page.getByLabel("Annual personal income band").selectOption("30_50k");
   await page.getByTestId("next").click();
+
+  await page.getByLabel("Housing situation").selectOption("rent");
   await page.getByTestId("next").click();
-  if (electoralRoll) await page.getByRole("button", { name: "Yes" }).click();
+
+  await page.getByRole("button", { name: electoralRoll ? "Yes" : "No" }).click();
   await page.getByTestId("next").click();
+
+  await page.getByRole("button", { name: "No" }).click();
   await page.getByTestId("next").click();
+
+  await page.getByLabel("Missed payments").fill("0");
   await page.getByTestId("next").click();
+
+  await page.getByLabel("Hard applications").fill("0");
   await page.getByTestId("next").click();
+
   await page.getByTestId("finish").click();
   await expect(page).toHaveURL(/\/dashboard$/);
 }
