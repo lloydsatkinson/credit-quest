@@ -13,6 +13,27 @@ export type MissionState =
   | "cooldown"
   | "no_longer_eligible";
 
+export type MissionScope = "profile" | "account";
+export type AccountType = "credit_card" | "current_account" | "loan" | "other";
+export type DirectDebitStatus = "yes" | "no" | "unknown";
+export type AccountSource = "manual" | "open_banking";
+export type ProviderType = "government" | "bank" | "card_issuer" | "partner" | "generic";
+export type ActionMode = "external_link" | "internal_flow" | "referral" | "api";
+export type VerificationMode =
+  | "internal_state"
+  | "self_confirm"
+  | "self_confirm_review"
+  | "api_verified"
+  | "partner_callback";
+export type ActionAttemptStatus =
+  | "started"
+  | "returned"
+  | "submitted"
+  | "self_confirmed"
+  | "verified"
+  | "cancelled"
+  | "failed";
+
 export interface CreditProfile {
   userId: string;
   dateOfBirth: string;
@@ -36,6 +57,87 @@ export interface MissionProgress {
 
 export type MissionProgressMap = Record<string, MissionProgress | undefined>;
 
+export type MissionSubject =
+  | { kind: "profile" }
+  | { kind: "account"; accountId: string };
+
+export interface MissionInstance {
+  id: string;
+  userId: string;
+  missionSlug: string;
+  subject: MissionSubject;
+  state: MissionState;
+  startedAt: string | null;
+  completedAt: string | null;
+  nextReviewAt: string | null;
+}
+
+export interface UserAccount {
+  id: string;
+  userId: string;
+  providerId: string | null;
+  providerName?: string | null;
+  accountType: AccountType;
+  nickname: string | null;
+  lastFour: string | null;
+  balanceMinor: number | null;
+  creditLimitMinor: number | null;
+  currency: string;
+  directDebitStatus: DirectDebitStatus;
+  source: AccountSource;
+  active: boolean;
+  lastVerifiedAt: string | null;
+}
+
+export interface ProviderDefinition {
+  id: string;
+  slug: string;
+  displayName: string;
+  providerType: ProviderType;
+  allowedHosts: string[];
+  active: boolean;
+}
+
+export interface ActionDefinition {
+  id: string;
+  actionKey: string;
+  missionSlug: string;
+  providerId: string | null;
+  accountType: AccountType | null;
+  mode: ActionMode;
+  destinationUrl: string | null;
+  instructions: string;
+  verificationMode: VerificationMode;
+  safeModeAllowed: boolean;
+  minAge: number | null;
+  priority: number;
+  active: boolean;
+}
+
+export interface ResolvedAction {
+  actionId: string;
+  mode: ActionMode;
+  providerName: string | null;
+  destinationUrl: string | null;
+  instructions: string;
+  verificationMode: VerificationMode;
+  fallbackUsed: boolean;
+}
+
+export interface ActionAttempt {
+  id: string;
+  userId: string;
+  missionInstanceId: string;
+  actionRegistryId: string;
+  accountId: string | null;
+  status: ActionAttemptStatus;
+  startedAt: string;
+  returnedAt: string | null;
+  selfConfirmedAt: string | null;
+  verifiedAt: string | null;
+  nextReviewAt: string | null;
+}
+
 export type CompletionEffect =
   | { type: "set_profile_value"; field: "electoralRoll"; value: true }
   | { type: "set_profile_value"; field: "hasDirectDebitForCredit"; value: true }
@@ -52,6 +154,7 @@ export interface MissionDefinition {
   questScoreDelta: number;
   priorityWeight: number;
   safeModeAllowed: boolean;
+  scope: MissionScope;
   reviewPeriodDays?: number;
   completionEffect?: CompletionEffect;
   referralCategory?: "credit_builder_card";
@@ -62,6 +165,10 @@ export interface RankedMission {
   mission: MissionDefinition;
   priorityScore: number;
   reasons: string[];
+}
+
+export interface RankedMissionInstance extends RankedMission {
+  instance: MissionInstance;
 }
 
 export interface OfferDefinition {
