@@ -8,6 +8,38 @@ export function calculateAccountUtilisation(account: UserAccount): number | null
   return Math.round((account.balanceMinor / account.creditLimitMinor) * 10000) / 100;
 }
 
+export function deriveAccountProfileSignals(
+  accounts: UserAccount[],
+): Partial<Pick<CreditProfile, "utilisationPct" | "hasDirectDebitForCredit" | "hasRevolvingCredit">> {
+  const creditCards = accounts.filter((account) => account.active && account.accountType === "credit_card");
+  if (creditCards.length === 0) return {};
+
+  const hasUnknownUtilisation = creditCards.some((account) => (
+    account.balanceMinor === null || account.creditLimitMinor === null || account.creditLimitMinor <= 0
+  ));
+
+  let utilisationPct: number | null = null;
+  if (!hasUnknownUtilisation) {
+    const totalBalance = creditCards.reduce((sum, account) => sum + (account.balanceMinor ?? 0), 0);
+    const totalLimit = creditCards.reduce((sum, account) => sum + (account.creditLimitMinor ?? 0), 0);
+    utilisationPct = totalLimit > 0
+      ? Math.round((totalBalance / totalLimit) * 10000) / 100
+      : null;
+  }
+
+  const hasDirectDebitForCredit = creditCards.some((account) => account.directDebitStatus === "no")
+    ? false
+    : creditCards.some((account) => account.directDebitStatus === "unknown")
+      ? null
+      : true;
+
+  return {
+    utilisationPct,
+    hasDirectDebitForCredit,
+    hasRevolvingCredit: true,
+  };
+}
+
 export function amountToReachUtilisation(account: UserAccount, thresholdPct: number): number | null {
   if (account.balanceMinor === null || account.creditLimitMinor === null || account.creditLimitMinor <= 0) {
     return null;
