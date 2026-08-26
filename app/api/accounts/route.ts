@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createUserAccount, listUserAccounts } from "@/lib/server/account-repository";
-import { listProviders } from "@/lib/server/action-repository";
+import { listAccountProviders } from "@/lib/server/action-repository";
 import { getSupabasePublicEnv } from "@/lib/supabase/env";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
@@ -28,7 +28,7 @@ export async function GET() {
   try {
     const [accounts, providers] = await Promise.all([
       listUserAccounts(supabase, user.id),
-      listProviders(supabase),
+      listAccountProviders(supabase),
     ]);
     return NextResponse.json({ accounts, providers });
   } catch {
