@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createUserAccount, listUserAccounts } from "@/lib/server/account-repository";
 import { listAccountProviders } from "@/lib/server/action-repository";
+import { syncTrackedAccountProfileSignals } from "@/lib/server/account-signal-service";
 import { getSupabasePublicEnv } from "@/lib/supabase/env";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
@@ -62,6 +63,7 @@ export async function POST(request: Request) {
 
   try {
     const account = await createUserAccount(supabase, user.id, parsed.data);
+    await syncTrackedAccountProfileSignals(supabase, user.id);
     return NextResponse.json({ account }, { status: 201 });
   } catch {
     return NextResponse.json({ error: "Could not save account" }, { status: 500 });
