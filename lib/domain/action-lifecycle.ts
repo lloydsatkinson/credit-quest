@@ -13,13 +13,14 @@ export type ActionResponse =
   | "not_finished"
   | "could_not_do"
   | "do_later"
-  | "confirmed_registered";
+  | "confirmed_registered"
+  | "confirmed_account_opened";
 
 export interface ActionOutcome {
   attemptStatus: ActionAttemptStatus;
   missionState: MissionState;
   nextReviewAt: string | null;
-  profilePatch: Partial<Pick<CreditProfile, "electoralRoll" | "hasDirectDebitForCredit">>;
+  profilePatch: Partial<Pick<CreditProfile, "electoralRoll" | "hasDirectDebitForCredit" | "hasRevolvingCredit">>;
   accountPatch: Partial<Pick<UserAccount, "directDebitStatus" | "balanceMinor" | "creditLimitMinor">>;
 }
 
@@ -114,8 +115,16 @@ export function applyActionResponse({
   }
 
   if (missionSlug === "build-revolving-history") {
+    if (response === "confirmed_account_opened") {
+      return {
+        ...baseOutcome("verified", "completed"),
+        profilePatch: { hasRevolvingCredit: true },
+      };
+    }
     if (response === "completed" || response === "submitted") {
-      return baseOutcome("self_confirmed", "in_review", addDays(now, 30));
+      // Completing a provider/application step is not proof that an account was opened.
+      // Keep the attempt for a later review confirmation instead of awarding completion.
+      return baseOutcome("submitted", "in_review", addDays(now, 30));
     }
     return baseOutcome("returned", "started");
   }
