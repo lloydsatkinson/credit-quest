@@ -91,8 +91,11 @@ Migrations:
 
 - `supabase/migrations/001_initial_schema.sql` — base schema.
 - `supabase/migrations/002_v2_product_integrity.sql` — V2.0a lifecycle/product-integrity changes.
-- `supabase/migrations/003_action_layer.sql` — providers, manual accounts, target-aware mission instances, action registry, action attempts and Action Layer RLS.
-- `supabase/migrations/004_action_layer_owner_integrity.sql` — same-owner composite foreign keys preventing cross-user account/mission references even if another row UUID is known.
+- `supabase/migrations/003_action_layer.sql` — backward-compatible additive expansion: providers, manual accounts, mission-instance IDs/subjects, action registry, action attempts and Action Layer RLS while retaining the legacy mission primary key for the currently deployed app.
+- `supabase/migrations/004_action_layer_mission_key_cutover.sql` — post-deploy key cutover from `(user_id, mission_slug)` to mission-instance `id`, enabling separate account-scoped instances of the same mission.
+- `supabase/migrations/005_action_layer_owner_integrity.sql` — same-owner composite foreign keys preventing cross-user account/mission references even if another row UUID is known.
+
+Production rollout is intentionally staged: apply `003` while V2.0a is still live, deploy V2.0b, then immediately apply `004` and `005`. This avoids a compatibility window where the old mission upsert route is running against the new mission-instance primary key.
 
 RLS and owner-integrity verification guidance is in `supabase/tests/rls.sql`.
 
@@ -107,7 +110,7 @@ npm run test:e2e
 npm run build
 ```
 
-The repository CI workflow runs the same audit/lint/unit/E2E/build gates for `main`, pull requests and the active Action Layer feature branch.
+The repository CI workflow runs the same audit/lint/unit/E2E/build gates for `main` and pull requests.
 
 ## Core architecture
 
