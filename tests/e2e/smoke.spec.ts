@@ -12,10 +12,10 @@ async function completeOnboarding(page: Page, dateOfBirth: string, electoralRoll
   await page.getByLabel("Housing situation").selectOption("rent");
   await page.getByTestId("next").click();
 
-  await page.getByRole("button", { name: electoralRoll ? "Yes" : "No" }).click();
+  await page.getByRole("button", { name: electoralRoll ? "Yes" : "No", exact: true }).click();
   await page.getByTestId("next").click();
 
-  await page.getByRole("button", { name: "No" }).click();
+  await page.getByRole("button", { name: "No", exact: true }).click();
   await page.getByTestId("next").click();
 
   await page.getByLabel("Missed payments").fill("0");
