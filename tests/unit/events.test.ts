@@ -8,6 +8,13 @@ describe("event payload validation", () => {
     expect(eventPayloadSchema.safeParse({ name: "mission_completed", metadata: { missionSlug: "set-up-direct-debit" } }).success).toBe(true);
     expect(eventPayloadSchema.safeParse({ name: "mission_deferred", metadata: { missionSlug: "set-up-direct-debit" } }).success).toBe(true);
     expect(eventPayloadSchema.safeParse({ name: "mission_dismissed", metadata: { missionSlug: "set-up-direct-debit" } }).success).toBe(true);
+    expect(eventPayloadSchema.safeParse({ name: "action_resolved", metadata: { missionSlug: "register-electoral-roll", actionId: "a1" } }).success).toBe(true);
+    expect(eventPayloadSchema.safeParse({ name: "action_started", metadata: { missionSlug: "register-electoral-roll", actionId: "a1" } }).success).toBe(true);
+    expect(eventPayloadSchema.safeParse({ name: "action_returned", metadata: { missionSlug: "register-electoral-roll" } }).success).toBe(true);
+    expect(eventPayloadSchema.safeParse({ name: "action_submitted", metadata: { missionSlug: "register-electoral-roll" } }).success).toBe(true);
+    expect(eventPayloadSchema.safeParse({ name: "action_self_confirmed", metadata: { missionSlug: "set-up-direct-debit" } }).success).toBe(true);
+    expect(eventPayloadSchema.safeParse({ name: "action_verified", metadata: { missionSlug: "register-electoral-roll" } }).success).toBe(true);
+    expect(eventPayloadSchema.safeParse({ name: "action_cancelled", metadata: { missionSlug: "register-electoral-roll" } }).success).toBe(true);
   });
 
   it("rejects unsupported events and client-supplied user ids", () => {
