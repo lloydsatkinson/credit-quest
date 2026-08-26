@@ -45,6 +45,7 @@
 - Modify `components/onboarding/onboarding-form.tsx` — unset defaults, required-step gating, Yes/No/I-don’t-know controls.
 - Modify `components/dashboard/dashboard-client.tsx` — separate start/complete flows and recalculate from the updated profile.
 - Modify `components/dashboard/next-mission-card.tsx` — render Start vs Complete state.
+- Modify `components/dashboard/progress-strip.tsx` — expose an unambiguous missions-completed value for E2E coverage.
 - Create `app/api/missions/[slug]/route.ts` — authenticated mission action endpoint.
 - Modify `app/api/onboarding/route.ts` — persist null values without coercion.
 - Modify `lib/events.ts` — lifecycle event helpers remain strictly validated.
@@ -151,7 +152,7 @@ export interface CreditProfile {
 }
 ```
 
-Add lifecycle support types for later tasks:
+Add lifecycle support types:
 
 ```ts
 export interface MissionProgress {
@@ -169,7 +170,13 @@ export type CompletionEffect =
   | { type: "set_profile_value"; field: "hasRevolvingCredit"; value: true };
 ```
 
-Add `safeModeAllowed: boolean` and optional `completionEffect?: CompletionEffect` to `MissionDefinition`.
+Add these fields to `MissionDefinition`:
+
+```ts
+safeModeAllowed: boolean;
+reviewPeriodDays?: number;
+completionEffect?: CompletionEffect;
+```
 
 - [ ] **Step 4: Update onboarding validation without turning unknown into defaults**
 
@@ -305,7 +312,7 @@ git commit -m "feat: make credit profile unknown-safe"
 
 - [ ] **Step 1: Write failing component tests for unset defaults**
 
-Add tests that verify the work and housing steps do not silently preselect customer states:
+Add:
 
 ```ts
 it("does not preselect employment or income", () => {
@@ -313,31 +320,26 @@ it("does not preselect employment or income", () => {
   expect(screen.getByLabelText("Employment status")).toHaveValue("");
   expect(screen.queryByLabelText("Annual personal income band")).toBeNull();
 });
-```
 
-Add a test that chooses employment explicitly and then reveals a blank income selector:
-
-```ts
 it("asks for income only after an applicable employment choice", () => {
   goToWorkStep();
   fireEvent.change(screen.getByLabelText("Employment status"), { target: { value: "employed" } });
   expect(screen.getByLabelText("Annual personal income band")).toHaveValue("");
 });
-```
 
-Add a test for an unknown tri-state question:
-
-```ts
 it("lets the user explicitly say they do not know electoral-roll status", () => {
-  // navigate to Identity step using explicit required answers
+  goToWorkStep();
+  fireEvent.change(screen.getByLabelText("Employment status"), { target: { value: "employed" } });
+  fireEvent.change(screen.getByLabelText("Annual personal income band"), { target: { value: "30_50k" } });
+  fireEvent.click(screen.getByTestId("next"));
+  fireEvent.change(screen.getByLabelText("Housing situation"), { target: { value: "rent" } });
+  fireEvent.click(screen.getByTestId("next"));
   fireEvent.click(screen.getByRole("button", { name: "I don't know" }));
   expect(screen.getByRole("button", { name: "I don't know" })).toHaveAttribute("aria-pressed", "true");
 });
 ```
 
 - [ ] **Step 2: Run the component test and verify RED**
-
-Run:
 
 ```bash
 npm test -- tests/unit/onboarding-form.test.tsx
@@ -346,8 +348,6 @@ npm test -- tests/unit/onboarding-form.test.tsx
 Expected: failures showing preselected `employed`, `30_50k`, or existing two-state controls.
 
 - [ ] **Step 3: Introduce an onboarding draft instead of pretending unset values are profile values**
-
-In `components/onboarding/onboarding-form.tsx`, replace the substantive initial defaults with a draft shape:
 
 ```ts
 type OnboardingDraft = Omit<OnboardingAnswers, "employmentStatus" | "incomeBand" | "housingStatus"> & {
@@ -368,35 +368,35 @@ const initial: OnboardingDraft = {
   hasRevolvingCredit: null,
   hasDirectDebitForCredit: null,
 };
-```
 
-Do not cast this draft to `OnboardingAnswers` until submission. The server schema remains the final authority.
+const [answered, setAnswered] = useState<Set<string>>(() => new Set());
+
+function markAnswered(key: string) {
+  setAnswered((current) => new Set(current).add(key));
+}
+```
 
 - [ ] **Step 4: Render blank-select placeholders instead of financial defaults**
 
-Update `Select` to accept a placeholder and render an empty disabled option:
+Update `Select` to accept `placeholder: string` and render:
 
 ```tsx
-<option value="" disabled>{placeholder}</option>
+<select
+  aria-label={ariaLabel}
+  className="field w-full rounded-2xl border border-slate-200 bg-white px-4 py-3"
+  value={value}
+  onChange={(e) => onChange(e.target.value)}
+>
+  <option value="" disabled>{placeholder}</option>
+  {options.map((option) => (
+    <option key={option} value={option}>{option.replaceAll("_", " ")}</option>
+  ))}
+</select>
 ```
 
-Employment example:
-
-```tsx
-<Select
-  ariaLabel="Employment status"
-  placeholder="Choose one"
-  value={answers.employmentStatus ?? ""}
-  onChange={(value) => updateEmploymentStatus(value as OnboardingAnswers["employmentStatus"])}
-  options={["employed", "self_employed", "student", "unemployed", "other"]}
-/>
-```
-
-Income should only render once an employment status is known and applicable. Housing must also begin blank.
+Employment must pass `placeholder="Choose one"` and `value={answers.employmentStatus ?? ""}`. Income renders only once an applicable employment status is known and passes `value={answers.incomeBand ?? ""}`. Housing begins blank and passes `value={answers.housingStatus ?? ""}`.
 
 - [ ] **Step 5: Add a reusable tri-state control**
-
-Replace binary controls for questions where unknown is valid with:
 
 ```tsx
 function YesNoUnknown({
@@ -435,15 +435,32 @@ function YesNoUnknown({
 }
 ```
 
-Use it for electoral-roll status and revolving-credit presence. For a known revolving account, use it for direct debit. A null selection must be visibly different from an untouched question by gating Next until the user has interacted; store a separate local `answered` set if needed rather than encoding “unanswered” as a fake financial answer.
+Use it for electoral-roll status and revolving-credit presence. For a known revolving account, use it for direct debit. Each handler calls `markAnswered()` for its question key.
 
-- [ ] **Step 6: Make utilisation and hard-search counts explicitly skippable as unknown**
+- [ ] **Step 6: Make utilisation, missed payments, and hard-search counts explicitly skippable as unknown**
 
-For utilisation, leave the number input blank when unknown and add plain-English helper text plus an `I don't know my utilisation` button that sets `utilisationPct` to `null` and marks that question answered.
+For utilisation:
 
-For hard searches, render an empty number input instead of `0` and add an `I don't know` action that preserves `null`.
+```ts
+setAnswers((current) => ({ ...current, utilisationPct: null }));
+markAnswered("utilisationPct");
+```
 
-Do not use `Number("")`, because it returns `0`. Use:
+For missed payments:
+
+```ts
+setAnswers((current) => ({ ...current, missedPaymentsLast12m: null }));
+markAnswered("missedPaymentsLast12m");
+```
+
+For hard searches:
+
+```ts
+setAnswers((current) => ({ ...current, hardApplicationsLast6m: null }));
+markAnswered("hardApplicationsLast6m");
+```
+
+Numeric handlers must never use `Number("")`:
 
 ```ts
 const value = event.target.value;
@@ -451,32 +468,44 @@ setAnswers((current) => ({
   ...current,
   hardApplicationsLast6m: value === "" ? null : Number(value),
 }));
+if (value !== "") markAnswered("hardApplicationsLast6m");
 ```
 
-- [ ] **Step 7: Gate progression on required identity/context answers, not financial guesses**
-
-Create a small `canContinue(step, answers, answered)` helper. Required rules for V2.0a:
+- [ ] **Step 7: Gate progression on explicit interaction**
 
 ```ts
-switch (step) {
-  case 0: return Boolean(answers.dateOfBirth);
-  case 1:
-    return Boolean(answers.employmentStatus) &&
-      (answers.employmentStatus === "unemployed" || answers.incomeBand !== null);
-  case 2: return Boolean(answers.housingStatus);
-  default: return true;
+function canContinue(step: number, answers: OnboardingDraft, answered: Set<string>): boolean {
+  switch (step) {
+    case 0:
+      return Boolean(answers.dateOfBirth);
+    case 1:
+      return Boolean(answers.employmentStatus) &&
+        (answers.employmentStatus === "unemployed" || answers.incomeBand !== null);
+    case 2:
+      return Boolean(answers.housingStatus);
+    case 3:
+      return answered.has("electoralRoll");
+    case 4:
+      return answered.has("hasRevolvingCredit") &&
+        (answers.hasRevolvingCredit !== true || answered.has("utilisationPct"));
+    case 5:
+      return answered.has("missedPaymentsLast12m") &&
+        (answers.hasRevolvingCredit !== true || answered.has("hasDirectDebitForCredit"));
+    case 6:
+      return answered.has("hardApplicationsLast6m");
+    default:
+      return true;
+  }
 }
 ```
 
-For tri-state questions, use the separate `answered` set to require that the user has selected Yes, No, or I don’t know before advancing.
+Set `disabled={!canContinue(step, answers, answered)}` on Next.
 
 - [ ] **Step 8: Update Playwright onboarding helper to choose explicit values**
 
-In `tests/e2e/smoke.spec.ts`, after reaching Work select `employed`, select a valid income band, then on Home select `rent`. Do not depend on previous defaults.
+In `tests/e2e/smoke.spec.ts`, select `employed`, `30_50k`, and `rent`, and explicitly answer every tri-state/numeric question. Do not depend on previous defaults.
 
 - [ ] **Step 9: Run tests and verify GREEN**
-
-Run:
 
 ```bash
 npm test -- tests/unit/onboarding-form.test.tsx
@@ -507,8 +536,6 @@ git commit -m "fix: remove unsafe onboarding defaults"
 - Adds lifecycle timestamps used by the mission API and dashboard.
 
 - [ ] **Step 1: Write the migration**
-
-Create `supabase/migrations/002_v2_product_integrity.sql` with:
 
 ```sql
 alter table public.profiles alter column electoral_roll drop not null;
@@ -541,13 +568,27 @@ alter table public.user_missions
 
 Do not remove or weaken any existing RLS policy.
 
-- [ ] **Step 2: Extend RLS verification SQL**
+- [ ] **Step 2: Extend RLS verification SQL with exact policy checks**
 
-Add checks in `supabase/tests/rls.sql` documenting that an authenticated user can update only their own `user_missions` state and cannot mutate another user’s row. Keep the existing events read restrictions unchanged.
+Replace the existing `missions_update_own` check in `supabase/tests/rls.sql` with:
+
+```sql
+if not exists (
+  select 1 from pg_policies
+  where schemaname = 'public'
+    and tablename = 'user_missions'
+    and policyname = 'missions_update_own'
+    and cmd = 'UPDATE'
+    and qual like '%auth.uid()%user_id%'
+    and with_check like '%auth.uid()%user_id%'
+) then
+  raise exception 'user_missions owner-update policy missing or not owner-scoped';
+end if;
+```
+
+Keep the existing `profiles_select_own` and no-event-select assertions unchanged.
 
 - [ ] **Step 3: Keep onboarding API values nullable end-to-end**
-
-In `app/api/onboarding/route.ts`, persist the profile exactly as normalised:
 
 ```ts
 missed_payments_last_12m: profile.missedPaymentsLast12m,
@@ -561,15 +602,11 @@ Do not use `?? 0` or `?? false`.
 
 - [ ] **Step 4: Verify migration locally or in CI**
 
-Run when Supabase CLI is available:
-
 ```bash
 npx supabase db reset
 ```
 
-Expected: both migrations apply cleanly and RLS policies remain enabled.
-
-If local Supabase is unavailable in the execution environment, do not claim this check passed; rely on SQL review plus the configured CI checks and verify the live migration separately before production deployment.
+Expected: both migrations apply cleanly and RLS policies remain enabled. If local Supabase is unavailable, do not claim this check passed; verify the live migration separately before production deployment.
 
 - [ ] **Step 5: Run application tests**
 
@@ -600,7 +637,7 @@ git commit -m "feat: migrate profile and mission lifecycle data"
 
 **Interfaces:**
 - Produces `assessSafety(profile): SafetyAssessment`.
-- `getOffersForMission` and `getMarketplaceOffers` must return `[]` when `assessment.suppressOffers` is true.
+- `getOffersForMission` and `getMarketplaceOffers` return `[]` when `assessment.suppressOffers` is true.
 - Mission ranking filters out `safeModeAllowed === false` missions while Safe Mode is active.
 
 - [ ] **Step 1: Write failing Safe Mode tests**
@@ -637,7 +674,6 @@ describe("assessSafety", () => {
     const result = assessSafety({ ...base, missedPaymentsLast12m: 2, hardApplicationsLast6m: 4 });
     expect(result.mode).toBe("safe_mode");
     expect(result.suppressOffers).toBe(true);
-    expect(result.reasons.length).toBeGreaterThan(0);
   });
 
   it("uses caution for one meaningful stress signal", () => {
@@ -655,8 +691,6 @@ npm test -- tests/unit/safety.test.ts
 Expected: fail because `lib/domain/safety.ts` does not exist.
 
 - [ ] **Step 3: Implement the minimal auditable safety engine**
-
-Create `lib/domain/safety.ts`:
 
 ```ts
 import type { CreditProfile } from "@/lib/domain/types";
@@ -689,22 +723,18 @@ export function assessSafety(profile: CreditProfile): SafetyAssessment {
 }
 ```
 
-This is intentionally conservative: V2.0a only uses evidence currently present in the profile. Do not infer overdraft dependency, disposable income, debt-service burden, or vulnerability until those data actually exist.
+Do not infer overdraft dependency, disposable income, debt-service burden, or vulnerability until those data exist.
 
 - [ ] **Step 4: Put safety ahead of offer matching**
 
-In `lib/domain/offer-matcher.ts`:
+In both offer functions:
 
 ```ts
 const safety = assessSafety(profile);
 if (safety.suppressOffers) return [];
 ```
 
-Do this before referral-category filtering for both mission-specific and marketplace matching.
-
 - [ ] **Step 5: Put safety ahead of borrowing-oriented mission ranking**
-
-In `lib/domain/mission-engine.ts`, compute safety once and filter:
 
 ```ts
 const safety = assessSafety(profile);
@@ -714,11 +744,7 @@ return MISSION_CATALOGUE
   .filter((mission) => mission.isEligible(profile, now))
 ```
 
-Do not modify priority based on affiliate data.
-
 - [ ] **Step 6: Add regression tests for suppressed offers and missions**
-
-Add to `tests/unit/offer-matcher.test.ts`:
 
 ```ts
 it("suppresses all offers in safe mode", () => {
@@ -727,7 +753,7 @@ it("suppresses all offers in safe mode", () => {
 });
 ```
 
-Add to `tests/unit/mission-engine.test.ts` an assertion that `build-revolving-history` is not returned in Safe Mode but a stability mission such as `application-cooldown` remains eligible where relevant.
+Add a mission-engine test asserting that a borrowing-oriented mission is filtered while `application-cooldown` remains available for the same safe-mode profile.
 
 - [ ] **Step 7: Run and verify GREEN**
 
@@ -761,8 +787,6 @@ git commit -m "feat: add safe mode offer suppression"
 
 - [ ] **Step 1: Write failing lifecycle tests**
 
-Create `tests/unit/mission-lifecycle.test.ts` with these behaviours:
-
 ```ts
 it("starting a mission does not complete it", () => {
   const progress = startMission(undefined, new Date("2026-08-26T12:00:00Z"));
@@ -794,15 +818,10 @@ Expected: fail because lifecycle functions do not exist.
 
 - [ ] **Step 3: Implement lifecycle transitions as pure functions**
 
-Create `lib/domain/mission-lifecycle.ts`:
-
 ```ts
 import type { CompletionEffect, CreditProfile, MissionDefinition, MissionProgress } from "@/lib/domain/types";
 
-export function startMission(
-  current: MissionProgress | undefined,
-  now = new Date(),
-): MissionProgress {
+export function startMission(current: MissionProgress | undefined, now = new Date()): MissionProgress {
   return {
     ...current,
     state: "started",
@@ -814,9 +833,7 @@ export function startMission(
 
 export function applyCompletionEffect(profile: CreditProfile, effect?: CompletionEffect): CreditProfile {
   if (!effect) return profile;
-  if (effect.type === "set_profile_value") {
-    return { ...profile, [effect.field]: effect.value };
-  }
+  if (effect.type === "set_profile_value") return { ...profile, [effect.field]: effect.value };
   return profile;
 }
 
@@ -844,7 +861,7 @@ export function completeMission(
 
 - [ ] **Step 4: Make mission ranking progress-aware**
 
-Change signatures in `lib/domain/mission-engine.ts` to:
+Use exact signatures:
 
 ```ts
 export function rankMissions(
@@ -854,8 +871,6 @@ export function rankMissions(
 ): RankedMission[]
 ```
 
-and:
-
 ```ts
 export function getNextBestMission(
   profile: CreditProfile,
@@ -864,7 +879,7 @@ export function getNextBestMission(
 ): RankedMission | null
 ```
 
-Filter lifecycle states:
+Add:
 
 ```ts
 function isAvailableByProgress(slug: string, progress: MissionProgressMap, now: Date): boolean {
@@ -878,18 +893,26 @@ function isAvailableByProgress(slug: string, progress: MissionProgressMap, now: 
 }
 ```
 
-Keep a started mission visible and boost it only within the user-benefit engine so the user can finish what they started:
+Filter with `isAvailableByProgress` and add:
 
 ```ts
 const startedBoost = progress[mission.slug]?.state === "started" ? 1000 : 0;
 priorityScore: missionPriority(profile, mission.slug, mission.priorityWeight) + startedBoost
 ```
 
-This boost is lifecycle continuity, not a commercial signal.
-
 - [ ] **Step 5: Add ranking regression tests**
 
-Verify a completed mission is no longer returned even if profile data did not change, and verify a started mission remains the next mission until completed/deferred/dismissed.
+```ts
+it("does not return a completed mission even when profile eligibility still matches", () => {
+  const progress = { "reduce-utilisation": { state: "completed" as const } };
+  expect(rankMissions({ ...base, utilisationPct: 60 }, now, progress).some((item) => item.mission.slug === "reduce-utilisation")).toBe(false);
+});
+
+it("keeps a started mission ahead of other eligible missions", () => {
+  const progress = { "set-up-direct-debit": { state: "started" as const } };
+  expect(getNextBestMission({ ...base, hasRevolvingCredit: true, hasDirectDebitForCredit: false }, now, progress)?.mission.slug).toBe("set-up-direct-debit");
+});
+```
 
 - [ ] **Step 6: Run focused tests and verify GREEN**
 
@@ -917,27 +940,31 @@ git commit -m "feat: add real mission lifecycle"
 
 **Interfaces:**
 - `POST /api/missions/:slug` accepts `{ action: "start" | "complete" | "defer" | "dismiss" }`.
-- Server derives `user_id` from Supabase auth; client must never supply a trusted user id.
+- Server derives `user_id` from Supabase auth; client never supplies a trusted user id.
 - Demo mode returns a deterministic response without server persistence; client stores demo state locally.
 
 - [ ] **Step 1: Add strict mission-action validation**
 
-In the new route file define:
-
 ```ts
 const missionActionSchema = z.discriminatedUnion("action", [
-  z.object({ action: z.literal("start") }),
-  z.object({ action: z.literal("complete") }),
-  z.object({ action: z.literal("defer") }),
-  z.object({ action: z.literal("dismiss") }),
+  z.object({ action: z.literal("start") }).strict(),
+  z.object({ action: z.literal("complete") }).strict(),
+  z.object({ action: z.literal("defer") }).strict(),
+  z.object({ action: z.literal("dismiss") }).strict(),
 ]);
 ```
 
-Reject unknown keys by applying `.strict()` to each object.
+Use the Next.js 16 route signature:
+
+```ts
+export async function POST(
+  request: Request,
+  context: { params: Promise<{ slug: string }> },
+) {
+  const { slug } = await context.params;
+```
 
 - [ ] **Step 2: Resolve the mission from the server-owned catalogue**
-
-Use:
 
 ```ts
 const mission = MISSION_CATALOGUE.find((item) => item.slug === slug);
@@ -946,9 +973,7 @@ if (!mission) return NextResponse.json({ error: "Unknown mission" }, { status: 4
 
 Never accept mission priority, completion effect, referral category, or profile patch from the client.
 
-- [ ] **Step 3: Implement demo-mode response using the pure lifecycle engine**
-
-When Supabase public env is absent, return enough data for the client to store locally:
+- [ ] **Step 3: Implement demo-mode response**
 
 ```ts
 if (!env) {
@@ -956,39 +981,113 @@ if (!env) {
 }
 ```
 
-Do not pretend the server persisted demo state.
+- [ ] **Step 4: Map the authenticated profile row exactly**
 
-- [ ] **Step 4: Implement authenticated lifecycle persistence**
-
-For configured Supabase:
-
-1. call `supabase.auth.getUser()` and reject unauthenticated users;
-2. load the user’s `profiles` row;
-3. load the current `user_missions` row for the slug;
-4. use `startMission` or `completeMission` for domain transitions;
-5. upsert the mission row with `state`, `started_at`, `completed_at`, `next_review_at`, `updated_at`;
-6. if completion changed the profile, update only the supported structured fields generated by the server-owned mission effect.
-
-For `defer`, set state `deferred` and `next_review_at` to seven days from now in V2.0a. For `dismiss`, set state `dismissed` and `dismissed_at = now`.
-
-If the profile update fails after mission upsert, return `500` and log no success event. Do not report completion to the UI unless both required writes succeed.
-
-- [ ] **Step 5: Track lifecycle events only after successful actions**
-
-Use the existing validated event names:
+After `supabase.auth.getUser()`, load the user’s profile with `.single()` and map:
 
 ```ts
-mission_started
-mission_completed
-mission_deferred
-mission_dismissed
+const profile: CreditProfile = {
+  userId: row.user_id,
+  dateOfBirth: row.date_of_birth,
+  employmentStatus: row.employment_status,
+  incomeBand: row.income_band,
+  housingStatus: row.housing_status,
+  electoralRoll: row.electoral_roll,
+  utilisationPct: row.utilisation_pct === null ? null : Number(row.utilisation_pct),
+  missedPaymentsLast12m: row.missed_payments_last_12m,
+  hardApplicationsLast6m: row.hard_applications_last_6m,
+  hasRevolvingCredit: row.has_revolving_credit,
+  hasDirectDebitForCredit: row.has_direct_debit_for_credit,
+};
 ```
 
-The event metadata may include `missionSlug`, but never a client-trusted `userId`.
+Reject a missing profile with `404` rather than fabricating demo data.
 
-Keep `eventPayloadSchema` strict. Extend `tests/unit/events.test.ts` so both `mission_started` and `mission_completed` validate while unsupported names still fail.
+- [ ] **Step 5: Map current mission state and perform the action**
 
-- [ ] **Step 6: Run tests**
+```ts
+const currentProgress: MissionProgress | undefined = missionRow
+  ? {
+      state: missionRow.state,
+      startedAt: missionRow.started_at,
+      completedAt: missionRow.completed_at,
+      nextReviewAt: missionRow.next_review_at,
+    }
+  : undefined;
+
+const now = new Date();
+let nextProfile = profile;
+let nextProgress: MissionProgress;
+
+if (parsed.data.action === "start") {
+  nextProgress = startMission(currentProgress, now);
+} else if (parsed.data.action === "complete") {
+  const result = completeMission(profile, mission, currentProgress, now);
+  nextProfile = result.profile;
+  nextProgress = result.progress;
+} else if (parsed.data.action === "defer") {
+  nextProgress = {
+    ...currentProgress,
+    state: "deferred",
+    nextReviewAt: new Date(now.getTime() + 7 * 86_400_000).toISOString(),
+  };
+} else {
+  nextProgress = { ...currentProgress, state: "dismissed", nextReviewAt: null };
+}
+```
+
+- [ ] **Step 6: Persist mission state and supported profile effects**
+
+```ts
+const missionWrite = {
+  user_id: user.id,
+  mission_slug: mission.slug,
+  state: nextProgress.state,
+  started_at: nextProgress.startedAt ?? null,
+  completed_at: nextProgress.completedAt ?? null,
+  next_review_at: nextProgress.nextReviewAt ?? null,
+  deferred_at: nextProgress.state === "deferred" ? now.toISOString() : null,
+  dismissed_at: nextProgress.state === "dismissed" ? now.toISOString() : null,
+  updated_at: now.toISOString(),
+};
+```
+
+If `nextProfile !== profile`, update only server-owned supported fields:
+
+```ts
+const profileWrite = {
+  electoral_roll: nextProfile.electoralRoll,
+  has_direct_debit_for_credit: nextProfile.hasDirectDebitForCredit,
+  has_revolving_credit: nextProfile.hasRevolvingCredit,
+  updated_at: now.toISOString(),
+};
+```
+
+If either required write fails, return `500` and do not emit a success event. Return only after success:
+
+```ts
+return NextResponse.json({
+  missionSlug: mission.slug,
+  action: parsed.data.action,
+  profile: nextProfile,
+  progress: nextProgress,
+});
+```
+
+- [ ] **Step 7: Track lifecycle events only after successful actions**
+
+```ts
+const eventNameByAction = {
+  start: "mission_started",
+  complete: "mission_completed",
+  defer: "mission_deferred",
+  dismiss: "mission_dismissed",
+} as const;
+```
+
+Insert using server-derived `user_id` and metadata `{ missionSlug: mission.slug }`. Extend `tests/unit/events.test.ts` so `mission_started` and `mission_completed` validate while unsupported names still fail.
+
+- [ ] **Step 8: Run tests**
 
 ```bash
 npm test -- tests/unit/events.test.ts tests/unit/mission-lifecycle.test.ts
@@ -996,7 +1095,7 @@ npm test -- tests/unit/events.test.ts tests/unit/mission-lifecycle.test.ts
 
 Expected: pass.
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 9: Commit**
 
 ```bash
 git add app/api/missions/[slug]/route.ts lib/events.ts tests/unit/events.test.ts
@@ -1010,6 +1109,7 @@ git commit -m "feat: persist mission lifecycle actions"
 **Files:**
 - Modify: `components/dashboard/dashboard-client.tsx`
 - Modify: `components/dashboard/next-mission-card.tsx`
+- Modify: `components/dashboard/progress-strip.tsx`
 - Modify: `tests/unit/dashboard-components.test.tsx`
 - Modify: `tests/e2e/smoke.spec.ts`
 
@@ -1019,8 +1119,6 @@ git commit -m "feat: persist mission lifecycle actions"
 - Completing a mission recalculates Quest Score and mission ranking from the resulting profile/progress map.
 
 - [ ] **Step 1: Write failing component tests for separate lifecycle buttons**
-
-Add tests such as:
 
 ```ts
 it("shows Start before a mission has begun", () => {
@@ -1043,12 +1141,10 @@ npm test -- tests/unit/dashboard-components.test.tsx
 
 Expected: fail because the current component has only one Start button.
 
-- [ ] **Step 3: Refactor `NextMissionCard` props**
-
-Use a signature conceptually equivalent to:
+- [ ] **Step 3: Refactor `NextMissionCard` to exact lifecycle props**
 
 ```ts
-{
+export function NextMissionCard({
   rankedMission,
   progress,
   offer,
@@ -1064,16 +1160,14 @@ Use a signature conceptually equivalent to:
   onStart?: () => void;
   onComplete?: () => void;
   onDefer?: () => void;
-}
+})
 ```
 
-Render `Start this mission` when state is absent/not-started/shown/eligible. Render `Mark complete` when state is `started`. Add a secondary `Do this later` action that defers rather than pretending completion.
+Render `Start this mission` when state is absent/not-started/shown/eligible. Render `Mark complete` when state is `started`. Add `Do this later` calling `onDefer`.
 
-- [ ] **Step 4: Replace the dashboard’s fake completed counter with mission progress state**
+- [ ] **Step 4: Replace the fake completed counter with mission progress state**
 
-Remove the current `startMission()` logic that increments `creditquest-completed` immediately.
-
-Store demo progress as one JSON map:
+Remove the current `startMission()` counter increment.
 
 ```ts
 const DEMO_PROGRESS_KEY = "creditquest-mission-progress";
@@ -1086,17 +1180,21 @@ const savedProgress = localStorage.getItem(DEMO_PROGRESS_KEY);
 if (savedProgress) setProgress(JSON.parse(savedProgress));
 ```
 
-Calculate mission results with:
+Rank using:
 
 ```ts
 const rankedMission = getNextBestMission(profile, new Date(), progress);
 ```
 
-Derive completed count from progress entries whose state is `completed`; never keep a parallel counter.
+Derive completed count:
 
-- [ ] **Step 5: Implement Start in demo mode and configured mode**
+```ts
+const completed = Object.values(progress).filter((item) => item?.state === "completed").length;
+```
 
-In demo mode, use the pure function:
+- [ ] **Step 5: Implement Start**
+
+Demo mode:
 
 ```ts
 const nextProgress = {
@@ -1107,7 +1205,7 @@ setProgress(nextProgress);
 localStorage.setItem(DEMO_PROGRESS_KEY, JSON.stringify(nextProgress));
 ```
 
-When Supabase is configured, POST `{ action: "start" }` to `/api/missions/${slug}` and update local UI only after a successful response.
+Configured mode: POST `{ action: "start" }` to `/api/missions/${slug}` and update local UI only after success.
 
 - [ ] **Step 6: Implement explicit completion and recalculation**
 
@@ -1122,13 +1220,11 @@ localStorage.setItem("creditquest-profile", JSON.stringify(result.profile));
 localStorage.setItem(DEMO_PROGRESS_KEY, JSON.stringify(nextProgress));
 ```
 
-Configured mode: POST `{ action: "complete" }`, then use the returned profile/progress or refetch the user state before recalculating.
-
-Do not increment score manually. `calculateQuestScore(profile)` must recompute from the new profile.
+Configured mode: POST `{ action: "complete" }`, then assign the returned profile and progress before recomputing. Never increment score manually.
 
 - [ ] **Step 7: Surface Safe Mode plainly**
 
-Use `assessSafety(profile)` in the dashboard. When `safe_mode`, show a prominent stability message such as:
+When `assessSafety(profile).mode === "safe_mode"`, render:
 
 ```text
 Protecting your finances comes first right now.
@@ -1136,22 +1232,21 @@ Protecting your finances comes first right now.
 Based on the information you gave us, we’re pausing credit-product suggestions and prioritising actions that help protect payments and financial stability.
 ```
 
-Do not call the user vulnerable or diagnose financial difficulty from missing data.
+- [ ] **Step 8: Make missions-completed E2E-safe and prove start is not completion**
 
-- [ ] **Step 8: Update E2E test to prove start is not completion**
+In `ProgressStrip`, add `data-testid="missions-done"` only to the value element for `Missions done`.
 
-Extend the adult journey:
+Update E2E:
 
 ```ts
 await page.getByRole("button", { name: "Start this mission" }).click();
 await expect(page.getByRole("button", { name: "Mark complete" })).toBeVisible();
-await expect(page.getByText(/Missions done/)).toBeVisible();
-await expect(page.getByText(/^0$/)).toBeVisible();
+await expect(page.getByTestId("missions-done")).toHaveText("0");
 await page.getByRole("button", { name: "Mark complete" }).click();
-await expect(page.getByText(/^1$/)).toBeVisible();
+await expect(page.getByTestId("missions-done")).toHaveText("1");
 ```
 
-Choose an onboarding profile whose first mission has a structured completion effect so the test can also assert the next mission changes after completion.
+Use a profile whose first mission is `register-electoral-roll`; after completion assert that mission is no longer the next mission.
 
 - [ ] **Step 9: Run focused component and E2E tests**
 
@@ -1160,12 +1255,12 @@ npm test -- tests/unit/dashboard-components.test.tsx
 npm run test:e2e -- tests/e2e/smoke.spec.ts
 ```
 
-Expected: Start leaves completed count unchanged; Complete changes actual progress and recalculates the next mission.
+Expected: Start leaves completed count unchanged; Complete changes progress and recalculates the next mission.
 
 - [ ] **Step 10: Commit**
 
 ```bash
-git add components/dashboard/dashboard-client.tsx components/dashboard/next-mission-card.tsx tests/unit/dashboard-components.test.tsx tests/e2e/smoke.spec.ts
+git add components/dashboard/dashboard-client.tsx components/dashboard/next-mission-card.tsx components/dashboard/progress-strip.tsx tests/unit/dashboard-components.test.tsx tests/e2e/smoke.spec.ts
 git commit -m "fix: separate mission start and completion"
 ```
 
@@ -1178,11 +1273,11 @@ git commit -m "fix: separate mission start and completion"
 - Modify tests only if verification exposes a real regression.
 
 **Interfaces:**
-- Documents the V2.0a product-integrity behaviour without claiming later V2 features are already live.
+- Documents V2.0a without claiming later V2 features are live.
 
 - [ ] **Step 1: Update README boundaries**
 
-Add a concise V2.0a section explaining:
+Add:
 
 ```text
 - financial onboarding answers are explicit rather than pre-populated
@@ -1195,13 +1290,13 @@ Add a concise V2.0a section explaining:
 
 Do not describe the TikTok-style Quest Feed as already shipped in V2.0a.
 
-- [ ] **Step 2: Run the production dependency audit**
+- [ ] **Step 2: Run production dependency audit**
 
 ```bash
 npm audit --omit=dev --audit-level=high
 ```
 
-Expected: exit 0 with no high/critical production vulnerabilities. If it fails, stop release work and address the dependency finding before claiming readiness.
+Expected: exit 0 with no high/critical production vulnerabilities.
 
 - [ ] **Step 3: Run lint**
 
@@ -1226,9 +1321,9 @@ npx playwright install --with-deps chromium
 npm run test:e2e
 ```
 
-Expected: all E2E journeys pass, including explicit onboarding choices and start-vs-complete lifecycle behaviour.
+Expected: all E2E journeys pass.
 
-- [ ] **Step 6: Run the production build**
+- [ ] **Step 6: Run production build**
 
 ```bash
 npm run build
@@ -1238,15 +1333,11 @@ Expected: Next.js production build succeeds.
 
 - [ ] **Step 7: Verify database migration separately**
 
-If Supabase CLI/database access is available:
-
 ```bash
 npx supabase db reset
 ```
 
-Expected: migrations `001_initial_schema.sql` and `002_v2_product_integrity.sql` apply cleanly.
-
-If this environment cannot run the database, record that limitation explicitly in the PR and do not claim live DB verification.
+Expected: `001_initial_schema.sql` and `002_v2_product_integrity.sql` apply cleanly. If this environment cannot run the database, record that limitation explicitly and do not claim live DB verification.
 
 - [ ] **Step 8: Commit release documentation**
 
@@ -1293,7 +1384,7 @@ Do not merge until CI on the exact PR head is green.
 - Support unknown answers: Tasks 1–3.
 - Safe Mode / offer suppression: Task 4 and dashboard messaging in Task 7.
 - Analytics distinguishes lifecycle actions: Task 6.
-- Preserve under-18 hard gate: existing domain rule retained and regression E2E remains in Task 7/8.
+- Preserve under-18 hard gate: existing domain rule retained and regression E2E remains in Tasks 7–8.
 - Preserve deterministic/auditable logic and affiliate separation: Tasks 4–5 plus Global Constraints.
 - Preserve RLS: Task 3 and Global Constraints.
 
