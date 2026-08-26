@@ -1,7 +1,25 @@
 import { describe, expect, it } from "vitest";
-import { applyActionResponse } from "@/lib/domain/action-lifecycle";
+import { applyActionResponse, applyUtilisationEvidence } from "@/lib/domain/action-lifecycle";
+import type { UserAccount } from "@/lib/domain/types";
 
 const now = new Date("2026-08-26T12:00:00Z");
+
+const card = (balanceMinor: number | null, creditLimitMinor: number | null): UserAccount => ({
+  id: "a1",
+  userId: "u1",
+  providerId: null,
+  providerName: null,
+  accountType: "credit_card",
+  nickname: "Main card",
+  lastFour: "1234",
+  balanceMinor,
+  creditLimitMinor,
+  currency: "GBP",
+  directDebitStatus: "yes",
+  source: "manual",
+  active: true,
+  lastVerifiedAt: null,
+});
 
 describe("action lifecycle", () => {
   it("puts electoral roll submission into review without claiming registration", () => {
@@ -68,5 +86,23 @@ describe("action lifecycle", () => {
     });
     expect(result.missionState).toBe("deferred");
     expect(result.nextReviewAt).toBe("2026-09-02T12:00:00.000Z");
+  });
+
+  it("keeps an unproven utilisation completion resumable", () => {
+    const result = applyUtilisationEvidence(
+      applyActionResponse({ missionSlug: "reduce-utilisation", response: "completed", now }),
+      card(62000, 100000),
+    );
+    expect(result.attemptStatus).toBe("returned");
+    expect(result.missionState).toBe("started");
+  });
+
+  it("completes utilisation only when account evidence is at or below 30 percent", () => {
+    const result = applyUtilisationEvidence(
+      applyActionResponse({ missionSlug: "reduce-utilisation", response: "completed", now }),
+      card(30000, 100000),
+    );
+    expect(result.attemptStatus).toBe("self_confirmed");
+    expect(result.missionState).toBe("completed");
   });
 });
