@@ -35,6 +35,16 @@ export const actionAttemptResponseSchema = z.object({
   creditLimitMinor: z.number().int().positive().optional(),
 }).strict();
 
+export type ActionAttemptResponseInput = z.infer<typeof actionAttemptResponseSchema>;
+
+export function actionEvidenceAllowedForMission(
+  missionSlug: string,
+  input: ActionAttemptResponseInput,
+): boolean {
+  const hasUtilisationEvidence = input.balanceMinor !== undefined || input.creditLimitMinor !== undefined;
+  return !hasUtilisationEvidence || missionSlug === "reduce-utilisation";
+}
+
 function hasKeys(value: object): boolean {
   return Object.keys(value).length > 0;
 }
@@ -71,6 +81,9 @@ export async function PATCH(
 
     const instance = await getMissionInstance(supabase, user.id, attempt.missionInstanceId);
     if (!instance) return NextResponse.json({ error: "Mission not found" }, { status: 404 });
+    if (!actionEvidenceAllowedForMission(instance.missionSlug, parsed.data)) {
+      return NextResponse.json({ error: "Balance and limit evidence is only valid for utilisation missions" }, { status: 400 });
+    }
 
     const account = instance.subject.kind === "account"
       ? await getUserAccount(supabase, user.id, instance.subject.accountId)
