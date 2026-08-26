@@ -8,6 +8,7 @@ import type {
 export interface ResolveActionInput {
   missionSlug: string;
   provider: ProviderDefinition | null;
+  providers?: ProviderDefinition[];
   accountType: AccountType | null;
   actions: ActionDefinition[];
   age: number;
@@ -36,12 +37,23 @@ function candidateScore(
 
   if (providerMatches && accountMatches) return 4000 - action.priority;
   if (providerMatches && action.accountType === null) return 3000 - action.priority;
+
+  // Profile-scoped actions may name their own trusted provider (for example GOV.UK)
+  // even though there is no target financial account/provider.
+  if (provider === null && accountType === null && action.providerId !== null && action.accountType === null) {
+    return 2500 - action.priority;
+  }
+
   if (action.providerId === null && accountMatches) return 2000 - action.priority;
   if (action.providerId === null && action.accountType === null) return 1000 - action.priority;
   return -1;
 }
 
 export function resolveAction(input: ResolveActionInput): ResolvedAction | null {
+  const providers = input.providers ?? [];
+  const providerById = new Map(providers.map((item) => [item.id, item]));
+  if (input.provider) providerById.set(input.provider.id, input.provider);
+
   const candidates = input.actions
     .filter((action) => action.active)
     .filter((action) => action.missionSlug === input.missionSlug)
@@ -51,7 +63,7 @@ export function resolveAction(input: ResolveActionInput): ResolvedAction | null 
     .filter(({ score }) => score >= 0)
     .filter(({ action }) => {
       if (action.mode !== "external_link" || action.destinationUrl === null) return true;
-      const destinationProvider = action.providerId === input.provider?.id ? input.provider : null;
+      const destinationProvider = action.providerId ? providerById.get(action.providerId) ?? null : null;
       return isAllowedDestination(action.destinationUrl, destinationProvider);
     })
     .sort((a, b) => b.score - a.score || a.action.actionKey.localeCompare(b.action.actionKey));
@@ -59,13 +71,18 @@ export function resolveAction(input: ResolveActionInput): ResolvedAction | null 
   const selected = candidates[0]?.action;
   if (!selected) return null;
 
+  const selectedProvider = selected.providerId ? providerById.get(selected.providerId) ?? null : null;
+  const isAccountFallback = input.accountType !== null && (
+    input.provider === null || selected.providerId !== input.provider.id
+  );
+
   return {
     actionId: selected.id,
     mode: selected.mode,
-    providerName: selected.providerId === input.provider?.id ? input.provider.displayName : null,
+    providerName: selectedProvider?.displayName ?? null,
     destinationUrl: selected.destinationUrl,
     instructions: selected.instructions,
     verificationMode: selected.verificationMode,
-    fallbackUsed: selected.providerId !== input.provider?.id,
+    fallbackUsed: isAccountFallback,
   };
 }
