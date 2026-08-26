@@ -83,7 +83,7 @@ alter table public.user_missions
 
 alter table public.user_missions
   add constraint user_missions_subject_id_fkey
-  foreign key (subject_id) references public.user_accounts(id) on delete set null;
+  foreign key (subject_id) references public.user_accounts(id) on delete cascade;
 
 create unique index if not exists user_missions_profile_unique
   on public.user_missions(user_id, mission_slug)
@@ -186,6 +186,8 @@ create policy "action_attempts_update_own" on public.action_attempts
   using (auth.uid() = user_id)
   with check (auth.uid() = user_id);
 
+-- Government and major UK card/account providers. The provider directory is
+-- configuration only; it does not imply an API partnership or data connection.
 insert into public.providers (
   slug,
   display_name,
@@ -193,13 +195,21 @@ insert into public.providers (
   allowed_hosts,
   active
 )
-values (
-  'gov-uk',
-  'GOV.UK',
-  'government',
-  array['www.gov.uk','gov.uk'],
-  true
-)
+values
+  ('gov-uk', 'GOV.UK', 'government', array['www.gov.uk','gov.uk'], true),
+  ('barclaycard', 'Barclaycard', 'card_issuer', array['www.barclaycard.co.uk','barclaycard.co.uk'], true),
+  ('capital-one-uk', 'Capital One UK', 'card_issuer', array['www.capitalone.co.uk','capitalone.co.uk'], true),
+  ('lloyds-bank', 'Lloyds Bank', 'bank', array['www.lloydsbank.com','lloydsbank.com'], true),
+  ('halifax', 'Halifax', 'bank', array['www.halifax.co.uk','halifax.co.uk'], true),
+  ('mbna', 'MBNA', 'card_issuer', array['www.mbna.co.uk','mbna.co.uk'], true),
+  ('natwest', 'NatWest', 'bank', array['www.natwest.com','natwest.com'], true),
+  ('rbs', 'Royal Bank of Scotland', 'bank', array['www.rbs.co.uk','rbs.co.uk'], true),
+  ('santander-uk', 'Santander UK', 'bank', array['www.santander.co.uk','santander.co.uk'], true),
+  ('hsbc-uk', 'HSBC UK', 'bank', array['www.hsbc.co.uk','hsbc.co.uk'], true),
+  ('american-express-uk', 'American Express UK', 'card_issuer', array['www.americanexpress.com','americanexpress.com'], true),
+  ('tesco-bank', 'Tesco Bank', 'bank', array['www.tescobank.com','tescobank.com'], true),
+  ('vanquis', 'Vanquis', 'card_issuer', array['www.vanquis.co.uk','vanquis.co.uk'], true),
+  ('newday', 'NewDay (Aqua / Marbles / Fluid / Bip)', 'card_issuer', array['www.newday.co.uk','newday.co.uk','www.aquacard.co.uk','aquacard.co.uk'], true)
 on conflict (slug) do update set
   display_name = excluded.display_name,
   provider_type = excluded.provider_type,
@@ -238,6 +248,83 @@ from public.providers p
 where p.slug = 'gov-uk'
 on conflict (action_key) do update set
   provider_id = excluded.provider_id,
+  destination_url = excluded.destination_url,
+  instructions = excluded.instructions,
+  verification_mode = excluded.verification_mode,
+  safe_mode_allowed = excluded.safe_mode_allowed,
+  min_age = excluded.min_age,
+  priority = excluded.priority,
+  active = true,
+  updated_at = now();
+
+-- Exact provider routes are included only where a current, stable official
+-- support journey was verified. Other issuers deliberately use the generic
+-- fallback rather than a guessed or brittle login/deep-link URL.
+insert into public.action_registry (
+  action_key,
+  mission_slug,
+  provider_id,
+  account_type,
+  action_mode,
+  destination_url,
+  instructions,
+  verification_mode,
+  safe_mode_allowed,
+  min_age,
+  priority,
+  active
+)
+select
+  v.action_key,
+  'set-up-direct-debit',
+  p.id,
+  'credit_card',
+  'external_link',
+  v.destination_url,
+  v.instructions,
+  'self_confirm',
+  true,
+  16,
+  20,
+  true
+from (
+  values
+    (
+      'direct-debit-capital-one-uk',
+      'capital-one-uk',
+      'https://www.capitalone.co.uk/support/worried-about-missed-payments',
+      'Capital One says you can set up or edit your Direct Debit in the app or after signing in online. Use the official support journey, then return to Credit Quest to confirm the target card.'
+    ),
+    (
+      'direct-debit-lloyds-bank',
+      'lloyds-bank',
+      'https://www.lloydsbank.com/credit-cards/ways-to-pay-your-credit-card.html',
+      'Lloyds Bank provides Direct Debit setup through its app and Online Banking. Follow the official payment guidance, then return to Credit Quest to confirm the target card.'
+    ),
+    (
+      'direct-debit-halifax',
+      'halifax',
+      'https://www.halifax.co.uk/creditcards/ways-to-pay-your-credit-card/pay-by-direct-debit.html',
+      'Halifax provides Direct Debit setup through its app and Online Banking. Follow the official guidance, then return to Credit Quest to confirm the target card.'
+    ),
+    (
+      'direct-debit-mbna',
+      'mbna',
+      'https://www.mbna.co.uk/credit-cards/help-and-support/making-payments.html',
+      'MBNA provides Direct Debit setup through its app and Online Services. Follow the official payment guidance, then return to Credit Quest to confirm the target card.'
+    ),
+    (
+      'direct-debit-natwest',
+      'natwest',
+      'https://www.natwest.com/support-centre/payments/general/pay-my-credit-card-with-direct-debit.html',
+      'NatWest provides Direct Debit setup through its app and Online Banking. Follow the official guidance, then return to Credit Quest to confirm the target card.'
+    )
+) as v(action_key, provider_slug, destination_url, instructions)
+join public.providers p on p.slug = v.provider_slug
+on conflict (action_key) do update set
+  provider_id = excluded.provider_id,
+  account_type = excluded.account_type,
+  action_mode = excluded.action_mode,
   destination_url = excluded.destination_url,
   instructions = excluded.instructions,
   verification_mode = excluded.verification_mode,
