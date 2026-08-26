@@ -9,7 +9,7 @@ const rankedMission: RankedMission = {
   mission: {
     id: "m1", slug: "register-electoral-roll", title: "Get on the electoral roll",
     description: "Register at your current address.", rationale: "It helps lenders verify your address.",
-    stage: "setup", impact: "high", questScoreDelta: 10, priorityWeight: 90,
+    stage: "setup", impact: "high", questScoreDelta: 10, priorityWeight: 90, safeModeAllowed: true,
     isEligible: () => true,
   },
 };
@@ -22,6 +22,18 @@ describe("NextMissionCard", () => {
     expect(screen.getByText(/high impact/i)).not.toBeNull();
     expect(screen.getByText(/\+10 Quest Score/i)).not.toBeNull();
     expect(screen.getByText(/30 days/i)).not.toBeNull();
+  });
+
+  it("shows Start before a mission has begun", () => {
+    render(<NextMissionCard rankedMission={rankedMission} progress={{ state: "not_started" }} />);
+    expect(screen.getByRole("button", { name: "Start this mission" })).not.toBeNull();
+    expect(screen.queryByRole("button", { name: "Mark complete" })).toBeNull();
+  });
+
+  it("shows Mark complete after a mission has started", () => {
+    render(<NextMissionCard rankedMission={rankedMission} progress={{ state: "started" }} />);
+    expect(screen.getByRole("button", { name: "Mark complete" })).not.toBeNull();
+    expect(screen.queryByRole("button", { name: "Start this mission" })).toBeNull();
   });
 
   it("renders partner disclosure when an offer exists", () => {
