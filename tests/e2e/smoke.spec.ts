@@ -39,6 +39,23 @@ test("adult can complete onboarding, receive a mission, and see a relevant refer
   await expect(page.getByRole("link", { name: "Check eligibility with provider" })).toBeVisible();
   await page.getByRole("button", { name: "Start this mission" }).click();
   await expect(page.getByRole("status")).toContainText("Mission started");
+  await expect(page.getByRole("button", { name: "Mark complete" })).toBeVisible();
+  await expect(page.getByTestId("missions-done")).toHaveText("0");
+});
+
+test("starting is not completion and completing a real mission recalculates the plan", async ({ page }) => {
+  await completeOnboarding(page, "1990-01-01", false);
+
+  await expect(page.getByRole("heading", { name: "Get on the electoral roll" })).toBeVisible();
+  await expect(page.getByTestId("missions-done")).toHaveText("0");
+
+  await page.getByRole("button", { name: "Start this mission" }).click();
+  await expect(page.getByRole("button", { name: "Mark complete" })).toBeVisible();
+  await expect(page.getByTestId("missions-done")).toHaveText("0");
+
+  await page.getByRole("button", { name: "Mark complete" }).click();
+  await expect(page.getByTestId("missions-done")).toHaveText("1");
+  await expect(page.getByRole("heading", { name: "Get on the electoral roll" })).toHaveCount(0);
 });
 
 test("17-year-old gets education mode with no credit-product referral", async ({ page }) => {
