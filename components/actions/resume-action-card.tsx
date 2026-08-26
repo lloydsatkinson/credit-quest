@@ -10,7 +10,16 @@ interface ResumeActionCardProps {
   providerLabel?: string | null;
 }
 
-function primaryAction(missionSlug: string): { label: string; response: string } {
+function primaryAction(missionSlug: string, attempt: ActionAttempt): { label: string; response: string } {
+  if (attempt.status === "submitted") {
+    if (missionSlug === "register-electoral-roll") {
+      return { label: "I'm now registered", response: "confirmed_registered" };
+    }
+    if (missionSlug === "build-revolving-history") {
+      return { label: "I opened the account", response: "confirmed_account_opened" };
+    }
+  }
+
   switch (missionSlug) {
     case "register-electoral-roll":
       return { label: "I submitted my registration", response: "submitted" };
@@ -35,7 +44,7 @@ export function ResumeActionCard({
 }: ResumeActionCardProps) {
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const primary = primaryAction(missionSlug);
+  const primary = primaryAction(missionSlug, attempt);
 
   async function respond(response: string) {
     setBusy(response);
@@ -68,6 +77,12 @@ export function ResumeActionCard({
       {missionSlug === "reduce-utilisation" ? (
         <p className="mt-3 rounded-2xl bg-white p-3 text-xs leading-5 text-slate-600">
           Update the card balance in My accounts first if it has changed. Credit Quest will only complete this mission when the stored balance and limit show utilisation at or below the target.
+        </p>
+      ) : null}
+
+      {attempt.status === "submitted" ? (
+        <p className="mt-3 rounded-2xl bg-white p-3 text-xs leading-5 text-slate-600">
+          This is a follow-up check. Confirm the real-world outcome only if it has actually happened; the earlier provider or application step did not complete the mission by itself.
         </p>
       ) : null}
 
