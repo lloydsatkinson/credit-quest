@@ -25,6 +25,15 @@ function missionKey(instance: MissionInstance): string {
   return `${instance.missionSlug}:${instance.subject.kind === "profile" ? "profile" : instance.subject.accountId}`;
 }
 
+export function mergeMissionSyncResults(
+  existing: MissionInstance[],
+  synced: MissionInstance[],
+): MissionInstance[] {
+  const byId = new Map(existing.map((instance) => [instance.id, instance]));
+  for (const instance of synced) byId.set(instance.id, instance);
+  return [...byId.values()];
+}
+
 export function shouldMarkNoLongerEligible(
   instance: MissionInstance,
   profile: CreditProfile,
@@ -179,5 +188,5 @@ export async function syncMissionInstances(
     if (updated) synced.push(updated);
   }
 
-  return synced;
+  return mergeMissionSyncResults(existing, synced);
 }
