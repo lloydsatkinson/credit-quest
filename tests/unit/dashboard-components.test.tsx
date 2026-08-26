@@ -27,10 +27,20 @@ describe("NextMissionCard", () => {
     expect(screen.getByText(/30 days/i)).not.toBeNull();
   });
 
-  it("shows Start before a mission has begun", () => {
+  it("shows Start before a mission has begun in local demo mode", () => {
     render(<NextMissionCard rankedMission={rankedMission} progress={{ state: "not_started" }} />);
     expect(screen.getByRole("button", { name: "Start this mission" })).not.toBeNull();
     expect(screen.queryByRole("button", { name: "Mark complete" })).toBeNull();
+  });
+
+  it("routes a new persisted mission into its Action Screen", () => {
+    render(<NextMissionCard
+      rankedMission={rankedMission}
+      progress={{ state: "not_started" }}
+      actionHref="/actions/11111111-1111-4111-8111-111111111111"
+    />);
+    expect(screen.getByRole("link", { name: /start this mission/i }).getAttribute("href"))
+      .toBe("/actions/11111111-1111-4111-8111-111111111111");
   });
 
   it("routes a started mission into the Action Screen instead of offering immediate completion", () => {
