@@ -9,7 +9,7 @@ export function calculateQuestScore(profile: CreditProfile): QuestScoreResult {
   let score = 50;
   const factors: string[] = [];
 
-  if (profile.electoralRoll) {
+  if (profile.electoralRoll === true) {
     score += 10;
     factors.push("+10 for being registered on the electoral roll");
   }
@@ -27,24 +27,24 @@ export function calculateQuestScore(profile: CreditProfile): QuestScoreResult {
     }
   }
 
-  if (profile.missedPaymentsLast12m > 0) {
-    const penalty = Math.min(profile.missedPaymentsLast12m * 15, 30);
+  if ((profile.missedPaymentsLast12m ?? 0) > 0) {
+    const penalty = Math.min((profile.missedPaymentsLast12m ?? 0) * 15, 30);
     score -= penalty;
     factors.push(`-${penalty} for missed payments in the last 12 months`);
   }
 
-  if (profile.hardApplicationsLast6m > 1) {
-    const penalty = Math.min((profile.hardApplicationsLast6m - 1) * 5, 15);
+  if ((profile.hardApplicationsLast6m ?? 0) > 1) {
+    const penalty = Math.min(((profile.hardApplicationsLast6m ?? 0) - 1) * 5, 15);
     score -= penalty;
     factors.push(`-${penalty} for multiple recent hard credit applications`);
   }
 
-  if (profile.hasRevolvingCredit) {
+  if (profile.hasRevolvingCredit === true) {
     score += 5;
     factors.push("+5 for having revolving credit history");
   }
 
-  if (profile.hasDirectDebitForCredit) {
+  if (profile.hasDirectDebitForCredit === true) {
     score += 5;
     factors.push("+5 for using a direct debit to reduce missed-payment risk");
   }

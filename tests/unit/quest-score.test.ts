@@ -25,4 +25,19 @@ describe("calculateQuestScore", () => {
     expect(stressed.score).toBeGreaterThanOrEqual(0);
     expect(stressed.score).toBeLessThanOrEqual(100);
   });
+
+  it("keeps unknown credit-file answers neutral", () => {
+    const result = calculateQuestScore({
+      ...base,
+      electoralRoll: null,
+      utilisationPct: null,
+      missedPaymentsLast12m: null,
+      hardApplicationsLast6m: null,
+      hasRevolvingCredit: null,
+      hasDirectDebitForCredit: null,
+    });
+
+    expect(result.score).toBe(50);
+    expect(result.factors).toEqual([]);
+  });
 });

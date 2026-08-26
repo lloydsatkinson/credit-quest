@@ -25,6 +25,11 @@ describe("offer matching", () => {
     expect(getOffersForMission(base, nonReferral)).toEqual([]);
   });
 
+  it("suppresses all offers in safe mode", () => {
+    const stressed = { ...base, missedPaymentsLast12m: 2, hardApplicationsLast6m: 4 };
+    expect(getOffersForMission(stressed, mission)).toEqual([]);
+  });
+
   it("does not use commission to choose the mission", () => {
     expect(getNextBestMission(base)?.mission.slug).toBe("build-revolving-history");
   });

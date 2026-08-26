@@ -1,22 +1,36 @@
 import { expect, test, type Page } from "@playwright/test";
 
 async function completeOnboarding(page: Page, dateOfBirth: string, electoralRoll = true) {
-  await page.goto("/onboarding");
+  await page.goto("/onboarding", { waitUntil: "networkidle" });
   await page.getByTestId("dob").fill(dateOfBirth);
+  await expect(page.getByTestId("next")).toBeEnabled();
   await page.getByTestId("next").click();
+
+  await page.getByLabel("Employment status").selectOption("employed");
+  await page.getByLabel("Annual personal income band").selectOption("30_50k");
   await page.getByTestId("next").click();
+
+  await page.getByLabel("Housing situation").selectOption("rent");
   await page.getByTestId("next").click();
-  if (electoralRoll) await page.getByRole("button", { name: "Yes" }).click();
+
+  await page.getByRole("button", { name: electoralRoll ? "Yes" : "No", exact: true }).click();
   await page.getByTestId("next").click();
+
+  await page.getByRole("button", { name: "No", exact: true }).click();
   await page.getByTestId("next").click();
+
+  await page.getByLabel("Missed payments").fill("0");
   await page.getByTestId("next").click();
+
+  await page.getByLabel("Hard applications").fill("0");
   await page.getByTestId("next").click();
+
   await page.getByTestId("finish").click();
   await expect(page).toHaveURL(/\/dashboard$/);
 }
 
 test("adult can complete onboarding, receive a mission, and see a relevant referral", async ({ page }) => {
-  await page.goto("/login");
+  await page.goto("/login", { waitUntil: "networkidle" });
   await expect(page.getByText("Build better credit habits, one move at a time.")).toBeVisible();
   await page.getByRole("link", { name: "Continue in demo mode" }).click();
   await completeOnboarding(page, "1990-01-01", true);
@@ -26,20 +40,37 @@ test("adult can complete onboarding, receive a mission, and see a relevant refer
   await expect(page.getByRole("link", { name: "Check eligibility with provider" })).toBeVisible();
   await page.getByRole("button", { name: "Start this mission" }).click();
   await expect(page.getByRole("status")).toContainText("Mission started");
+  await expect(page.getByRole("button", { name: "Mark complete" })).toBeVisible();
+  await expect(page.getByTestId("missions-done")).toHaveText("0");
+});
+
+test("starting is not completion and completing a real mission recalculates the plan", async ({ page }) => {
+  await completeOnboarding(page, "1990-01-01", false);
+
+  await expect(page.getByRole("heading", { name: "Get on the electoral roll" })).toBeVisible();
+  await expect(page.getByTestId("missions-done")).toHaveText("0");
+
+  await page.getByRole("button", { name: "Start this mission" }).click();
+  await expect(page.getByRole("button", { name: "Mark complete" })).toBeVisible();
+  await expect(page.getByTestId("missions-done")).toHaveText("0");
+
+  await page.getByRole("button", { name: "Mark complete" }).click();
+  await expect(page.getByTestId("missions-done")).toHaveText("1");
+  await expect(page.getByRole("heading", { name: "Get on the electoral roll" })).toHaveCount(0);
 });
 
 test("17-year-old gets education mode with no credit-product referral", async ({ page }) => {
-  await completeOnboarding(page, "2009-08-26", true);
+  await completeOnboarding(page, "2009-08-25", true);
   await expect(page.getByText("Your next best move")).toBeVisible();
   await expect(page.getByRole("link", { name: "Check eligibility with provider" })).toHaveCount(0);
 
-  await page.goto("/offers");
+  await page.goto("/offers", { waitUntil: "networkidle" });
   await expect(page.getByText("Learn now. Products can wait.")).toBeVisible();
   await expect(page.getByRole("button", { name: "Check eligibility with provider" })).toHaveCount(0);
 });
 
 test("PWA manifest exposes install assets", async ({ page, request }) => {
-  await page.goto("/");
+  await page.goto("/", { waitUntil: "networkidle" });
   const manifest = await request.get("/manifest.webmanifest");
   expect(manifest.ok()).toBeTruthy();
   const body = await manifest.json();
