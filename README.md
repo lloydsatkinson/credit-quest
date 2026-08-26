@@ -2,7 +2,21 @@
 
 Credit Quest is a mobile-first UK credit-building and credit-optimisation PWA. It turns a user's profile into one explainable **next best move**, then uses a staged journey — Setup → Stabilise → Build → Optimise → Maintain — to keep progress understandable and actionable.
 
-## V1 product boundaries
+## V2.0a — Product Integrity
+
+The first incremental V2 release strengthens the decisioning foundation before the larger Credit Passport and Quest Feed experience is introduced.
+
+- Financial onboarding answers are explicit rather than pre-populated with plausible customer values.
+- Unknown credit-file answers remain unknown instead of being converted to `0` or `false`.
+- Mission **started** and mission **completed** are separate lifecycle states.
+- Supported completion effects update the underlying customer profile before the mission engine and Quest Score are recalculated.
+- Safe Mode can suppress credit-product offers and borrowing-oriented missions when current profile signals indicate financial pressure.
+- Users aged 16–17 remain education-only and receive no credit-product referrals.
+- Affiliate commission remains outside mission ranking and safety logic.
+
+Later V2 releases will add Barrier Diagnosis, Credit Passport, Application Readiness / **Can I Apply Yet?**, the TikTok-inspired vertical Quest Feed, Decline Recovery, richer mission coverage and external-data integrations. Those features are not claimed as shipped in V2.0a.
+
+## Product boundaries
 
 - Available from age 16.
 - Ages 16–17 use education mode and receive **no credit-product referrals**.
@@ -30,7 +44,7 @@ npm run dev
 
 Open `http://localhost:3000`.
 
-Without Supabase environment variables the app runs in **demo mode**, using browser-local state so the V1 journey can be reviewed without a backend account.
+Without Supabase environment variables the app runs in **demo mode**, using browser-local state so the journey can be reviewed without a backend account.
 
 ## Environment variables
 
@@ -53,11 +67,12 @@ npx supabase start
 npx supabase db reset
 ```
 
-The initial migration is at `supabase/migrations/001_initial_schema.sql`. RLS verification guidance is in `supabase/tests/rls.sql`.
+The base migration is at `supabase/migrations/001_initial_schema.sql`. V2.0a adds `supabase/migrations/002_v2_product_integrity.sql`. RLS verification guidance is in `supabase/tests/rls.sql`.
 
 ## Verification
 
 ```bash
+npm audit --omit=dev --audit-level=high
 npm run lint
 npm test
 npx playwright install --with-deps chromium
@@ -72,14 +87,16 @@ The decision flow is intentionally one-way:
 ```text
 profile
   ↓
+safety assessment
+  ↓
 Credit Quest Score + mission eligibility/ranking
   ↓
 next-best mission
   ↓
-offer matching (optional, age-gated)
+offer matching (optional, age-gated and safety-gated)
 ```
 
-Offer data never flows back into mission ranking. This keeps user benefit separate from commercial value.
+Offer data never flows back into safety or mission ranking. This keeps user benefit separate from commercial value.
 
 ## Demo affiliate data
 
@@ -87,9 +104,11 @@ All provider and affiliate records committed to source control are fictional dem
 
 ## Future extension points
 
-The V1 data/domain boundaries are designed for later additions including Open Banking, CRA data, lender eligibility APIs, richer alerting, premium scenario analysis and an AI coach. External data should be normalised into the structured profile before the deterministic mission engine consumes it.
+The V2 architecture is designed for later additions including Barrier Diagnosis, Credit Passport, Application Readiness, the vertical Quest Feed, Decline Recovery, Open Banking, CRA data, lender eligibility APIs, Product Fit, premium scenario analysis and an AI coach. External data should be normalised into the structured profile before deterministic decision engines consume it.
 
 ## Design and implementation docs
 
 - `docs/superpowers/specs/2026-08-25-credit-quest-v1-design.md`
 - `docs/superpowers/plans/2026-08-25-credit-quest-v1-implementation.md`
+- `docs/superpowers/specs/2026-08-26-credit-quest-v2-design.md`
+- `docs/superpowers/plans/2026-08-26-credit-quest-v2-0a-product-integrity.md`
