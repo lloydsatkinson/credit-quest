@@ -37,19 +37,17 @@ export function NextMissionCard({
       </div>
       {reviewTiming && <p className="mt-4 text-sm text-slate-400">Review timing: {reviewTiming}</p>}
 
-      {isStarted ? (
-        actionHref ? (
-          <Link
-            href={actionHref}
-            className="mt-6 block w-full rounded-2xl bg-violet-500 px-5 py-3 text-center font-black text-white hover:bg-violet-400"
-          >
-            Continue this mission
-          </Link>
-        ) : (
-          <div className="mt-6 rounded-2xl bg-white/8 px-5 py-3 text-center text-sm font-bold text-slate-300">
-            This mission is ready to continue through its action journey.
-          </div>
-        )
+      {actionHref ? (
+        <Link
+          href={actionHref}
+          className="mt-6 block w-full rounded-2xl bg-violet-500 px-5 py-3 text-center font-black text-white hover:bg-violet-400"
+        >
+          {isStarted ? "Continue this mission" : "Start this mission"}
+        </Link>
+      ) : isStarted ? (
+        <div className="mt-6 rounded-2xl bg-white/8 px-5 py-3 text-center text-sm font-bold text-slate-300">
+          This mission is ready to continue through its action journey.
+        </div>
       ) : (
         <button onClick={onStart} className="mt-6 w-full rounded-2xl bg-violet-500 px-5 py-3 font-black text-white hover:bg-violet-400">
           Start this mission
