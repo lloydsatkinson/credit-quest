@@ -11,7 +11,9 @@ export const MISSION_CATALOGUE: MissionDefinition[] = [
     impact: "high",
     questScoreDelta: 10,
     priorityWeight: 90,
-    isEligible: (profile) => !profile.electoralRoll,
+    safeModeAllowed: true,
+    completionEffect: { type: "set_profile_value", field: "electoralRoll", value: true },
+    isEligible: (profile) => profile.electoralRoll === false,
   },
   {
     id: "m-utilisation",
@@ -23,6 +25,7 @@ export const MISSION_CATALOGUE: MissionDefinition[] = [
     impact: "high",
     questScoreDelta: 10,
     priorityWeight: 70,
+    safeModeAllowed: true,
     isEligible: (profile) => profile.utilisationPct !== null && profile.utilisationPct > 30,
   },
   {
@@ -35,7 +38,9 @@ export const MISSION_CATALOGUE: MissionDefinition[] = [
     impact: "medium",
     questScoreDelta: 5,
     priorityWeight: 65,
-    isEligible: (profile) => profile.hasRevolvingCredit && !profile.hasDirectDebitForCredit,
+    safeModeAllowed: true,
+    completionEffect: { type: "set_profile_value", field: "hasDirectDebitForCredit", value: true },
+    isEligible: (profile) => profile.hasRevolvingCredit === true && profile.hasDirectDebitForCredit === false,
   },
   {
     id: "m-cooldown",
@@ -47,7 +52,8 @@ export const MISSION_CATALOGUE: MissionDefinition[] = [
     impact: "high",
     questScoreDelta: 5,
     priorityWeight: 95,
-    isEligible: (profile) => profile.hardApplicationsLast6m >= 3,
+    safeModeAllowed: true,
+    isEligible: (profile) => (profile.hardApplicationsLast6m ?? 0) >= 3,
   },
   {
     id: "m-revolving-history",
@@ -59,7 +65,8 @@ export const MISSION_CATALOGUE: MissionDefinition[] = [
     impact: "medium",
     questScoreDelta: 5,
     priorityWeight: 55,
+    safeModeAllowed: false,
     referralCategory: "credit_builder_card",
-    isEligible: (profile) => !profile.hasRevolvingCredit && profile.missedPaymentsLast12m === 0,
+    isEligible: (profile) => profile.hasRevolvingCredit === false && profile.missedPaymentsLast12m === 0,
   },
 ];
