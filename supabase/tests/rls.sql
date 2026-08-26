@@ -16,10 +16,14 @@ begin
 
   if not exists (
     select 1 from pg_policies
-    where schemaname = 'public' and tablename = 'user_missions'
+    where schemaname = 'public'
+      and tablename = 'user_missions'
       and policyname = 'missions_update_own'
+      and cmd = 'UPDATE'
+      and qual like '%auth.uid()%user_id%'
+      and with_check like '%auth.uid()%user_id%'
   ) then
-    raise exception 'user_missions owner-update policy missing';
+    raise exception 'user_missions owner-update policy missing or not owner-scoped';
   end if;
 
   if exists (
