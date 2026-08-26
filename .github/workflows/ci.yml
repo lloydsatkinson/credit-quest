@@ -2,12 +2,16 @@ name: CI
 
 on:
   push:
-    branches: ["main", "feat/action-layer-phase-1"]
+    branches: ["main"]
   pull_request:
     branches: ["main"]
 
 permissions:
   contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   verify:
