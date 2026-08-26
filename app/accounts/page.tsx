@@ -1,14 +1,15 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { AccountsClient } from "@/components/accounts/accounts-client";
+import type { ProviderDefinition, UserAccount } from "@/lib/domain/types";
 import { listUserAccounts } from "@/lib/server/account-repository";
 import { listProviders } from "@/lib/server/action-repository";
 import { getSupabasePublicEnv } from "@/lib/supabase/env";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 export default async function AccountsPage() {
-  let accounts = [];
-  let providers = [];
+  let accounts: UserAccount[] = [];
+  let providers: ProviderDefinition[] = [];
 
   if (getSupabasePublicEnv()) {
     const supabase = await createServerSupabaseClient();
