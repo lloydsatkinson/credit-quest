@@ -38,4 +38,17 @@ describe("mission ranking", () => {
 
     expect(rankMissions(unknown)).toEqual([]);
   });
+
+  it("keeps stability actions available in safe mode", () => {
+    const stressed: CreditProfile = {
+      ...clean,
+      missedPaymentsLast12m: 2,
+      hardApplicationsLast6m: 4,
+      hasRevolvingCredit: false,
+    };
+    const missions = rankMissions(stressed).map((item) => item.mission.slug);
+
+    expect(missions).toContain("application-cooldown");
+    expect(missions).not.toContain("build-revolving-history");
+  });
 });
