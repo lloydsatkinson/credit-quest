@@ -32,13 +32,24 @@ export type MissionActionContextResult =
   | { ok: true; context: MissionActionContext }
   | { ok: false; status: 404 | 409; error: string };
 
-const BLOCKED_INSTANCE_STATES: MissionInstance["state"][] = [
+const TERMINAL_INSTANCE_STATES: MissionInstance["state"][] = [
   "completed",
   "dismissed",
   "no_longer_eligible",
+];
+
+const REVIEW_GATED_INSTANCE_STATES: MissionInstance["state"][] = [
   "in_review",
   "cooldown",
+  "deferred",
 ];
+
+export function isMissionInstanceActionable(instance: MissionInstance, now = new Date()): boolean {
+  if (TERMINAL_INSTANCE_STATES.includes(instance.state)) return false;
+  if (!REVIEW_GATED_INSTANCE_STATES.includes(instance.state)) return true;
+  if (!instance.nextReviewAt) return false;
+  return new Date(instance.nextReviewAt) <= now;
+}
 
 export async function resolveOwnedMissionAction(
   supabase: SupabaseClient,
@@ -48,7 +59,7 @@ export async function resolveOwnedMissionAction(
 ): Promise<MissionActionContextResult> {
   const instance = await getMissionInstance(supabase, userId, missionInstanceId);
   if (!instance) return { ok: false, status: 404, error: "Mission not found" };
-  if (BLOCKED_INSTANCE_STATES.includes(instance.state)) {
+  if (!isMissionInstanceActionable(instance, now)) {
     return { ok: false, status: 409, error: "This mission is not ready for a new action" };
   }
 
