@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { accountInputSchema } from "@/app/api/accounts/route";
 import { accountUpdateSchema } from "@/app/api/accounts/[id]/route";
+import { actionResolveSchema } from "@/app/api/actions/resolve/route";
+import { actionStartSchema } from "@/app/api/actions/start/route";
 import { canUseLegacyMissionAction } from "@/app/api/missions/[slug]/route";
 import { MISSION_CATALOGUE } from "@/lib/data/missions";
 
@@ -37,6 +39,21 @@ describe("account api validation", () => {
   it("allows a partial owner-account update but no user id override", () => {
     expect(accountUpdateSchema.safeParse({ nickname: "Travel card" }).success).toBe(true);
     expect(accountUpdateSchema.safeParse({ nickname: "Travel card", userId: "someone-else" }).success).toBe(false);
+  });
+});
+
+describe("mission action api validation", () => {
+  const valid = { missionInstanceId: "11111111-1111-4111-8111-111111111111" };
+
+  it("accepts only a mission instance id for resolve and start", () => {
+    expect(actionResolveSchema.safeParse(valid).success).toBe(true);
+    expect(actionStartSchema.safeParse(valid).success).toBe(true);
+  });
+
+  it("rejects a client supplied destination url", () => {
+    const malicious = { ...valid, destinationUrl: "https://evil.example/phish" };
+    expect(actionResolveSchema.safeParse(malicious).success).toBe(false);
+    expect(actionStartSchema.safeParse(malicious).success).toBe(false);
   });
 });
 
