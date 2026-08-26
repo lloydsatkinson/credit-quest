@@ -5,7 +5,7 @@ import type { CreditProfile } from "@/lib/domain/types";
 export const onboardingSchema = z.object({
   dateOfBirth: z.string().min(10),
   employmentStatus: z.enum(["employed", "self_employed", "student", "unemployed", "other"]),
-  incomeBand: z.enum(["under_15k", "15_30k", "30_50k", "50k_plus"]),
+  incomeBand: z.enum(["under_15k", "15_30k", "30_50k", "50k_plus", "not_applicable"]),
   housingStatus: z.enum(["owner", "mortgage", "rent", "family", "other"]),
   electoralRoll: z.boolean(),
   utilisationPct: z.number().min(0).max(100).nullable(),
@@ -13,6 +13,14 @@ export const onboardingSchema = z.object({
   hardApplicationsLast6m: z.number().int().min(0).max(30),
   hasRevolvingCredit: z.boolean(),
   hasDirectDebitForCredit: z.boolean(),
+}).superRefine((data, ctx) => {
+  if (data.employmentStatus !== "unemployed" && data.incomeBand === "not_applicable") {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["incomeBand"],
+      message: "Choose an income band for this employment status.",
+    });
+  }
 });
 
 export type OnboardingAnswers = z.infer<typeof onboardingSchema>;
@@ -26,8 +34,11 @@ export function normaliseOnboardingAnswers(
   if (getAgeYears(parsed.dateOfBirth, now) < 16) {
     throw new Error("Credit Quest is currently available from age 16.");
   }
+
+  const incomeBand = parsed.employmentStatus === "unemployed" ? "not_applicable" : parsed.incomeBand;
+
   return {
-    profile: { userId, ...parsed },
+    profile: { userId, ...parsed, incomeBand },
     ageMode: getAgeMode(parsed.dateOfBirth, now),
   };
 }
