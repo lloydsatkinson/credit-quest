@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getNextBestMission } from "@/lib/domain/mission-engine";
+import { getNextBestMission, rankMissions } from "@/lib/domain/mission-engine";
 import type { CreditProfile } from "@/lib/domain/types";
 
 const clean: CreditProfile = {
@@ -23,5 +23,19 @@ describe("mission ranking", () => {
 
   it("is independent of affiliate economics", () => {
     expect(getNextBestMission({ ...clean, hasRevolvingCredit: false })?.mission.slug).toBe("build-revolving-history");
+  });
+
+  it("does not manufacture missions from unknown answers", () => {
+    const unknown: CreditProfile = {
+      ...clean,
+      electoralRoll: null,
+      utilisationPct: null,
+      missedPaymentsLast12m: null,
+      hardApplicationsLast6m: null,
+      hasRevolvingCredit: null,
+      hasDirectDebitForCredit: null,
+    };
+
+    expect(rankMissions(unknown)).toEqual([]);
   });
 });
