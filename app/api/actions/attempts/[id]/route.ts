@@ -11,6 +11,7 @@ import {
   getUserAccount,
   updateUserAccount,
 } from "@/lib/server/account-repository";
+import { recordServerEvent, type EventName } from "@/lib/server/event-repository";
 import {
   getMissionInstance,
   updateMissionInstanceState,
@@ -35,6 +36,14 @@ export const actionAttemptResponseSchema = z.object({
 
 function hasKeys(value: object): boolean {
   return Object.keys(value).length > 0;
+}
+
+function actionEventFor(status: ActionAttemptStatus): EventName {
+  if (status === "verified") return "action_verified";
+  if (status === "submitted") return "action_submitted";
+  if (status === "self_confirmed") return "action_self_confirmed";
+  if (status === "cancelled") return "action_cancelled";
+  return "action_returned";
 }
 
 export async function PATCH(
@@ -138,6 +147,15 @@ export async function PATCH(
     if (!updatedAttempt) {
       return NextResponse.json({ error: "Could not update action attempt" }, { status: 409 });
     }
+
+    await recordServerEvent(supabase, user.id, actionEventFor(attemptStatus), {
+      missionSlug: instance.missionSlug,
+      missionInstanceId: instance.id,
+      attemptId: attempt.id,
+      accountType: account?.accountType ?? null,
+      response: parsed.data.response,
+      missionState,
+    });
 
     return NextResponse.json({
       attempt: updatedAttempt,
