@@ -1,7 +1,7 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AccountsClient } from "@/components/accounts/accounts-client";
-import type { ProviderDefinition } from "@/lib/domain/types";
+import type { ProviderDefinition, UserAccount } from "@/lib/domain/types";
 
 const providers: ProviderDefinition[] = [{
   id: "11111111-1111-1111-1111-111111111111",
@@ -11,6 +11,23 @@ const providers: ProviderDefinition[] = [{
   allowedHosts: ["demo.example"],
   active: true,
 }];
+
+const existingAccount: UserAccount = {
+  id: "a1",
+  userId: "u1",
+  providerId: providers[0].id,
+  providerName: "Demo Bank",
+  accountType: "credit_card",
+  nickname: "Main card",
+  lastFour: "1234",
+  balanceMinor: 62000,
+  creditLimitMinor: 100000,
+  currency: "GBP",
+  directDebitStatus: "no",
+  source: "manual",
+  active: true,
+  lastVerifiedAt: null,
+};
 
 afterEach(() => {
   cleanup();
@@ -63,5 +80,30 @@ describe("AccountsClient", () => {
 
     await waitFor(() => expect(screen.getByText(/Card 2/)).not.toBeNull());
     expect(screen.getByText(/Card 1/)).not.toBeNull();
+  });
+
+  it("lets the user update balance evidence for an existing card", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+      expect(String(input)).toContain("/api/accounts/a1");
+      expect(init?.method).toBe("PATCH");
+      expect(JSON.parse(String(init?.body))).toMatchObject({
+        balanceMinor: 28000,
+        creditLimitMinor: 100000,
+      });
+      return new Response(JSON.stringify({
+        account: { ...existingAccount, balanceMinor: 28000 },
+      }), { status: 200, headers: { "content-type": "application/json" } });
+    });
+
+    render(<AccountsClient initialAccounts={[existingAccount]} providers={providers} />);
+    const accountCard = screen.getByTestId("account-a1");
+    fireEvent.click(within(accountCard).getByRole("button", { name: /edit/i }));
+
+    const editForm = screen.getByTestId("edit-account-a1");
+    fireEvent.change(within(editForm).getByLabelText(/current balance/i), { target: { value: "280" } });
+    fireEvent.click(within(editForm).getByRole("button", { name: /save changes/i }));
+
+    await waitFor(() => expect(fetchSpy).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(within(screen.getByTestId("account-a1")).getByText(/balance £280\.00/i)).not.toBeNull());
   });
 });
