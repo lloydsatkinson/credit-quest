@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import {
   createActionAttempt,
+  findPendingAttemptForMission,
   listPendingActionAttempts,
 } from "@/lib/server/action-repository";
 import { resolveOwnedMissionAction } from "@/lib/server/action-service";
@@ -38,18 +39,31 @@ export async function POST(request: Request) {
       if (!updated) return NextResponse.json({ error: "Could not start this mission" }, { status: 409 });
     }
 
-    const pending = await listPendingActionAttempts(supabase, user.id);
-    const existing = pending.find((attempt) => attempt.missionInstanceId === context.instance.id);
-    const attempt = existing ?? await createActionAttempt(supabase, {
-      userId: user.id,
-      missionInstanceId: context.instance.id,
-      actionRegistryId: context.actionDefinition.id,
-      accountId: context.account?.id ?? null,
-      metadata: {
-        missionSlug: context.mission.slug,
-        fallbackUsed: context.resolvedAction.fallbackUsed,
-      },
-    });
+    let pending = await listPendingActionAttempts(supabase, user.id);
+    let existing = findPendingAttemptForMission(pending, context.instance.id);
+    let attempt = existing;
+
+    if (!attempt) {
+      try {
+        attempt = await createActionAttempt(supabase, {
+          userId: user.id,
+          missionInstanceId: context.instance.id,
+          actionRegistryId: context.actionDefinition.id,
+          accountId: context.account?.id ?? null,
+          metadata: {
+            missionSlug: context.mission.slug,
+            fallbackUsed: context.resolvedAction.fallbackUsed,
+          },
+        });
+      } catch (error) {
+        // A concurrent request may have won the unique-index race. Re-read the
+        // pending attempts and resume the winner; rethrow genuine insert errors.
+        pending = await listPendingActionAttempts(supabase, user.id);
+        existing = findPendingAttemptForMission(pending, context.instance.id);
+        if (!existing) throw error;
+        attempt = existing;
+      }
+    }
 
     await recordServerEvent(supabase, user.id, "action_started", {
       missionSlug: context.mission.slug,
