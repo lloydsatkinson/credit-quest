@@ -59,7 +59,7 @@ test("starting is not completion and completing a real mission recalculates the 
 });
 
 test("17-year-old gets education mode with no credit-product referral", async ({ page }) => {
-  await completeOnboarding(page, "2009-08-26", true);
+  await completeOnboarding(page, "2009-08-25", true);
   await expect(page.getByText("Your next best move")).toBeVisible();
   await expect(page.getByRole("link", { name: "Check eligibility with provider" })).toHaveCount(0);
 
