@@ -34,6 +34,18 @@ describe("ResumeActionCard", () => {
     expect(screen.queryByRole("button", { name: /mark complete/i })).toBeNull();
   });
 
+  it("switches electoral roll to registration confirmation after the review wait", () => {
+    render(<ResumeActionCard
+      attempt={{ ...attempt, status: "submitted", nextReviewAt: "2026-09-25T12:00:00.000Z" }}
+      missionSlug="register-electoral-roll"
+      missionTitle="Get on the electoral roll"
+      providerLabel="GOV.UK"
+    />);
+
+    expect(screen.getByRole("button", { name: /i'm now registered/i })).not.toBeNull();
+    expect(screen.queryByRole("button", { name: /i submitted my registration/i })).toBeNull();
+  });
+
   it("uses direct-debit completion language for a card action", () => {
     render(<ResumeActionCard
       attempt={{ ...attempt, accountId: "a1" }}
@@ -43,5 +55,16 @@ describe("ResumeActionCard", () => {
     />);
 
     expect(screen.getByRole("button", { name: /i set up the direct debit/i })).not.toBeNull();
+  });
+
+  it("asks for account-opened confirmation when a product journey returns after review", () => {
+    render(<ResumeActionCard
+      attempt={{ ...attempt, status: "submitted", nextReviewAt: "2026-09-25T12:00:00.000Z" }}
+      missionSlug="build-revolving-history"
+      missionTitle="Consider building revolving credit history"
+      providerLabel="Provider"
+    />);
+
+    expect(screen.getByRole("button", { name: /i opened the account/i })).not.toBeNull();
   });
 });
