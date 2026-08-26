@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { calculateAccountUtilisation } from "@/lib/domain/account-missions";
-import { applyActionResponse } from "@/lib/domain/action-lifecycle";
-import type { ActionAttemptStatus, MissionState, UserAccount } from "@/lib/domain/types";
+import { applyActionResponse, applyUtilisationEvidence } from "@/lib/domain/action-lifecycle";
+import type { ActionAttemptStatus, UserAccount } from "@/lib/domain/types";
 import {
   getActionAttempt,
   updateActionAttempt,
@@ -79,32 +78,21 @@ export async function PATCH(
       return NextResponse.json({ error: "Target account not found" }, { status: 409 });
     }
 
-    const baseOutcome = applyActionResponse({
+    let outcome = applyActionResponse({
       missionSlug: instance.missionSlug,
       response: parsed.data.response,
       now,
     });
 
-    let missionState: MissionState = baseOutcome.missionState;
-    let attemptStatus: ActionAttemptStatus = baseOutcome.attemptStatus;
-    let nextReviewAt = baseOutcome.nextReviewAt;
     const accountPatch: Partial<Pick<UserAccount, "directDebitStatus" | "balanceMinor" | "creditLimitMinor">> = {
-      ...baseOutcome.accountPatch,
+      ...outcome.accountPatch,
     };
-
     if (parsed.data.balanceMinor !== undefined) accountPatch.balanceMinor = parsed.data.balanceMinor;
     if (parsed.data.creditLimitMinor !== undefined) accountPatch.creditLimitMinor = parsed.data.creditLimitMinor;
 
-    if (instance.missionSlug === "reduce-utilisation" && account) {
-      const candidate = { ...account, ...accountPatch };
-      const utilisation = calculateAccountUtilisation(candidate);
-      const userSaysDone = parsed.data.response === "completed" || parsed.data.response === "submitted";
-
-      if (userSaysDone && utilisation !== null && utilisation <= 30) {
-        missionState = "completed";
-        attemptStatus = "self_confirmed";
-        nextReviewAt = null;
-      }
+    const userSaysDone = parsed.data.response === "completed" || parsed.data.response === "submitted";
+    if (instance.missionSlug === "reduce-utilisation" && account && userSaysDone) {
+      outcome = applyUtilisationEvidence(outcome, { ...account, ...accountPatch });
     }
 
     let updatedAccount = account;
@@ -115,15 +103,15 @@ export async function PATCH(
       }
     }
 
-    if (hasKeys(baseOutcome.profilePatch)) {
-      await updateUserProfile(supabase, user.id, baseOutcome.profilePatch, now);
+    if (hasKeys(outcome.profilePatch)) {
+      await updateUserProfile(supabase, user.id, outcome.profilePatch, now);
     }
 
     const missionPatch: Parameters<typeof updateMissionInstanceState>[3] = {
-      state: missionState,
-      nextReviewAt,
+      state: outcome.missionState,
+      nextReviewAt: outcome.nextReviewAt,
     };
-    if (missionState === "completed") missionPatch.completedAt = instance.completedAt ?? nowIso;
+    if (outcome.missionState === "completed") missionPatch.completedAt = instance.completedAt ?? nowIso;
 
     const updatedMission = await updateMissionInstanceState(
       supabase,
@@ -136,32 +124,32 @@ export async function PATCH(
     }
 
     const updatedAttempt = await updateActionAttempt(supabase, user.id, attempt.id, {
-      status: attemptStatus,
+      status: outcome.attemptStatus,
       returnedAt: attempt.returnedAt ?? nowIso,
-      selfConfirmedAt: ["self_confirmed", "submitted"].includes(attemptStatus)
+      selfConfirmedAt: ["self_confirmed", "submitted"].includes(outcome.attemptStatus)
         ? attempt.selfConfirmedAt ?? nowIso
         : attempt.selfConfirmedAt,
-      verifiedAt: attemptStatus === "verified" ? attempt.verifiedAt ?? nowIso : attempt.verifiedAt,
-      nextReviewAt,
+      verifiedAt: outcome.attemptStatus === "verified" ? attempt.verifiedAt ?? nowIso : attempt.verifiedAt,
+      nextReviewAt: outcome.nextReviewAt,
     });
     if (!updatedAttempt) {
       return NextResponse.json({ error: "Could not update action attempt" }, { status: 409 });
     }
 
-    await recordServerEvent(supabase, user.id, actionEventFor(attemptStatus), {
+    await recordServerEvent(supabase, user.id, actionEventFor(outcome.attemptStatus), {
       missionSlug: instance.missionSlug,
       missionInstanceId: instance.id,
       attemptId: attempt.id,
       accountType: account?.accountType ?? null,
       response: parsed.data.response,
-      missionState,
+      missionState: outcome.missionState,
     });
 
     return NextResponse.json({
       attempt: updatedAttempt,
       mission: updatedMission,
       account: updatedAccount,
-      profilePatch: baseOutcome.profilePatch,
+      profilePatch: outcome.profilePatch,
     });
   } catch {
     return NextResponse.json({ error: "Could not save this action response" }, { status: 500 });
