@@ -5,6 +5,7 @@ import { DashboardClient } from "@/components/dashboard/dashboard-client";
 import { NextMissionCard } from "@/components/dashboard/next-mission-card";
 import { ProgressStrip } from "@/components/dashboard/progress-strip";
 import { MISSION_CATALOGUE } from "@/lib/data/missions";
+import { deriveAccountProfileSignals } from "@/lib/domain/account-missions";
 import { rankMissionInstances } from "@/lib/domain/mission-engine";
 import { calculateQuestScore } from "@/lib/domain/quest-score";
 import { assessSafety } from "@/lib/domain/safety";
@@ -47,16 +48,18 @@ export default async function DashboardPage() {
 
   const now = new Date();
   const accounts = await listUserAccounts(supabase, user.id);
-  const instances = await syncMissionInstances(supabase, profile, accounts, now);
-  const ranked = rankMissionInstances(profile, instances, accounts, now);
+  const effectiveProfile = { ...profile, ...deriveAccountProfileSignals(accounts) };
+  const instances = await syncMissionInstances(supabase, effectiveProfile, accounts, now);
+  const ranked = rankMissionInstances(effectiveProfile, instances, accounts, now);
   const next = ranked[0] ?? null;
-  const pendingAttempts = await listPendingActionAttempts(supabase, user.id);
+  const pendingAttempts = await listPendingActionAttempts(supabase, user.id, now);
   const pendingAttempt = pendingAttempts[0] ?? null;
-  const score = calculateQuestScore(profile);
-  const safety = assessSafety(profile);
+  const score = calculateQuestScore(effectiveProfile);
+  const safety = assessSafety(effectiveProfile);
   const completed = instances.filter((instance) => instance.state === "completed").length;
   const stage: JourneyStage = next?.mission.stage ?? "maintain";
-  const needsAccountSetup = accounts.length === 0 && profile.hasRevolvingCredit === true;
+  const hasTrackedCreditCard = accounts.some((account) => account.accountType === "credit_card");
+  const needsAccountSetup = !hasTrackedCreditCard && effectiveProfile.hasRevolvingCredit === true;
 
   let pendingView: {
     attempt: NonNullable<typeof pendingAttempt>;
