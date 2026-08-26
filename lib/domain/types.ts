@@ -7,7 +7,7 @@ export interface CreditProfile {
   userId: string;
   dateOfBirth: string;
   employmentStatus: "employed" | "self_employed" | "student" | "unemployed" | "other";
-  incomeBand: "under_15k" | "15_30k" | "30_50k" | "50k_plus";
+  incomeBand: "under_15k" | "15_30k" | "30_50k" | "50k_plus" | "not_applicable";
   housingStatus: "owner" | "mortgage" | "rent" | "family" | "other";
   electoralRoll: boolean;
   utilisationPct: number | null;
