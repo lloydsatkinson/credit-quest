@@ -10,6 +10,7 @@ import {
   getUserAccount,
   updateUserAccount,
 } from "@/lib/server/account-repository";
+import { syncTrackedAccountProfileSignals } from "@/lib/server/account-signal-service";
 import { recordServerEvent, type EventName } from "@/lib/server/event-repository";
 import {
   getMissionInstance,
@@ -102,6 +103,7 @@ export async function PATCH(
       if (!updatedAccount) {
         return NextResponse.json({ error: "Could not update target account" }, { status: 409 });
       }
+      await syncTrackedAccountProfileSignals(supabase, user.id, now);
     }
 
     if (hasKeys(outcome.profilePatch)) {
