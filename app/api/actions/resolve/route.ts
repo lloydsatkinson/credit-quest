@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { resolveOwnedMissionAction } from "@/lib/server/action-service";
+import { recordServerEvent } from "@/lib/server/event-repository";
 import { getSupabasePublicEnv } from "@/lib/supabase/env";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
@@ -22,6 +23,14 @@ export async function POST(request: Request) {
     if (!result.ok) return NextResponse.json({ error: result.error }, { status: result.status });
 
     const { context } = result;
+    await recordServerEvent(supabase, user.id, "action_resolved", {
+      missionSlug: context.mission.slug,
+      missionInstanceId: context.instance.id,
+      actionId: context.actionDefinition.id,
+      accountType: context.account?.accountType ?? null,
+      fallbackUsed: context.resolvedAction.fallbackUsed,
+    });
+
     return NextResponse.json({
       missionInstanceId: context.instance.id,
       missionSlug: context.mission.slug,
