@@ -28,6 +28,7 @@ export const actionAttemptResponseSchema = z.object({
     "could_not_do",
     "do_later",
     "confirmed_registered",
+    "confirmed_account_opened",
   ]),
   balanceMinor: z.number().int().min(0).optional(),
   creditLimitMinor: z.number().int().positive().optional(),
