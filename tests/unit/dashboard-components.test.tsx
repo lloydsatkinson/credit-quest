@@ -33,10 +33,15 @@ describe("NextMissionCard", () => {
     expect(screen.queryByRole("button", { name: "Mark complete" })).toBeNull();
   });
 
-  it("shows Mark complete after a mission has started", () => {
-    render(<NextMissionCard rankedMission={rankedMission} progress={{ state: "started" }} />);
-    expect(screen.getByRole("button", { name: "Mark complete" })).not.toBeNull();
-    expect(screen.queryByRole("button", { name: "Start this mission" })).toBeNull();
+  it("routes a started mission into the Action Screen instead of offering immediate completion", () => {
+    render(<NextMissionCard
+      rankedMission={rankedMission}
+      progress={{ state: "started" }}
+      actionHref="/actions/11111111-1111-4111-8111-111111111111"
+    />);
+    expect(screen.getByRole("link", { name: /continue this mission/i }).getAttribute("href"))
+      .toBe("/actions/11111111-1111-4111-8111-111111111111");
+    expect(screen.queryByRole("button", { name: "Mark complete" })).toBeNull();
   });
 
   it("renders partner disclosure when an offer exists", () => {
