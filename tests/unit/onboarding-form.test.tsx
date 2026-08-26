@@ -42,14 +42,14 @@ describe("OnboardingForm clarity", () => {
 
   it("does not preselect employment or income", () => {
     goToWorkStep();
-    expect(screen.getByLabelText("Employment status")).toHaveValue("");
+    expect((screen.getByLabelText("Employment status") as HTMLSelectElement).value).toBe("");
     expect(screen.queryByLabelText("Annual personal income band")).toBeNull();
   });
 
   it("asks for income only after an applicable employment choice", () => {
     goToWorkStep();
     fireEvent.change(screen.getByLabelText("Employment status"), { target: { value: "employed" } });
-    expect(screen.getByLabelText("Annual personal income band")).toHaveValue("");
+    expect((screen.getByLabelText("Annual personal income band") as HTMLSelectElement).value).toBe("");
   });
 
   it("does not ask unemployed users to choose an income band", () => {
@@ -62,15 +62,15 @@ describe("OnboardingForm clarity", () => {
   it("does not preselect housing", () => {
     goToWorkStep();
     completeWorkStep();
-    expect(screen.getByLabelText("Housing situation")).toHaveValue("");
+    expect((screen.getByLabelText("Housing situation") as HTMLSelectElement).value).toBe("");
   });
 
   it("lets the user explicitly say they do not know electoral-roll status", () => {
     goToIdentityStep();
     const unknown = screen.getByRole("button", { name: "I don't know" });
-    expect(unknown).toHaveAttribute("aria-pressed", "false");
+    expect(unknown.getAttribute("aria-pressed")).toBe("false");
     fireEvent.click(unknown);
-    expect(unknown).toHaveAttribute("aria-pressed", "true");
+    expect(unknown.getAttribute("aria-pressed")).toBe("true");
   });
 
   it("visibly labels revolving credit utilisation as a percentage", () => {
