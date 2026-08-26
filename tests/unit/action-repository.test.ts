@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { isAttemptReadyToResume } from "@/lib/server/action-repository";
+import {
+  findPendingAttemptForMission,
+  isAttemptReadyToResume,
+} from "@/lib/server/action-repository";
 import type { ActionAttempt } from "@/lib/domain/types";
 
 const base: ActionAttempt = {
@@ -31,5 +34,16 @@ describe("action attempt resume timing", () => {
 
   it("never resumes terminal attempt statuses", () => {
     expect(isAttemptReadyToResume({ ...base, status: "verified", nextReviewAt: null }, new Date("2026-09-25T12:00:00.000Z"))).toBe(false);
+  });
+
+  it("finds the existing open attempt for one mission without matching another mission", () => {
+    const other = {
+      ...base,
+      id: "44444444-4444-4444-8444-444444444444",
+      missionInstanceId: "55555555-5555-4555-8555-555555555555",
+    };
+
+    expect(findPendingAttemptForMission([other, base], base.missionInstanceId)?.id).toBe(base.id);
+    expect(findPendingAttemptForMission([other], base.missionInstanceId)).toBeNull();
   });
 });
