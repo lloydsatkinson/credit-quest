@@ -51,6 +51,12 @@ function mapAttemptRow(row: Record<string, unknown>): ActionAttempt {
   };
 }
 
+export function isAttemptReadyToResume(attempt: ActionAttempt, now = new Date()): boolean {
+  if (!["started", "returned", "submitted"].includes(attempt.status)) return false;
+  if (!attempt.nextReviewAt) return true;
+  return new Date(attempt.nextReviewAt) <= now;
+}
+
 export async function listProviders(supabase: SupabaseClient): Promise<ProviderDefinition[]> {
   const { data, error } = await supabase.from("providers").select("*").eq("active", true).order("display_name");
   if (error) throw error;
@@ -145,6 +151,7 @@ export async function getActionAttempt(
 export async function listPendingActionAttempts(
   supabase: SupabaseClient,
   userId: string,
+  now = new Date(),
 ): Promise<ActionAttempt[]> {
   const { data, error } = await supabase
     .from("action_attempts")
@@ -153,7 +160,9 @@ export async function listPendingActionAttempts(
     .in("status", ["started", "returned", "submitted"])
     .order("started_at", { ascending: false });
   if (error) throw error;
-  return (data ?? []).map((row) => mapAttemptRow(row as Record<string, unknown>));
+  return (data ?? [])
+    .map((row) => mapAttemptRow(row as Record<string, unknown>))
+    .filter((attempt) => isAttemptReadyToResume(attempt, now));
 }
 
 export async function updateActionAttempt(
