@@ -33,6 +33,7 @@ describe("action resolver", () => {
     const resolved = resolveAction({
       missionSlug: "set-up-direct-debit",
       provider,
+      providers: [provider],
       accountType: "credit_card",
       actions: [
         action({ id: "generic", actionKey: "generic", destinationUrl: "/accounts", mode: "internal_flow" }),
@@ -43,6 +44,38 @@ describe("action resolver", () => {
     });
 
     expect(resolved?.actionId).toBe("exact");
+    expect(resolved?.fallbackUsed).toBe(false);
+  });
+
+  it("resolves a profile-scoped official action using the action provider allowlist", () => {
+    const gov: ProviderDefinition = {
+      id: "gov",
+      slug: "gov-uk",
+      displayName: "GOV.UK",
+      providerType: "government",
+      allowedHosts: ["www.gov.uk", "gov.uk"],
+      active: true,
+    };
+    const resolved = resolveAction({
+      missionSlug: "register-electoral-roll",
+      provider: null,
+      providers: [gov],
+      accountType: null,
+      actions: [action({
+        id: "electoral",
+        actionKey: "electoral-roll-gov-uk",
+        missionSlug: "register-electoral-roll",
+        providerId: "gov",
+        destinationUrl: "https://www.gov.uk/register-to-vote",
+        verificationMode: "self_confirm_review",
+      })],
+      age: 36,
+      safeMode: false,
+    });
+
+    expect(resolved?.actionId).toBe("electoral");
+    expect(resolved?.providerName).toBe("GOV.UK");
+    expect(resolved?.destinationUrl).toBe("https://www.gov.uk/register-to-vote");
     expect(resolved?.fallbackUsed).toBe(false);
   });
 
@@ -62,6 +95,7 @@ describe("action resolver", () => {
     expect(resolveAction({
       missionSlug: "build-revolving-history",
       provider: null,
+      providers: [],
       accountType: null,
       actions: [action({
         missionSlug: "build-revolving-history",
@@ -78,6 +112,7 @@ describe("action resolver", () => {
     expect(resolveAction({
       missionSlug: "build-revolving-history",
       provider: null,
+      providers: [],
       accountType: null,
       actions: [action({
         missionSlug: "build-revolving-history",
