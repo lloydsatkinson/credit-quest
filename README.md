@@ -22,12 +22,14 @@ Phase 1 makes the current mission catalogue executable without pretending Credit
 - The browser supplies a mission-instance ID, never an arbitrary external destination URL; the server resolves and revalidates the destination against the configured provider allowlist.
 - Manual **My accounts** supports multiple credit cards/accounts so direct-debit and utilisation missions can target the correct account.
 - Account records keep only minimal user-entered data such as provider, optional nickname/last four, balance/limit where relevant, and direct-debit status. Credit Quest does not ask for or store banking passwords or full card numbers.
+- When active credit cards are tracked, their account data becomes the effective source for aggregate utilisation, revolving-credit presence and direct-debit coverage. Aggregate utilisation uses total balances divided by total limits; incomplete card data remains unknown rather than being guessed.
 - The official electoral-roll journey uses the GOV.UK registration service. Submitting a registration moves the mission to `in_review`; it does **not** immediately set the customer as registered.
-- Direct-debit completion updates only the targeted card/account.
+- Direct-debit completion updates only the targeted card/account. With several tracked cards, the global direct-debit signal remains incomplete until the tracked cards are protected or their status is known.
 - Utilisation actions calculate a planning target where balance and limit are known, but a click or self-confirmation alone does not complete the mission.
 - Application cooldown is an internal timed state rather than an external provider action.
-- Revolving-history product journeys remain age/Safe-Mode gated, lender-owned and separate from mission ranking. Clicking or applying never auto-completes the mission.
-- Pending external actions are resumable when the customer returns to the dashboard.
+- Revolving-history product journeys remain age/Safe-Mode gated, lender-owned and separate from mission ranking. Clicking or applying never auto-completes the mission; a later confirmation that an account was actually opened is required in the Phase 1 fallback flow.
+- Pending external actions are resumable when the customer returns to the dashboard, while deferred/review actions stay hidden until their configured review date.
+- Completed mission history is retained even after the underlying gap has been resolved.
 - Action analytics are best-effort and are written only after the relevant core state change succeeds.
 
 Open Banking, CRA ingestion, payment initiation, lender eligibility APIs, provider scraping and automatic form filling are **not** part of Phase 1. The account/action model is designed so those capabilities can be added later through adapters without rebuilding mission selection.
@@ -90,8 +92,9 @@ Migrations:
 - `supabase/migrations/001_initial_schema.sql` — base schema.
 - `supabase/migrations/002_v2_product_integrity.sql` — V2.0a lifecycle/product-integrity changes.
 - `supabase/migrations/003_action_layer.sql` — providers, manual accounts, target-aware mission instances, action registry, action attempts and Action Layer RLS.
+- `supabase/migrations/004_action_layer_owner_integrity.sql` — same-owner composite foreign keys preventing cross-user account/mission references even if another row UUID is known.
 
-RLS verification guidance is in `supabase/tests/rls.sql`.
+RLS and owner-integrity verification guidance is in `supabase/tests/rls.sql`.
 
 ## Verification
 
@@ -113,6 +116,8 @@ The decision flow remains intentionally one-way:
 ```text
 profile + minimal account state
   ↓
+account-derived effective signals when cards are tracked
+  ↓
 safety assessment
   ↓
 Credit Quest Score + deterministic mission eligibility/ranking
@@ -128,9 +133,11 @@ return + verification/self-confirmation rules
 
 Commercial offer data never flows back into safety, mission ranking or Action Registry priority. This keeps user benefit separate from commercial value.
 
-## Demo and configured provider data
+## Provider and affiliate data
 
-Commercial provider and affiliate records committed for demonstration remain fictional unless explicitly replaced through an approved provider/network relationship. The GOV.UK electoral-roll destination is an intentionally configured official government route, not a fictional partner integration.
+The provider directory contains real UK issuer/bank names solely so a user can identify the account they already hold and, where a stable official support route has been verified, be sent to that provider's own public help journey. Listing a provider does **not** imply a commercial partnership, API integration, endorsement or data connection.
+
+Affiliate/product records committed for demonstration remain fictional unless explicitly replaced through an approved provider/network relationship. The GOV.UK electoral-roll destination is an intentionally configured official government route, not a partner integration.
 
 ## Future extension points
 
