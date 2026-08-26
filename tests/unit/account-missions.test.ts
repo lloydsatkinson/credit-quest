@@ -4,6 +4,7 @@ import {
   amountToReachUtilisation,
   buildMissionInstances,
   calculateAccountUtilisation,
+  deriveAccountProfileSignals,
 } from "@/lib/domain/account-missions";
 import type { CreditProfile, UserAccount } from "@/lib/domain/types";
 
@@ -80,5 +81,51 @@ describe("account-aware missions", () => {
       { kind: "account", accountId: "a1" },
       { kind: "account", accountId: "a2" },
     ]));
+  });
+});
+
+describe("tracked account profile signals", () => {
+  it("derives aggregate utilisation from total balances and total limits", () => {
+    expect(deriveAccountProfileSignals([
+      card("a1", 30000, 100000, "yes"),
+      card("a2", 70000, 100000, "yes"),
+    ])).toMatchObject({
+      utilisationPct: 50,
+      hasRevolvingCredit: true,
+      hasDirectDebitForCredit: true,
+    });
+  });
+
+  it("keeps aggregate utilisation unknown if any tracked card lacks balance or limit", () => {
+    expect(deriveAccountProfileSignals([
+      card("a1", 30000, 100000, "yes"),
+      { ...card("a2", 0, 100000, "yes"), balanceMinor: null },
+    ]).utilisationPct).toBeNull();
+  });
+
+  it("derives conservative direct-debit status across tracked cards", () => {
+    expect(deriveAccountProfileSignals([
+      card("a1", 10000, 100000, "yes"),
+      card("a2", 10000, 100000, "yes"),
+    ]).hasDirectDebitForCredit).toBe(true);
+
+    expect(deriveAccountProfileSignals([
+      card("a1", 10000, 100000, "yes"),
+      card("a2", 10000, 100000, "no"),
+    ]).hasDirectDebitForCredit).toBe(false);
+
+    expect(deriveAccountProfileSignals([
+      card("a1", 10000, 100000, "yes"),
+      card("a2", 10000, 100000, "unknown"),
+    ]).hasDirectDebitForCredit).toBeNull();
+  });
+
+  it("treats at least one active tracked credit card as revolving credit", () => {
+    expect(deriveAccountProfileSignals([card("a1", 10000, 100000, "yes")]).hasRevolvingCredit).toBe(true);
+  });
+
+  it("does not overwrite manually reported profile signals when no active credit cards are tracked", () => {
+    expect(deriveAccountProfileSignals([])).toEqual({});
+    expect(deriveAccountProfileSignals([{ ...card("a1", 10000, 100000, "yes"), active: false }])).toEqual({});
   });
 });
