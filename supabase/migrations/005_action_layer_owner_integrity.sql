@@ -9,6 +9,12 @@ create unique index if not exists user_accounts_id_user_unique
 create unique index if not exists user_missions_id_user_unique
   on public.user_missions(id, user_id);
 
+-- Starting an action is idempotent at the database boundary. A mission may
+-- have historical attempts, but only one open/resumable attempt at a time.
+create unique index if not exists action_attempts_one_open_per_mission
+  on public.action_attempts(mission_instance_id)
+  where status in ('started', 'returned', 'submitted');
+
 alter table public.user_missions
   drop constraint if exists user_missions_subject_id_fkey;
 
