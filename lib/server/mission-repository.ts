@@ -1,5 +1,9 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { MissionInstance, MissionState } from "@/lib/domain/types";
+import { buildMissionInstances, calculateAccountUtilisation } from "@/lib/domain/account-missions";
+import type { CreditProfile, MissionInstance, MissionState, UserAccount } from "@/lib/domain/types";
+
+const MISSION_SELECT = "id,user_id,mission_slug,subject_type,subject_id,state,started_at,completed_at,next_review_at";
+const TERMINAL_STATES: MissionState[] = ["completed", "dismissed", "no_longer_eligible"];
 
 export function mapMissionRow(row: Record<string, unknown>): MissionInstance {
   const subjectType = String(row.subject_type ?? "profile");
@@ -17,10 +21,50 @@ export function mapMissionRow(row: Record<string, unknown>): MissionInstance {
   };
 }
 
+function missionKey(instance: MissionInstance): string {
+  return `${instance.missionSlug}:${instance.subject.kind === "profile" ? "profile" : instance.subject.accountId}`;
+}
+
+export function shouldMarkNoLongerEligible(
+  instance: MissionInstance,
+  profile: CreditProfile,
+  accounts: UserAccount[],
+): boolean {
+  if (TERMINAL_STATES.includes(instance.state)) return false;
+
+  if (instance.subject.kind === "profile") {
+    switch (instance.missionSlug) {
+      case "register-electoral-roll":
+        return profile.electoralRoll === true;
+      case "application-cooldown":
+        return profile.hardApplicationsLast6m !== null && profile.hardApplicationsLast6m < 3;
+      case "build-revolving-history":
+        if (profile.hasRevolvingCredit === true) return true;
+        return profile.missedPaymentsLast12m !== null && profile.missedPaymentsLast12m !== 0;
+      default:
+        return false;
+    }
+  }
+
+  const account = accounts.find((item) => item.id === instance.subject.accountId);
+  if (!account || !account.active) return true;
+
+  if (instance.missionSlug === "set-up-direct-debit") {
+    return account.directDebitStatus === "yes";
+  }
+
+  if (instance.missionSlug === "reduce-utilisation") {
+    const utilisation = calculateAccountUtilisation(account);
+    return utilisation !== null && utilisation <= 30;
+  }
+
+  return false;
+}
+
 export async function listMissionInstances(supabase: SupabaseClient, userId: string): Promise<MissionInstance[]> {
   const { data, error } = await supabase
     .from("user_missions")
-    .select("id,user_id,mission_slug,subject_type,subject_id,state,started_at,completed_at,next_review_at")
+    .select(MISSION_SELECT)
     .eq("user_id", userId);
   if (error) throw error;
   return (data ?? []).map((row) => mapMissionRow(row as Record<string, unknown>));
@@ -33,7 +77,7 @@ export async function getMissionInstance(
 ): Promise<MissionInstance | null> {
   const { data, error } = await supabase
     .from("user_missions")
-    .select("id,user_id,mission_slug,subject_type,subject_id,state,started_at,completed_at,next_review_at")
+    .select(MISSION_SELECT)
     .eq("id", id)
     .eq("user_id", userId)
     .maybeSingle();
@@ -41,34 +85,45 @@ export async function getMissionInstance(
   return data ? mapMissionRow(data as Record<string, unknown>) : null;
 }
 
+async function insertMissionInstance(
+  supabase: SupabaseClient,
+  instance: MissionInstance,
+): Promise<MissionInstance> {
+  const { data, error } = await supabase
+    .from("user_missions")
+    .insert({
+      user_id: instance.userId,
+      mission_slug: instance.missionSlug,
+      subject_type: instance.subject.kind,
+      subject_id: instance.subject.kind === "account" ? instance.subject.accountId : null,
+      state: instance.state,
+      started_at: instance.startedAt,
+      completed_at: instance.completedAt,
+      next_review_at: instance.nextReviewAt,
+      updated_at: new Date().toISOString(),
+    })
+    .select(MISSION_SELECT)
+    .single();
+  if (error) throw error;
+  return mapMissionRow(data as Record<string, unknown>);
+}
+
 export async function upsertMissionInstance(
   supabase: SupabaseClient,
   instance: MissionInstance,
 ): Promise<MissionInstance> {
-  const payload = {
-    id: instance.id.startsWith("local:") ? undefined : instance.id,
-    user_id: instance.userId,
-    mission_slug: instance.missionSlug,
-    subject_type: instance.subject.kind,
-    subject_id: instance.subject.kind === "account" ? instance.subject.accountId : null,
+  if (instance.id.startsWith("local:")) {
+    return insertMissionInstance(supabase, instance);
+  }
+
+  const updated = await updateMissionInstanceState(supabase, instance.userId, instance.id, {
     state: instance.state,
-    started_at: instance.startedAt,
-    completed_at: instance.completedAt,
-    next_review_at: instance.nextReviewAt,
-    updated_at: new Date().toISOString(),
-  };
-
-  let query = supabase.from("user_missions").upsert(payload, {
-    onConflict: instance.subject.kind === "profile"
-      ? "user_id,mission_slug"
-      : "user_id,mission_slug,subject_id",
+    startedAt: instance.startedAt,
+    completedAt: instance.completedAt,
+    nextReviewAt: instance.nextReviewAt,
   });
-
-  const { data, error } = await query
-    .select("id,user_id,mission_slug,subject_type,subject_id,state,started_at,completed_at,next_review_at")
-    .single();
-  if (error) throw error;
-  return mapMissionRow(data as Record<string, unknown>);
+  if (!updated) throw new Error("Mission instance not found");
+  return updated;
 }
 
 export async function updateMissionInstanceState(
@@ -88,8 +143,40 @@ export async function updateMissionInstanceState(
     .update(update)
     .eq("id", id)
     .eq("user_id", userId)
-    .select("id,user_id,mission_slug,subject_type,subject_id,state,started_at,completed_at,next_review_at")
+    .select(MISSION_SELECT)
     .maybeSingle();
   if (error) throw error;
   return data ? mapMissionRow(data as Record<string, unknown>) : null;
+}
+
+export async function syncMissionInstances(
+  supabase: SupabaseClient,
+  profile: CreditProfile,
+  accounts: UserAccount[],
+  now = new Date(),
+): Promise<MissionInstance[]> {
+  const existing = await listMissionInstances(supabase, profile.userId);
+  const desired = buildMissionInstances(profile, accounts, existing, now);
+  const desiredKeys = new Set(desired.map(missionKey));
+  const synced: MissionInstance[] = [];
+
+  for (const instance of desired) {
+    if (instance.id.startsWith("local:")) {
+      synced.push(await insertMissionInstance(supabase, instance));
+    } else {
+      synced.push(instance);
+    }
+  }
+
+  for (const instance of existing) {
+    if (desiredKeys.has(missionKey(instance))) continue;
+    if (!shouldMarkNoLongerEligible(instance, profile, accounts)) continue;
+    const updated = await updateMissionInstanceState(supabase, profile.userId, instance.id, {
+      state: "no_longer_eligible",
+      nextReviewAt: null,
+    });
+    if (updated) synced.push(updated);
+  }
+
+  return synced;
 }
