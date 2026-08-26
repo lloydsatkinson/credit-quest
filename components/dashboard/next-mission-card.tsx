@@ -1,17 +1,25 @@
-import type { OfferDefinition, RankedMission } from "@/lib/domain/types";
+import type { MissionProgress, OfferDefinition, RankedMission } from "@/lib/domain/types";
 
 export function NextMissionCard({
   rankedMission,
+  progress,
   offer,
   reviewTiming,
   onStart,
+  onComplete,
+  onDefer,
 }: {
   rankedMission: RankedMission;
+  progress?: MissionProgress;
   offer?: OfferDefinition;
   reviewTiming?: string;
   onStart?: () => void;
+  onComplete?: () => void;
+  onDefer?: () => void;
 }) {
   const { mission, reasons } = rankedMission;
+  const isStarted = progress?.state === "started";
+
   return (
     <section className="rounded-3xl bg-slate-950 p-6 text-white shadow-2xl shadow-slate-300">
       <div className="flex items-center justify-between gap-3">
@@ -26,7 +34,23 @@ export function NextMissionCard({
         <p className="mt-2 text-sm text-slate-400">{reasons[0]}</p>
       </div>
       {reviewTiming && <p className="mt-4 text-sm text-slate-400">Review timing: {reviewTiming}</p>}
-      <button onClick={onStart} className="mt-6 w-full rounded-2xl bg-violet-500 px-5 py-3 font-black text-white hover:bg-violet-400">Start this mission</button>
+
+      {isStarted ? (
+        <button onClick={onComplete} className="mt-6 w-full rounded-2xl bg-emerald-500 px-5 py-3 font-black text-slate-950 hover:bg-emerald-400">
+          Mark complete
+        </button>
+      ) : (
+        <button onClick={onStart} className="mt-6 w-full rounded-2xl bg-violet-500 px-5 py-3 font-black text-white hover:bg-violet-400">
+          Start this mission
+        </button>
+      )}
+
+      {onDefer && (
+        <button type="button" onClick={onDefer} className="mt-3 w-full rounded-2xl border border-white/15 px-5 py-3 text-sm font-bold text-slate-200 hover:bg-white/5">
+          Do this later
+        </button>
+      )}
+
       {offer && (
         <div className="mt-5 border-t border-white/10 pt-5">
           <p className="text-sm font-bold">Optional route: {offer.productName}</p>
