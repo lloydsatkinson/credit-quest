@@ -48,6 +48,56 @@ export interface CreditProfile {
   hasDirectDebitForCredit: boolean | null;
 }
 
+export type BarrierType =
+  | "credit_invisible"
+  | "thin_file"
+  | "new_to_uk"
+  | "credit_rebuilder"
+  | "affordability_constrained"
+  | "optimiser";
+
+export interface DiagnosisFactor {
+  code: string;
+  label: string;
+  evidence: string;
+}
+
+export interface BarrierDiagnosis {
+  primary: BarrierType | null;
+  secondary: BarrierType[];
+  confidence: "low" | "medium" | "high";
+  factors: DiagnosisFactor[];
+}
+
+export type PassportStatus = "green" | "amber" | "red" | "unknown";
+
+export interface PassportPillar {
+  id: "identity" | "payment_health" | "debt_headroom" | "affordability_stability" | "application_readiness";
+  title: string;
+  status: PassportStatus;
+  strength: string;
+  helping: string[];
+  hurting: string[];
+  unknowns: string[];
+  nextActions: string[];
+}
+
+export interface CreditPassport {
+  pillars: PassportPillar[];
+}
+
+export type ReadinessState = "red" | "amber" | "green" | "unknown";
+
+export interface ApplicationReadiness {
+  state: ReadinessState;
+  headline: string;
+  reasons: string[];
+  avoid: string[];
+  actions: string[];
+  reassessAt: string | null;
+  daysUntilReassessment: number | null;
+}
+
 export interface MissionProgress {
   state: MissionState;
   startedAt?: string | null;
