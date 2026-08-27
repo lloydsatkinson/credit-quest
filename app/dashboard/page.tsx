@@ -5,10 +5,16 @@ import { DashboardClient } from "@/components/dashboard/dashboard-client";
 import { NextMissionCard } from "@/components/dashboard/next-mission-card";
 import { ProgressStrip } from "@/components/dashboard/progress-strip";
 import { QuestFeed, QuestFeedCard } from "@/components/dashboard/quest-feed";
+import { PassportCard } from "@/components/passport/passport-card";
+import { ReadinessCard } from "@/components/readiness/readiness-card";
 import { MISSION_CATALOGUE } from "@/lib/data/missions";
 import { deriveAccountProfileSignals } from "@/lib/domain/account-missions";
+import { getAgeMode } from "@/lib/domain/age-gate";
+import { diagnoseBarrier } from "@/lib/domain/diagnosis";
 import { rankMissionInstances } from "@/lib/domain/mission-engine";
+import { buildCreditPassport } from "@/lib/domain/passport";
 import { calculateQuestScore } from "@/lib/domain/quest-score";
+import { assessApplicationReadiness } from "@/lib/domain/readiness";
 import { assessSafety } from "@/lib/domain/safety";
 import type { JourneyStage, MissionInstance } from "@/lib/domain/types";
 import { listUserAccounts } from "@/lib/server/account-repository";
@@ -23,7 +29,7 @@ import { getSupabasePublicEnv } from "@/lib/supabase/env";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 const DAY_MS = 86_400_000;
-const FEED_CARD_TOTAL = 4;
+const FEED_CARD_TOTAL = 6;
 
 function nextReviewLabel(instances: MissionInstance[], now: Date): string {
   const future = instances
@@ -58,6 +64,10 @@ export default async function DashboardPage() {
   const pendingAttempt = pendingAttempts[0] ?? null;
   const score = calculateQuestScore(effectiveProfile);
   const safety = assessSafety(effectiveProfile);
+  const ageMode = getAgeMode(effectiveProfile.dateOfBirth, now);
+  const diagnosis = diagnoseBarrier(effectiveProfile);
+  const readiness = assessApplicationReadiness(effectiveProfile, safety, ageMode);
+  const passport = buildCreditPassport(effectiveProfile, readiness);
   const completed = instances.filter((instance) => instance.state === "completed").length;
   const stage: JourneyStage = next?.mission.stage ?? "maintain";
   const nextReview = nextReviewLabel(instances, now);
@@ -178,11 +188,19 @@ export default async function DashboardPage() {
           </div>
         </QuestFeedCard>
 
-        <QuestFeedCard eyebrow="Your progress" index={3} total={FEED_CARD_TOTAL} tone="light">
+        <QuestFeedCard eyebrow="Your Credit Passport" index={3} total={FEED_CARD_TOTAL} tone="light">
+          <PassportCard passport={passport} diagnosis={diagnosis} />
+        </QuestFeedCard>
+
+        <QuestFeedCard eyebrow="Can I apply yet?" index={4} total={FEED_CARD_TOTAL} tone="soft">
+          <ReadinessCard readiness={readiness} />
+        </QuestFeedCard>
+
+        <QuestFeedCard eyebrow="Your progress" index={5} total={FEED_CARD_TOTAL} tone="light">
           <ProgressStrip score={score.score} stage={stage} completed={completed} nextReview={nextReview} />
         </QuestFeedCard>
 
-        <QuestFeedCard eyebrow="Know what the score means" index={4} total={FEED_CARD_TOTAL} tone="soft">
+        <QuestFeedCard eyebrow="Know what the score means" index={6} total={FEED_CARD_TOTAL} tone="soft">
           <div className="flex flex-1 flex-col justify-center">
             <span className="w-fit rounded-full bg-violet-600 px-3 py-1.5 text-xs font-black uppercase tracking-wider text-white">Setup → Stabilise → Build → Optimise → Maintain</span>
             <h2 className="mt-5 text-3xl font-black tracking-tight sm:text-4xl">Progress, not a lender prediction.</h2>
