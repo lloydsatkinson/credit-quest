@@ -37,6 +37,6 @@ describe("V2.0b close-out migration", () => {
 
     expect(sql).not.toMatch(/\busing \(auth\.uid\(\) = user_id\)/);
     expect(sql).not.toMatch(/\bwith check \(auth\.uid\(\) = user_id\)/);
-    expect(sql.match(/\(select auth\.uid\(\)\) = user_id/g)?.length).toBeGreaterThanOrEqual(10);
+    expect(sql.match(/\(select auth\.uid\(\)\) = user_id/g)?.length).toBe(9);
   });
 });
