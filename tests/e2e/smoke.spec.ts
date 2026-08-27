@@ -35,7 +35,14 @@ test("adult can complete onboarding, receive a mission, and see a relevant refer
   await page.getByRole("link", { name: "Continue in demo mode" }).click();
   await completeOnboarding(page, "1990-01-01", true);
 
-  await expect(page.getByText("Your next best move")).toBeVisible();
+  const feed = page.getByTestId("quest-feed");
+  await expect(feed).toBeVisible();
+  await expect(feed.locator("[data-quest-feed-card]")).toHaveCount(4);
+  await expect(feed.getByText("Your next move", { exact: true })).toBeVisible();
+  await expect(feed.getByText("Why this matters", { exact: true })).toBeVisible();
+  await expect(feed.getByText("Your progress", { exact: true })).toBeVisible();
+  await expect(feed.getByText("Know what the score means", { exact: true })).toBeVisible();
+
   await expect(page.getByText(/Quest Score/).first()).toBeVisible();
   await expect(page.getByRole("link", { name: "Check eligibility with provider" })).toBeVisible();
   await page.getByRole("button", { name: "Start this mission" }).click();
@@ -59,7 +66,7 @@ test("starting electoral-roll guidance never counts as completion", async ({ pag
 
 test("17-year-old gets education mode with no credit-product referral", async ({ page }) => {
   await completeOnboarding(page, "2009-08-25", true);
-  await expect(page.getByText("Your next best move")).toBeVisible();
+  await expect(page.getByText("Your next move")).toBeVisible();
   await expect(page.getByRole("link", { name: "Check eligibility with provider" })).toHaveCount(0);
 
   await page.goto("/offers", { waitUntil: "networkidle" });
