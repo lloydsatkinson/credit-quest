@@ -44,9 +44,11 @@ test("adult can complete onboarding, receive a mission, and see a relevant refer
 
   const feed = page.getByTestId("quest-feed");
   await expect(feed).toBeVisible();
-  await expect(feed.locator("[data-quest-feed-card]")).toHaveCount(4);
+  await expect(feed.locator("[data-quest-feed-card]")).toHaveCount(6);
   await expect(feed.getByText("Your next move", { exact: true })).toBeVisible();
   await expect(feed.getByText("Why this matters", { exact: true })).toBeVisible();
+  await expect(feed.getByText("Your Credit Passport", { exact: true }).first()).toBeVisible();
+  await expect(feed.getByText("Can I apply yet?", { exact: true }).first()).toBeVisible();
   await expect(feed.getByText("Your progress", { exact: true })).toBeVisible();
   await expect(feed.getByText("Know what the score means", { exact: true })).toBeVisible();
 
