@@ -22,16 +22,47 @@ export default async function AccountsPage() {
   }
 
   return (
-    <main className="mx-auto min-h-screen max-w-2xl px-5 py-8 sm:py-12">
-      <header className="flex items-center justify-between">
-        <Link href="/dashboard" className="font-black text-violet-700">← Dashboard</Link>
-        <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Manual now, Open Banking ready later</span>
+    <main
+      data-testid="accounts-shell"
+      className="accounts-shell mx-auto min-h-screen max-w-3xl px-5 py-6 sm:px-8 sm:py-10"
+    >
+      <header className="flex items-center justify-between gap-4">
+        <Link href="/dashboard" className="font-black text-violet-700">← Quest Feed</Link>
+        <span className="rounded-full border border-slate-200 bg-white/80 px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.16em] text-slate-500 shadow-sm backdrop-blur">
+          Manual now · Open Banking ready later
+        </span>
       </header>
-      <h1 className="mt-10 text-4xl font-black tracking-tight">My accounts</h1>
-      <p className="mt-3 mb-8 leading-7 text-slate-600">
-        Add the credit accounts Credit Quest needs to target card-specific missions. We store only the minimum account details you choose to provide; never enter passwords or a full card number.
-      </p>
-      <AccountsClient initialAccounts={accounts} providers={providers} />
+
+      <section className="mt-8 overflow-hidden rounded-[2rem] bg-slate-950 p-6 text-white shadow-2xl shadow-violet-200/40 sm:p-8">
+        <div className="flex items-center justify-between gap-4">
+          <span className="rounded-full bg-emerald-400/10 px-3 py-1 text-xs font-black uppercase tracking-[0.18em] text-emerald-300">
+            Minimum data
+          </span>
+          <span className="text-xs font-bold text-slate-500">You stay in control</span>
+        </div>
+        <h1 className="mt-5 text-4xl font-black tracking-[-0.04em] sm:text-5xl">My accounts</h1>
+        <p className="mt-3 text-lg font-semibold text-slate-200">Only the details that help your plan.</p>
+        <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-400">
+          Credit Quest uses a lightweight account record to target card-specific missions such as utilisation or direct-debit protection. Never enter passwords or a full card number.
+        </p>
+
+        <div className="mt-6 grid gap-3 sm:grid-cols-3">
+          {[
+            ["Last 4 only", "Enough to recognise the account"],
+            ["Balance + limit", "Used only when they improve guidance"],
+            ["Direct debit", "Helps protect payment missions"],
+          ].map(([title, copy]) => (
+            <div key={title} className="rounded-2xl border border-white/10 bg-white/5 p-4">
+              <p className="text-sm font-black text-white">{title}</p>
+              <p className="mt-1 text-xs leading-5 text-slate-400">{copy}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <div className="mt-6">
+        <AccountsClient initialAccounts={accounts} providers={providers} />
+      </div>
     </main>
   );
 }
