@@ -67,6 +67,15 @@ test("17-year-old gets education mode with no credit-product referral", async ({
   await expect(page.getByRole("button", { name: "Check eligibility with provider" })).toHaveCount(0);
 });
 
+test("accounts and actions routes keep safe demo-mode boundaries", async ({ page }) => {
+  await page.goto("/accounts", { waitUntil: "networkidle" });
+  await expect(page.getByRole("heading", { name: "My accounts" })).toBeVisible();
+  await expect(page.getByText(/never enter passwords or a full card number/i)).toBeVisible();
+
+  await page.goto("/actions/demo-mission", { waitUntil: "networkidle" });
+  await expect(page).toHaveURL(/\/dashboard$/);
+});
+
 test("PWA manifest exposes install assets", async ({ page, request }) => {
   await page.goto("/", { waitUntil: "networkidle" });
   const manifest = await request.get("/manifest.webmanifest");
