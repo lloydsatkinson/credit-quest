@@ -5,16 +5,29 @@ import { useEffect, useMemo, useState } from "react";
 import { NextMissionCard } from "@/components/dashboard/next-mission-card";
 import { ProgressStrip } from "@/components/dashboard/progress-strip";
 import { QuestFeed, QuestFeedCard } from "@/components/dashboard/quest-feed";
+import { PassportCard } from "@/components/passport/passport-card";
+import { ReadinessCard } from "@/components/readiness/readiness-card";
+import { getAgeMode } from "@/lib/domain/age-gate";
+import { diagnoseBarrier } from "@/lib/domain/diagnosis";
 import { completeMission, startMission } from "@/lib/domain/mission-lifecycle";
 import { calculateQuestScore } from "@/lib/domain/quest-score";
 import { getNextBestMission } from "@/lib/domain/mission-engine";
 import { getOffersForMission } from "@/lib/domain/offer-matcher";
+import { buildCreditPassport } from "@/lib/domain/passport";
+import { assessApplicationReadiness } from "@/lib/domain/readiness";
 import { assessSafety } from "@/lib/domain/safety";
-import type { CreditProfile, MissionProgress, MissionProgressMap } from "@/lib/domain/types";
+import type {
+  ApplicationReadiness,
+  BarrierDiagnosis,
+  CreditPassport,
+  CreditProfile,
+  MissionProgress,
+  MissionProgressMap,
+} from "@/lib/domain/types";
 
 const DEMO_PROGRESS_KEY = "creditquest-mission-progress";
 const PROFILE_KEY = "creditquest-profile";
-const FEED_CARD_TOTAL = 4;
+const FEED_CARD_TOTAL = 6;
 
 const demoProfile: CreditProfile = {
   userId: "demo-user",
@@ -28,6 +41,33 @@ const demoProfile: CreditProfile = {
   hardApplicationsLast6m: 1,
   hasRevolvingCredit: true,
   hasDirectDebitForCredit: false,
+};
+
+const unknownReadiness: ApplicationReadiness = {
+  state: "unknown",
+  headline: "We need more information",
+  reasons: ["Credit Quest could not safely derive readiness from the information currently available."],
+  avoid: ["Avoid making a hard application just to test whether you might be approved."],
+  actions: ["Review your profile information before relying on this readiness view."],
+  reassessAt: null,
+  daysUntilReassessment: null,
+};
+
+const unknownPassport: CreditPassport = {
+  pillars: [
+    { id: "identity", title: "Identity & Traceability", status: "unknown", strength: "Not available yet.", helping: [], hurting: [], unknowns: ["This signal could not be derived safely."], nextActions: [] },
+    { id: "payment_health", title: "Payment Health", status: "unknown", strength: "Not available yet.", helping: [], hurting: [], unknowns: ["This signal could not be derived safely."], nextActions: [] },
+    { id: "debt_headroom", title: "Debt & Headroom", status: "unknown", strength: "Not available yet.", helping: [], hurting: [], unknowns: ["This signal could not be derived safely."], nextActions: [] },
+    { id: "affordability_stability", title: "Affordability & Stability", status: "unknown", strength: "Not assessed with current data.", helping: [], hurting: [], unknowns: ["Current profile data is not enough for a responsible affordability assessment."], nextActions: [] },
+    { id: "application_readiness", title: "Application Readiness", status: "unknown", strength: "We need more information", helping: [], hurting: [], unknowns: unknownReadiness.reasons, nextActions: unknownReadiness.actions },
+  ],
+};
+
+const unknownDiagnosis: BarrierDiagnosis = {
+  primary: null,
+  secondary: [],
+  confidence: "low",
+  factors: [],
 };
 
 export function DashboardClient() {
@@ -53,13 +93,20 @@ export function DashboardClient() {
     try {
       const score = calculateQuestScore(profile);
       const safety = assessSafety(profile);
+      const ageMode = getAgeMode(profile.dateOfBirth);
+      const diagnosis = diagnoseBarrier(profile);
+      const readiness = assessApplicationReadiness(profile, safety, ageMode);
+      const passport = buildCreditPassport(profile, readiness);
       const rankedMission = getNextBestMission(profile, new Date(), progress);
       const offers = rankedMission ? getOffersForMission(profile, rankedMission.mission) : [];
-      return { score, safety, rankedMission, offers };
+      return { score, safety, diagnosis, readiness, passport, rankedMission, offers };
     } catch {
       return {
         score: { score: 0, factors: [] },
         safety: { mode: "normal" as const, reasons: [], suppressOffers: false },
+        diagnosis: unknownDiagnosis,
+        readiness: unknownReadiness,
+        passport: unknownPassport,
         rankedMission: null,
         offers: [],
       };
@@ -203,11 +250,19 @@ export function DashboardClient() {
           </div>
         </QuestFeedCard>
 
-        <QuestFeedCard eyebrow="Your progress" index={3} total={FEED_CARD_TOTAL} tone="light">
+        <QuestFeedCard eyebrow="Your Credit Passport" index={3} total={FEED_CARD_TOTAL} tone="light">
+          <PassportCard passport={result.passport} diagnosis={result.diagnosis} />
+        </QuestFeedCard>
+
+        <QuestFeedCard eyebrow="Can I apply yet?" index={4} total={FEED_CARD_TOTAL} tone="soft">
+          <ReadinessCard readiness={result.readiness} />
+        </QuestFeedCard>
+
+        <QuestFeedCard eyebrow="Your progress" index={5} total={FEED_CARD_TOTAL} tone="light">
           <ProgressStrip score={result.score.score} stage={stage} completed={completed} nextReview="30 days" />
         </QuestFeedCard>
 
-        <QuestFeedCard eyebrow="Know what the score means" index={4} total={FEED_CARD_TOTAL} tone="soft">
+        <QuestFeedCard eyebrow="Know what the score means" index={6} total={FEED_CARD_TOTAL} tone="soft">
           <div className="flex flex-1 flex-col justify-center">
             <span className="w-fit rounded-full bg-violet-600 px-3 py-1.5 text-xs font-black uppercase tracking-wider text-white">Setup → Stabilise → Build → Optimise → Maintain</span>
             <h2 className="mt-5 text-3xl font-black tracking-tight sm:text-4xl">Progress, not a lender prediction.</h2>
