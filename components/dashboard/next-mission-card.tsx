@@ -9,6 +9,7 @@ export function NextMissionCard({
   actionHref,
   onStart,
   onDefer,
+  embedded = false,
 }: {
   rankedMission: RankedMission;
   progress?: MissionProgress;
@@ -18,47 +19,56 @@ export function NextMissionCard({
   onStart?: () => void;
   onComplete?: () => void;
   onDefer?: () => void;
+  embedded?: boolean;
 }) {
   const { mission, reasons } = rankedMission;
   const isStarted = progress?.state === "started";
 
   return (
-    <section className="rounded-3xl bg-slate-950 p-6 text-white shadow-2xl shadow-slate-300">
+    <section className={embedded ? "flex h-full flex-col" : "rounded-3xl bg-slate-950 p-6 text-white shadow-2xl shadow-slate-300"}>
       <div className="flex items-center justify-between gap-3">
         <span className="rounded-full bg-white/10 px-3 py-1 text-xs font-black uppercase tracking-wider">{mission.impact} impact</span>
         <span className="text-sm font-bold text-violet-200">Estimated +{mission.questScoreDelta} Quest Score</span>
       </div>
-      <h2 className="mt-5 text-3xl font-black tracking-tight">{mission.title}</h2>
-      <p className="mt-3 leading-7 text-slate-300">{mission.description}</p>
-      <div className="mt-5 rounded-2xl bg-white/8 p-4">
-        <p className="text-xs font-black uppercase tracking-wider text-violet-200">Why this matters</p>
-        <p className="mt-2 text-sm leading-6 text-slate-200">{mission.rationale}</p>
-        <p className="mt-2 text-sm text-slate-400">{reasons[0]}</p>
-      </div>
+      <h2 className="mt-5 text-3xl font-black tracking-tight sm:text-4xl">{mission.title}</h2>
+      <p className="mt-3 max-w-xl text-base leading-7 text-slate-300">{mission.description}</p>
+
+      {!embedded ? (
+        <div className="mt-5 rounded-2xl bg-white/8 p-4">
+          <p className="text-xs font-black uppercase tracking-wider text-violet-200">Why this matters</p>
+          <p className="mt-2 text-sm leading-6 text-slate-200">{mission.rationale}</p>
+          <p className="mt-2 text-sm text-slate-400">{reasons[0]}</p>
+        </div>
+      ) : reasons[0] ? (
+        <p className="mt-5 text-sm font-semibold leading-6 text-violet-200">Why now: {reasons[0]}</p>
+      ) : null}
+
       {reviewTiming && <p className="mt-4 text-sm text-slate-400">Review timing: {reviewTiming}</p>}
 
-      {actionHref ? (
-        <Link
-          href={actionHref}
-          className="mt-6 block w-full rounded-2xl bg-violet-500 px-5 py-3 text-center font-black text-white hover:bg-violet-400"
-        >
-          {isStarted ? "Continue this mission" : "Start this mission"}
-        </Link>
-      ) : isStarted ? (
-        <div className="mt-6 rounded-2xl bg-white/8 px-5 py-3 text-center text-sm font-bold text-slate-300">
-          This mission is ready to continue through its action journey.
-        </div>
-      ) : (
-        <button onClick={onStart} className="mt-6 w-full rounded-2xl bg-violet-500 px-5 py-3 font-black text-white hover:bg-violet-400">
-          Start this mission
-        </button>
-      )}
+      <div className={embedded ? "mt-auto pt-8" : ""}>
+        {actionHref ? (
+          <Link
+            href={actionHref}
+            className="block w-full rounded-2xl bg-violet-500 px-5 py-3.5 text-center font-black text-white transition hover:bg-violet-400"
+          >
+            {isStarted ? "Continue this mission" : "Start this mission"}
+          </Link>
+        ) : isStarted ? (
+          <div className="rounded-2xl bg-white/8 px-5 py-3.5 text-center text-sm font-bold text-slate-300">
+            This mission is ready to continue through its action journey.
+          </div>
+        ) : (
+          <button onClick={onStart} className="w-full rounded-2xl bg-violet-500 px-5 py-3.5 font-black text-white transition hover:bg-violet-400">
+            Start this mission
+          </button>
+        )}
 
-      {onDefer && (
-        <button type="button" onClick={onDefer} className="mt-3 w-full rounded-2xl border border-white/15 px-5 py-3 text-sm font-bold text-slate-200 hover:bg-white/5">
-          Do this later
-        </button>
-      )}
+        {onDefer && (
+          <button type="button" onClick={onDefer} className="mt-3 w-full rounded-2xl border border-white/15 px-5 py-3 text-sm font-bold text-slate-200 transition hover:bg-white/5">
+            Do this later
+          </button>
+        )}
+      </div>
 
       {offer && (
         <div className="mt-5 border-t border-white/10 pt-5">
