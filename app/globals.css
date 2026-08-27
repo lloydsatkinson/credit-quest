@@ -37,6 +37,34 @@ button, a { -webkit-tap-highlight-color: transparent; }
 }
 .quest-feed-scroll::-webkit-scrollbar { display: none; }
 
+.onboarding-shell input,
+.onboarding-shell select,
+.accounts-shell input,
+.accounts-shell select {
+  transition: border-color 160ms ease, box-shadow 160ms ease, background-color 160ms ease;
+}
+
+.onboarding-shell input:focus,
+.onboarding-shell select:focus,
+.accounts-shell input:focus,
+.accounts-shell select:focus {
+  outline: none;
+  border-color: rgba(101, 88, 245, 0.7);
+  box-shadow: 0 0 0 4px rgba(101, 88, 245, 0.10);
+}
+
+.onboarding-shell button,
+.accounts-shell button,
+[data-testid="mission-action-shell"] button {
+  transition: transform 160ms ease, background-color 160ms ease, border-color 160ms ease, opacity 160ms ease;
+}
+
+.onboarding-shell button:active,
+.accounts-shell button:active,
+[data-testid="mission-action-shell"] button:active {
+  transform: scale(0.985);
+}
+
 @media (prefers-reduced-motion: reduce) {
   html,
   .quest-feed-scroll {
@@ -45,5 +73,15 @@ button, a { -webkit-tap-highlight-color: transparent; }
 
   .quest-feed-scroll {
     scroll-snap-type: y proximity;
+  }
+
+  .onboarding-shell input,
+  .onboarding-shell select,
+  .accounts-shell input,
+  .accounts-shell select,
+  .onboarding-shell button,
+  .accounts-shell button,
+  [data-testid="mission-action-shell"] button {
+    transition: none;
   }
 }
