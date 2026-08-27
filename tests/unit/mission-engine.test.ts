@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { canStartMission, getNextBestMission, rankMissions } from "@/lib/domain/mission-engine";
-import type { CreditProfile, MissionDefinition } from "@/lib/domain/types";
+import { canStartMission, getNextBestMission, rankMissionInstances, rankMissions } from "@/lib/domain/mission-engine";
+import type { CreditProfile, MissionDefinition, MissionInstance, UserAccount } from "@/lib/domain/types";
 
 const clean: CreditProfile = {
   userId: "u1", dateOfBirth: "1990-01-01", employmentStatus: "employed", incomeBand: "30_50k",
@@ -8,6 +8,23 @@ const clean: CreditProfile = {
   hardApplicationsLast6m: 0, hasRevolvingCredit: true, hasDirectDebitForCredit: true,
 };
 const now = new Date("2026-08-26T12:00:00Z");
+
+const card = (id: string, balanceMinor: number, creditLimitMinor: number): UserAccount => ({
+  id,
+  userId: "u1",
+  providerId: null,
+  providerName: null,
+  accountType: "credit_card",
+  nickname: id,
+  lastFour: null,
+  balanceMinor,
+  creditLimitMinor,
+  currency: "GBP",
+  directDebitStatus: "no",
+  source: "manual",
+  active: true,
+  lastVerifiedAt: null,
+});
 
 describe("mission ranking", () => {
   it("prioritises electoral roll when it is the main gap", () => {
@@ -70,6 +87,40 @@ describe("mission ranking", () => {
     expect(getNextBestMission(profile, now, progress)?.mission.slug).toBe("set-up-direct-debit");
   });
 
+  it("ranks separate account mission instances independently and boosts only the started target", () => {
+    const instances: MissionInstance[] = [
+      {
+        id: "mi-a1",
+        userId: "u1",
+        missionSlug: "reduce-utilisation",
+        subject: { kind: "account", accountId: "a1" },
+        state: "started",
+        startedAt: now.toISOString(),
+        completedAt: null,
+        nextReviewAt: null,
+      },
+      {
+        id: "mi-a2",
+        userId: "u1",
+        missionSlug: "reduce-utilisation",
+        subject: { kind: "account", accountId: "a2" },
+        state: "not_started",
+        startedAt: null,
+        completedAt: null,
+        nextReviewAt: null,
+      },
+    ];
+    const ranked = rankMissionInstances(clean, instances, [
+      card("a1", 80000, 100000),
+      card("a2", 60000, 100000),
+    ], now);
+
+    expect(ranked.map((item) => item.instance.id)).toEqual(["mi-a1", "mi-a2"]);
+    expect(ranked[0].priorityScore).toBeGreaterThan(ranked[1].priorityScore);
+    expect(ranked[0].reasons[0]).toMatch(/80%/);
+    expect(ranked[1].reasons[0]).toMatch(/60%/);
+  });
+
   it("rejects a direct start when the mission is not eligible", () => {
     const mission: MissionDefinition = {
       id: "m-test",
@@ -82,6 +133,7 @@ describe("mission ranking", () => {
       questScoreDelta: 0,
       priorityWeight: 1,
       safeModeAllowed: true,
+      scope: "profile",
       isEligible: () => false,
     };
 
@@ -103,6 +155,7 @@ describe("mission ranking", () => {
       questScoreDelta: 0,
       priorityWeight: 1,
       safeModeAllowed: false,
+      scope: "profile",
       isEligible: () => true,
     };
     const stressed = { ...clean, missedPaymentsLast12m: 2, hardApplicationsLast6m: 4 };

@@ -11,6 +11,13 @@ export const eventNames = [
   "offer_shown",
   "offer_clicked",
   "referral_outcome",
+  "action_resolved",
+  "action_started",
+  "action_returned",
+  "action_submitted",
+  "action_self_confirmed",
+  "action_verified",
+  "action_cancelled",
 ] as const;
 
 export const eventPayloadSchema = z.object({

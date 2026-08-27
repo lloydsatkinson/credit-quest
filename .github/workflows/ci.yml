@@ -2,13 +2,21 @@ name: CI
 
 on:
   push:
-    branches: ["feat/credit-quest-v1"]
+    branches: ["main"]
   pull_request:
     branches: ["main"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   verify:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

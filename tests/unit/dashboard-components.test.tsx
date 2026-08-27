@@ -12,6 +12,7 @@ const rankedMission: RankedMission = {
     id: "m1", slug: "register-electoral-roll", title: "Get on the electoral roll",
     description: "Register at your current address.", rationale: "It helps lenders verify your address.",
     stage: "setup", impact: "high", questScoreDelta: 10, priorityWeight: 90, safeModeAllowed: true,
+    scope: "profile",
     isEligible: () => true,
   },
 };
@@ -26,16 +27,31 @@ describe("NextMissionCard", () => {
     expect(screen.getByText(/30 days/i)).not.toBeNull();
   });
 
-  it("shows Start before a mission has begun", () => {
+  it("shows Start before a mission has begun in local demo mode", () => {
     render(<NextMissionCard rankedMission={rankedMission} progress={{ state: "not_started" }} />);
     expect(screen.getByRole("button", { name: "Start this mission" })).not.toBeNull();
     expect(screen.queryByRole("button", { name: "Mark complete" })).toBeNull();
   });
 
-  it("shows Mark complete after a mission has started", () => {
-    render(<NextMissionCard rankedMission={rankedMission} progress={{ state: "started" }} />);
-    expect(screen.getByRole("button", { name: "Mark complete" })).not.toBeNull();
-    expect(screen.queryByRole("button", { name: "Start this mission" })).toBeNull();
+  it("routes a new persisted mission into its Action Screen", () => {
+    render(<NextMissionCard
+      rankedMission={rankedMission}
+      progress={{ state: "not_started" }}
+      actionHref="/actions/11111111-1111-4111-8111-111111111111"
+    />);
+    expect(screen.getByRole("link", { name: /start this mission/i }).getAttribute("href"))
+      .toBe("/actions/11111111-1111-4111-8111-111111111111");
+  });
+
+  it("routes a started mission into the Action Screen instead of offering immediate completion", () => {
+    render(<NextMissionCard
+      rankedMission={rankedMission}
+      progress={{ state: "started" }}
+      actionHref="/actions/11111111-1111-4111-8111-111111111111"
+    />);
+    expect(screen.getByRole("link", { name: /continue this mission/i }).getAttribute("href"))
+      .toBe("/actions/11111111-1111-4111-8111-111111111111");
+    expect(screen.queryByRole("button", { name: "Mark complete" })).toBeNull();
   });
 
   it("renders partner disclosure when an offer exists", () => {

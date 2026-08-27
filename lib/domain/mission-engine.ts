@@ -1,6 +1,18 @@
 import { MISSION_CATALOGUE } from "@/lib/data/missions";
+import { calculateAccountUtilisation } from "@/lib/domain/account-missions";
 import { assessSafety } from "@/lib/domain/safety";
-import type { CreditProfile, MissionDefinition, MissionProgressMap, RankedMission } from "@/lib/domain/types";
+import type {
+  CreditProfile,
+  MissionDefinition,
+  MissionInstance,
+  MissionProgressMap,
+  RankedMission,
+  UserAccount,
+} from "@/lib/domain/types";
+
+export interface RankedMissionInstance extends RankedMission {
+  instance: MissionInstance;
+}
 
 function missionPriority(profile: CreditProfile, slug: string, base: number): number {
   if (slug === "reduce-utilisation" && (profile.utilisationPct ?? 0) > 50) return 100;
@@ -18,15 +30,38 @@ function reasonFor(profile: CreditProfile, slug: string): string {
   }
 }
 
+function isAvailableState(
+  state: MissionInstance["state"],
+  nextReviewAt: string | null | undefined,
+  now: Date,
+): boolean {
+  if (["completed", "dismissed", "no_longer_eligible"].includes(state)) return false;
+  if (["deferred", "cooldown", "in_review"].includes(state)) {
+    if (!nextReviewAt) return false;
+    return new Date(nextReviewAt) <= now;
+  }
+  return true;
+}
+
 function isAvailableByProgress(slug: string, progress: MissionProgressMap, now: Date): boolean {
   const current = progress[slug];
   if (!current) return true;
-  if (["completed", "dismissed", "no_longer_eligible"].includes(current.state)) return false;
-  if (["deferred", "cooldown", "in_review"].includes(current.state)) {
-    if (!current.nextReviewAt) return false;
-    return new Date(current.nextReviewAt) <= now;
+  return isAvailableState(current.state, current.nextReviewAt, now);
+}
+
+function accountReason(mission: MissionDefinition, account: UserAccount | undefined): string {
+  if (!account) return "This action applies to one of your credit accounts.";
+  const label = account.nickname ?? account.providerName ?? (account.lastFour ? `card ending ${account.lastFour}` : "this card");
+  if (mission.slug === "reduce-utilisation") {
+    const utilisation = calculateAccountUtilisation(account);
+    return utilisation === null
+      ? `Update ${label} so Credit Quest can confirm its utilisation.`
+      : `${label} is using about ${utilisation}% of its credit limit.`;
   }
-  return true;
+  if (mission.slug === "set-up-direct-debit") {
+    return `${label} does not currently have a confirmed direct debit.`;
+  }
+  return `This action applies to ${label}.`;
 }
 
 export function canStartMission(
@@ -72,6 +107,42 @@ export function rankMissions(
       };
     })
     .sort((a, b) => b.priorityScore - a.priorityScore || a.mission.slug.localeCompare(b.mission.slug));
+}
+
+export function rankMissionInstances(
+  profile: CreditProfile,
+  instances: MissionInstance[],
+  accounts: UserAccount[],
+  now = new Date(),
+): RankedMissionInstance[] {
+  const safety = assessSafety(profile);
+  const missionBySlug = new Map(MISSION_CATALOGUE.map((mission) => [mission.slug, mission]));
+  const accountById = new Map(accounts.map((account) => [account.id, account]));
+
+  return instances
+    .flatMap((instance): RankedMissionInstance[] => {
+      const mission = missionBySlug.get(instance.missionSlug);
+      if (!mission) return [];
+      if (safety.mode === "safe_mode" && !mission.safeModeAllowed) return [];
+      if (!isAvailableState(instance.state, instance.nextReviewAt, now)) return [];
+
+      const account = instance.subject.kind === "account"
+        ? accountById.get(instance.subject.accountId)
+        : undefined;
+      const accountUtilisation = account ? calculateAccountUtilisation(account) : null;
+      const basePriority = mission.slug === "reduce-utilisation" && accountUtilisation !== null && accountUtilisation > 50
+        ? 100
+        : missionPriority(profile, mission.slug, mission.priorityWeight);
+      const startedBoost = instance.state === "started" ? 1000 : 0;
+
+      return [{
+        instance,
+        mission,
+        priorityScore: basePriority + startedBoost,
+        reasons: [instance.subject.kind === "account" ? accountReason(mission, account) : reasonFor(profile, mission.slug)],
+      }];
+    })
+    .sort((a, b) => b.priorityScore - a.priorityScore || a.instance.id.localeCompare(b.instance.id));
 }
 
 export function getNextBestMission(

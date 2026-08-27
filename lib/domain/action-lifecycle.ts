@@ -1,0 +1,133 @@
+import { calculateAccountUtilisation } from "@/lib/domain/account-missions";
+import type {
+  ActionAttemptStatus,
+  CreditProfile,
+  MissionState,
+  UserAccount,
+} from "@/lib/domain/types";
+
+export type ActionResponse =
+  | "submitted"
+  | "completed"
+  | "started"
+  | "not_finished"
+  | "could_not_do"
+  | "do_later"
+  | "confirmed_registered"
+  | "confirmed_account_opened";
+
+export interface ActionOutcome {
+  attemptStatus: ActionAttemptStatus;
+  missionState: MissionState;
+  nextReviewAt: string | null;
+  profilePatch: Partial<Pick<CreditProfile, "electoralRoll" | "hasDirectDebitForCredit" | "hasRevolvingCredit">>;
+  accountPatch: Partial<Pick<UserAccount, "directDebitStatus" | "balanceMinor" | "creditLimitMinor">>;
+}
+
+function addDays(now: Date, days: number): string {
+  return new Date(now.getTime() + days * 86_400_000).toISOString();
+}
+
+function baseOutcome(
+  attemptStatus: ActionAttemptStatus,
+  missionState: MissionState,
+  nextReviewAt: string | null = null,
+): ActionOutcome {
+  return {
+    attemptStatus,
+    missionState,
+    nextReviewAt,
+    profilePatch: {},
+    accountPatch: {},
+  };
+}
+
+export function applyUtilisationEvidence(
+  outcome: ActionOutcome,
+  account: UserAccount,
+): ActionOutcome {
+  const utilisation = calculateAccountUtilisation(account);
+  if (utilisation !== null && utilisation <= 30) {
+    return {
+      ...outcome,
+      attemptStatus: "self_confirmed",
+      missionState: "completed",
+      nextReviewAt: null,
+    };
+  }
+
+  return {
+    ...outcome,
+    attemptStatus: "returned",
+    missionState: "started",
+    nextReviewAt: null,
+  };
+}
+
+export function applyActionResponse({
+  missionSlug,
+  response,
+  now = new Date(),
+}: {
+  missionSlug: string;
+  response: ActionResponse;
+  now?: Date;
+}): ActionOutcome {
+  if (response === "not_finished") return baseOutcome("returned", "started");
+  if (response === "could_not_do") return baseOutcome("failed", "started");
+  if (response === "do_later") return baseOutcome("returned", "deferred", addDays(now, 7));
+
+  if (missionSlug === "register-electoral-roll") {
+    if (response === "confirmed_registered") {
+      return {
+        ...baseOutcome("verified", "completed"),
+        profilePatch: { electoralRoll: true },
+      };
+    }
+    if (response === "submitted" || response === "completed") {
+      return baseOutcome("submitted", "in_review", addDays(now, 30));
+    }
+    return baseOutcome("returned", "started");
+  }
+
+  if (missionSlug === "set-up-direct-debit") {
+    if (response === "completed" || response === "submitted") {
+      return {
+        ...baseOutcome("self_confirmed", "completed"),
+        accountPatch: { directDebitStatus: "yes" },
+      };
+    }
+    return baseOutcome("returned", "started");
+  }
+
+  if (missionSlug === "reduce-utilisation") {
+    if (response === "completed" || response === "submitted") {
+      return baseOutcome("self_confirmed", "started");
+    }
+    return baseOutcome("returned", "started");
+  }
+
+  if (missionSlug === "application-cooldown") {
+    if (response === "started" || response === "completed") {
+      return baseOutcome("verified", "cooldown", addDays(now, 30));
+    }
+    return baseOutcome("returned", "started");
+  }
+
+  if (missionSlug === "build-revolving-history") {
+    if (response === "confirmed_account_opened") {
+      return {
+        ...baseOutcome("verified", "completed"),
+        profilePatch: { hasRevolvingCredit: true },
+      };
+    }
+    if (response === "completed" || response === "submitted") {
+      // Completing a provider/application step is not proof that an account was opened.
+      // Keep the attempt for a later review confirmation instead of awarding completion.
+      return baseOutcome("submitted", "in_review", addDays(now, 30));
+    }
+    return baseOutcome("returned", "started");
+  }
+
+  return baseOutcome("returned", "started");
+}
