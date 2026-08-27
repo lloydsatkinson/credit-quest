@@ -9,21 +9,31 @@ const labels: Record<JourneyStage, string> = {
 };
 
 export function ProgressStrip({ score, stage, completed, nextReview }: { score: number; stage: JourneyStage; completed: number; nextReview: string }) {
-  const items = [
-    ["Quest Score", `${score}/100`],
-    ["Stage", labels[stage]],
-    ["Missions done", String(completed)],
-    ["Next review", nextReview],
-  ];
-
   return (
-    <section className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-      {items.map(([label, value]) => (
-        <div key={label} className="rounded-2xl border border-slate-200 bg-white p-4">
-          <p className="text-xs font-bold uppercase tracking-wider text-slate-400">{label}</p>
-          <p data-testid={label === "Missions done" ? "missions-done" : undefined} className="mt-1 font-black text-slate-900">{value}</p>
+    <section className="flex flex-1 flex-col justify-between">
+      <div>
+        <div className="flex items-end justify-between gap-4">
+          <div>
+            <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">Quest Score</p>
+            <p className="mt-2 text-6xl font-black tracking-[-0.06em] text-slate-950">{score}</p>
+          </div>
+          <span className="rounded-full bg-violet-100 px-3 py-1.5 text-sm font-black text-violet-700">{labels[stage]}</span>
         </div>
-      ))}
+        <div className="mt-5 h-2 overflow-hidden rounded-full bg-slate-100" aria-label={`Quest Score ${score} out of 100`}>
+          <div className="h-full rounded-full bg-violet-600" style={{ width: `${Math.max(0, Math.min(100, score))}%` }} />
+        </div>
+      </div>
+
+      <div className="mt-8 grid grid-cols-2 gap-3">
+        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+          <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Missions done</p>
+          <p data-testid="missions-done" className="mt-2 text-2xl font-black text-slate-950">{completed}</p>
+        </div>
+        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+          <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Next review</p>
+          <p className="mt-2 text-2xl font-black text-slate-950">{nextReview}</p>
+        </div>
+      </div>
     </section>
   );
 }
