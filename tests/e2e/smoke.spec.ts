@@ -29,6 +29,13 @@ async function completeOnboarding(page: Page, dateOfBirth: string, electoralRoll
   await expect(page).toHaveURL(/\/dashboard$/);
 }
 
+test("onboarding uses the new guided Quest visual shell", async ({ page }) => {
+  await page.goto("/onboarding", { waitUntil: "networkidle" });
+  await expect(page.getByTestId("onboarding-shell")).toBeVisible();
+  await expect(page.getByText("8 quick questions", { exact: true })).toBeVisible();
+  await expect(page.getByText("We only ask what changes your plan.", { exact: true })).toBeVisible();
+});
+
 test("adult can complete onboarding, receive a mission, and see a relevant referral", async ({ page }) => {
   await page.goto("/login", { waitUntil: "networkidle" });
   await expect(page.getByText("Build better credit habits, one move at a time.")).toBeVisible();
@@ -76,7 +83,9 @@ test("17-year-old gets education mode with no credit-product referral", async ({
 
 test("accounts and actions routes keep safe demo-mode boundaries", async ({ page }) => {
   await page.goto("/accounts", { waitUntil: "networkidle" });
+  await expect(page.getByTestId("accounts-shell")).toBeVisible();
   await expect(page.getByRole("heading", { name: "My accounts" })).toBeVisible();
+  await expect(page.getByText("Only the details that help your plan.", { exact: true })).toBeVisible();
   await expect(page.getByText(/never enter passwords or a full card number/i)).toBeVisible();
 
   await page.goto("/actions/demo-mission", { waitUntil: "networkidle" });
