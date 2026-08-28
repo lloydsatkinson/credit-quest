@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 
 function renderInline(text: string, keyPrefix: string): ReactNode[] {
   const nodes: ReactNode[] = [];
-  const token = /(\[([^\]]+)\]\(([^)]+)\)|\*\*([^*]+)\*\*|\*([^*]+)\*)/g;
+  const token = /(\[([^\]]+)\]\(([^()]*(?:\([^()]*\)[^()]*)*)\)|\*\*([^*]+)\*\*|\*([^*]+)\*)/g;
   let cursor = 0;
   let match: RegExpExecArray | null;
   let tokenIndex = 0;
