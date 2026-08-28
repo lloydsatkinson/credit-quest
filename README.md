@@ -34,7 +34,23 @@ Phase 1 makes the current mission catalogue executable without pretending Credit
 
 Open Banking, CRA ingestion, payment initiation, lender eligibility APIs, provider scraping and automatic form filling are **not** part of Phase 1. The account/action model is designed so those capabilities can be added later through adapters without rebuilding mission selection.
 
-Later V2 releases will add Barrier Diagnosis, Credit Passport, Application Readiness / **Can I Apply Yet?**, the TikTok-inspired vertical Quest Feed, Decline Recovery, richer mission coverage and external-data integrations. Those features are not claimed as shipped here.
+## V2.1 — Credit Passport, Readiness, Quest Feed & Academy
+
+V2.1 adds the customer-facing guidance layer while preserving deterministic strategy and commercial separation.
+
+- **Credit Passport** explains identity, payment health, debt/headroom, affordability/stability and application-readiness pillars without pretending unknown signals are known.
+- **Can I Apply Yet?** gives deterministic red/amber/green/unknown guidance. Green means it may be worth checking eligibility; it is never an approval prediction.
+- The dashboard is a finite **7-card Quest Feed**: next move, rationale, Passport, readiness, a contextual **Learn in 20 seconds** Academy card, progress and score education.
+- **Credit Quest Academy** is public at `/learn` and `/learn/[slug]`, with reviewed plain-English education powered by a canonical Supabase content store in configured environments.
+- Launch Academy content contains 25+ reviewed topics. Material content changes are versioned rather than silently overwriting a live article.
+- Under-18 users only receive `under18_safe` Academy content. Safe Mode users only receive `safe_mode_safe` education.
+- Academy personalisation is deterministic and downstream of the existing mission/barrier/Passport/readiness outputs. Academy data never changes those upstream engines.
+- Academy ranking has no affiliate commission, CPA/CPL, EPC, provider payout, campaign or sponsored-placement input.
+- Learning progress and events are best-effort. Tracking failure never blocks Academy reading or the core Credit Quest journey.
+- Direct browser writes to Academy content/progress are denied. Authenticated progress writes go through a server route; the Supabase service-role key remains server-only.
+- Configured Supabase is the canonical production content source. The small reviewed fixture in `lib/academy/demo-content.ts` is demo/test-only and is not used as a silent fallback when a configured production content read fails.
+
+No CRA, Open Banking or lender eligibility API was added as part of Academy.
 
 ## Product boundaries
 
@@ -43,7 +59,7 @@ Later V2 releases will add Barrier Diagnosis, Credit Passport, Application Readi
 - Ages 18+ may receive relevant partner referrals after the mission engine has already selected the user's next-best action.
 - The **Credit Quest Score** is an internal progress indicator. It is not an Experian, Equifax or TransUnion score and does not predict lender approval.
 - Credit Quest is an enhanced introducer: lenders own eligibility, underwriting and the credit application.
-- Affiliate commission is never used by the mission-ranking engine.
+- Affiliate commission is never used by the mission-ranking engine or Academy selector.
 - Starting an action, clicking an outbound link or submitting a third-party form is not treated as proof that a mission is complete unless the mission's verification rules support that conclusion.
 
 ## Stack
@@ -65,18 +81,20 @@ npm run dev
 
 Open `http://localhost:3000`.
 
-Without Supabase environment variables the app runs in **demo mode**, using browser-local state so the journey can be reviewed without a backend account.
+Without Supabase environment variables the app runs in **demo mode**, using browser-local state so the journey can be reviewed without a backend account. Academy uses its small reviewed demo fixture only in this unconfigured mode.
 
 ## Environment variables
 
-Copy `.env.example` to `.env.local` and provide the public Supabase project settings used by the web application:
+Copy `.env.example` to `.env.local` and provide the settings required by the environment:
 
 ```text
 NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
+SUPABASE_SERVICE_ROLE_KEY=
+NEXT_PUBLIC_SITE_URL=
 ```
 
-Any service-role or admin credential used for database administration must remain server/admin-side and must never be exposed with a `NEXT_PUBLIC_` prefix.
+`SUPABASE_SERVICE_ROLE_KEY` is server-only. It must never be exposed with a `NEXT_PUBLIC_` prefix or imported into client components. `NEXT_PUBLIC_SITE_URL` is an optional canonical-site override used for metadata/sitemap generation.
 
 ## Supabase local setup
 
@@ -91,11 +109,14 @@ Migrations:
 
 - `supabase/migrations/001_initial_schema.sql` — base schema.
 - `supabase/migrations/002_v2_product_integrity.sql` — V2.0a lifecycle/product-integrity changes.
-- `supabase/migrations/003_action_layer.sql` — backward-compatible additive expansion: providers, manual accounts, mission-instance IDs/subjects, action registry, action attempts and Action Layer RLS while retaining the legacy mission primary key for the currently deployed app.
+- `supabase/migrations/003_action_layer.sql` — backward-compatible additive expansion: providers, manual accounts, mission-instance IDs/subjects, action registry, action attempts and Action Layer RLS while retaining the legacy mission primary key for the then-deployed app.
 - `supabase/migrations/004_action_layer_mission_key_cutover.sql` — post-deploy key cutover from `(user_id, mission_slug)` to mission-instance `id`, enabling separate account-scoped instances of the same mission.
-- `supabase/migrations/005_action_layer_owner_integrity.sql` — same-owner composite foreign keys, one-open-attempt enforcement, covering indexes for new foreign keys, and optimized owner-RLS evaluation for the new Action Layer tables.
+- `supabase/migrations/005_action_layer_owner_integrity.sql` — same-owner composite foreign keys, one-open-attempt enforcement, covering indexes for new foreign keys, and optimised owner-RLS evaluation for the Action Layer tables.
+- `supabase/migrations/006_v2_0b_closeout.sql` — closes the V2.0b migration sequence and integrity boundary.
+- `supabase/migrations/007_academy.sql` — versioned Academy articles, private learning progress, RLS, indexes and service-role-only atomic publication.
+- `supabase/migrations/008_academy_launch_content.sql` — reviewed V2.1 Academy launch curriculum.
 
-Production rollout is intentionally staged: apply `003` while V2.0a is still live, deploy V2.0b, then immediately apply `004` and `005`. This avoids a compatibility window where the old mission upsert route is running against the new mission-instance primary key.
+The Action Layer rollout used staged expand/deploy/cutover migrations. Academy is additive: apply `007` and `008`, verify RLS/content invariants, then deploy/enable the Academy surfaces. Content can subsequently be versioned and published through the database workflow without requiring an application redeployment for ordinary editorial changes.
 
 RLS and owner-integrity verification guidance is in `supabase/tests/rls.sql`.
 
@@ -112,6 +133,8 @@ npm run build
 
 The repository CI workflow runs the same audit/lint/unit/E2E/build gates for `main` and pull requests.
 
+For database verification, reset a local Supabase project and run `supabase/tests/rls.sql` before applying production DDL. After applying migrations in a target Supabase project, run the project's security/performance advisors as an additional check; source-text tests are not a substitute for live RLS verification.
+
 ## Core architecture
 
 The decision flow remains intentionally one-way:
@@ -123,18 +146,22 @@ account-derived effective signals when cards are tracked
   ↓
 safety assessment
   ↓
+barrier diagnosis + Credit Passport + Application Readiness
+  ↓
 Credit Quest Score + deterministic mission eligibility/ranking
   ↓
 target-aware next-best mission instance
   ↓
-server-side Action Registry resolution
+Academy selector (education only, downstream)
+  ↓
+server-side Action Registry resolution for executable actions
   ↓
 internal / official / provider / referral action
   ↓
 return + verification/self-confirmation rules
 ```
 
-Commercial offer data never flows back into safety, mission ranking or Action Registry priority. This keeps user benefit separate from commercial value.
+Commercial offer data never flows back into safety, diagnosis, Passport, readiness, mission ranking or Academy selection. This keeps user benefit separate from commercial value.
 
 ## Provider and affiliate data
 
@@ -144,7 +171,7 @@ Affiliate/product records committed for demonstration remain fictional unless ex
 
 ## Future extension points
 
-The V2 architecture is designed for later additions including Barrier Diagnosis, Credit Passport, Application Readiness, the vertical Quest Feed, Decline Recovery, Open Banking, CRA data, lender eligibility APIs, Product Fit, premium scenario analysis and an AI coach. External data should be normalised into the structured profile/account model before deterministic decision engines consume it.
+The V2 architecture is designed for later additions including Decline Recovery, Open Banking, CRA data, lender eligibility APIs, Product Fit, premium scenario analysis, richer mission coverage and an AI coach. External data should be normalised into the structured profile/account model before deterministic decision engines consume it. AI may explain or simplify approved guidance, but it must not invent lender criteria or decide creditworthiness.
 
 ## Design and implementation docs
 
@@ -154,3 +181,7 @@ The V2 architecture is designed for later additions including Barrier Diagnosis,
 - `docs/superpowers/plans/2026-08-26-credit-quest-v2-0a-product-integrity.md`
 - `docs/superpowers/specs/2026-08-26-credit-quest-action-layer-phase-1-design.md`
 - `docs/superpowers/plans/2026-08-26-credit-quest-action-layer-phase-1-implementation.md`
+- `docs/superpowers/specs/2026-08-27-credit-passport-readiness-design.md`
+- `docs/superpowers/plans/2026-08-27-credit-passport-readiness-implementation.md`
+- `docs/superpowers/specs/2026-08-28-credit-quest-academy-design.md`
+- `docs/superpowers/plans/2026-08-28-credit-quest-academy-implementation.md`
