@@ -131,7 +131,7 @@ npm run test:e2e
 npm run build
 ```
 
-The repository CI workflow runs the same audit/lint/unit/E2E/build gates for `main` and pull requests. It also starts a **disposable local Supabase database inside GitHub Actions**, applies every migration, runs `supabase/tests/rls.sql`, and then destroys that local database. This verifies Academy migration/RLS/publication behaviour without requiring a paid Supabase preview branch or touching production.
+The repository CI workflow runs the same audit/lint/unit/E2E/build gates for `main` and pull requests. It also starts a **disposable local Supabase database inside GitHub Actions**, applies every migration, runs `supabase/tests/rls.sql`, and then destroys that local database. This verifies Academy migration/RLS/publication behaviour without creating a Supabase preview branch or touching production.
 
 For database verification, reset a local Supabase project and run `supabase/tests/rls.sql` before applying production DDL. After applying migrations in a target Supabase project, run the project's security/performance advisors as an additional check; source-text tests are not a substitute for live RLS verification.
 
