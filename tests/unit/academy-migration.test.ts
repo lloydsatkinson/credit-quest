@@ -3,6 +3,7 @@ import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
 const path = resolve(process.cwd(), "supabase/migrations/007_academy.sql");
+const rlsPath = resolve(process.cwd(), "supabase/tests/rls.sql");
 
 describe("Academy migration", () => {
   it("creates versioned public content and private progress safely", () => {
@@ -18,5 +19,14 @@ describe("Academy migration", () => {
     expect(sql).toContain("grant execute on function public.publish_academy_article(uuid) to service_role");
     expect(sql).not.toMatch(/grant (insert|update|delete).*academy_articles.*authenticated/i);
     expect(sql).not.toMatch(/grant (insert|update|delete).*academy_progress.*authenticated/i);
+  });
+
+  it("requires live launch-content and atomic-publication verification", () => {
+    expect(existsSync(rlsPath)).toBe(true);
+    if (!existsSync(rlsPath)) return;
+    const sql = readFileSync(rlsPath, "utf8");
+    expect(sql).toContain("Expected 29 published Academy launch rows");
+    expect(sql).toContain("Academy publication did not supersede the prior version");
+    expect(sql).toContain("Academy publication did not publish the reviewed replacement");
   });
 });
