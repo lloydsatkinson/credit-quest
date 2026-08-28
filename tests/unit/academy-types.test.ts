@@ -5,6 +5,10 @@ function acceptsArticle(value: AcademyArticle) { return value; }
 function acceptsContext(value: AcademySelectionContext) { return value; }
 
 describe("Academy contracts", () => {
+  it("resolves the Academy contract module", async () => {
+    expect(await import("@/lib/academy/types")).toBeDefined();
+  });
+
   it("uses controlled article and selector fields", () => {
     const article = acceptsArticle({
       id: "00000000-0000-0000-0000-000000000001",
