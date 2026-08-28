@@ -104,6 +104,61 @@ begin
   ) then
     raise exception 'action_registry must not expose client write policies';
   end if;
+
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'academy_articles'
+      and policyname = 'academy_articles_public_published_select'
+      and cmd = 'SELECT'
+      and qual like '%status%published%'
+  ) then
+    raise exception 'Academy published-only public select policy missing';
+  end if;
+
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'academy_progress'
+      and policyname = 'academy_progress_select_own'
+      and cmd = 'SELECT'
+      and qual like '%auth.uid()%user_id%'
+  ) then
+    raise exception 'Academy progress owner-select policy missing';
+  end if;
+
+  if exists (
+    select 1
+    from information_schema.role_table_grants
+    where table_schema = 'public'
+      and table_name in ('academy_articles', 'academy_progress')
+      and grantee in ('anon', 'authenticated')
+      and privilege_type in ('INSERT', 'UPDATE', 'DELETE')
+  ) then
+    raise exception 'Academy client write grant must not exist';
+  end if;
+
+  if exists (
+    select 1
+    from information_schema.role_table_grants
+    where table_schema = 'public'
+      and table_name = 'academy_progress'
+      and grantee = 'anon'
+      and privilege_type = 'SELECT'
+  ) then
+    raise exception 'Anonymous users must not read Academy progress';
+  end if;
+
+  if exists (
+    select 1
+    from information_schema.routine_privileges
+    where routine_schema = 'public'
+      and routine_name = 'publish_academy_article'
+      and grantee in ('PUBLIC', 'anon', 'authenticated')
+      and privilege_type = 'EXECUTE'
+  ) then
+    raise exception 'Academy publish function must not be client executable';
+  end if;
 end $$;
 
 rollback;
