@@ -2,11 +2,14 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { AcademyCard } from "@/components/academy/academy-card";
 import { NextMissionCard } from "@/components/dashboard/next-mission-card";
 import { ProgressStrip } from "@/components/dashboard/progress-strip";
 import { QuestFeed, QuestFeedCard } from "@/components/dashboard/quest-feed";
 import { PassportCard } from "@/components/passport/passport-card";
 import { ReadinessCard } from "@/components/readiness/readiness-card";
+import { DEMO_ACADEMY_ARTICLES } from "@/lib/academy/demo-content";
+import { selectAcademyArticle } from "@/lib/academy/selector";
 import { getAgeMode } from "@/lib/domain/age-gate";
 import { diagnoseBarrier } from "@/lib/domain/diagnosis";
 import { completeMission, startMission } from "@/lib/domain/mission-lifecycle";
@@ -27,7 +30,7 @@ import type {
 
 const DEMO_PROGRESS_KEY = "creditquest-mission-progress";
 const PROFILE_KEY = "creditquest-profile";
-const FEED_CARD_TOTAL = 6;
+const FEED_CARD_TOTAL = 7;
 
 const demoProfile: CreditProfile = {
   userId: "demo-user",
@@ -98,16 +101,27 @@ export function DashboardClient() {
       const readiness = assessApplicationReadiness(profile, safety, ageMode);
       const passport = buildCreditPassport(profile, readiness);
       const rankedMission = getNextBestMission(profile, new Date(), progress);
+      const academySelection = selectAcademyArticle(DEMO_ACADEMY_ARTICLES, {
+        ageMode,
+        safety,
+        missionKey: rankedMission?.mission.slug ?? null,
+        diagnosis,
+        passport,
+        readiness,
+        seenContentKeys: [],
+      });
       const offers = rankedMission ? getOffersForMission(profile, rankedMission.mission) : [];
-      return { score, safety, diagnosis, readiness, passport, rankedMission, offers };
+      return { score, safety, ageMode, diagnosis, readiness, passport, rankedMission, academySelection, offers };
     } catch {
       return {
         score: { score: 0, factors: [] },
         safety: { mode: "normal" as const, reasons: [], suppressOffers: false },
+        ageMode: "education" as const,
         diagnosis: unknownDiagnosis,
         readiness: unknownReadiness,
         passport: unknownPassport,
         rankedMission: null,
+        academySelection: null,
         offers: [],
       };
     }
@@ -258,11 +272,15 @@ export function DashboardClient() {
           <ReadinessCard readiness={result.readiness} />
         </QuestFeedCard>
 
-        <QuestFeedCard eyebrow="Your progress" index={5} total={FEED_CARD_TOTAL} tone="light">
+        <QuestFeedCard eyebrow="Learn in 20 seconds" index={5} total={FEED_CARD_TOTAL} tone="light">
+          <AcademyCard selection={result.academySelection} />
+        </QuestFeedCard>
+
+        <QuestFeedCard eyebrow="Your progress" index={6} total={FEED_CARD_TOTAL} tone="light">
           <ProgressStrip score={result.score.score} stage={stage} completed={completed} nextReview="30 days" />
         </QuestFeedCard>
 
-        <QuestFeedCard eyebrow="Know what the score means" index={6} total={FEED_CARD_TOTAL} tone="soft">
+        <QuestFeedCard eyebrow="Know what the score means" index={7} total={FEED_CARD_TOTAL} tone="soft">
           <div className="flex flex-1 flex-col justify-center">
             <span className="w-fit rounded-full bg-violet-600 px-3 py-1.5 text-xs font-black uppercase tracking-wider text-white">Setup → Stabilise → Build → Optimise → Maintain</span>
             <h2 className="mt-5 text-3xl font-black tracking-tight sm:text-4xl">Progress, not a lender prediction.</h2>
