@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { AcademyArticleTracker } from "@/components/academy/academy-tracker";
 import { AcademyMarkdown } from "@/lib/academy/markdown";
 import type { AcademyArticle } from "@/lib/academy/types";
 
@@ -40,6 +41,8 @@ export function AcademyArticleView({
         <div className="mt-9">
           <AcademyMarkdown markdown={article.bodyMarkdown} />
         </div>
+
+        <AcademyArticleTracker article={article} />
 
         <aside className="mt-10 rounded-3xl border border-violet-100 bg-violet-50 p-5 text-sm leading-6 text-slate-700">
           <p className="font-black text-slate-950">Source and review</p>
