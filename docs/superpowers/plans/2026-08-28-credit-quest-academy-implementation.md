@@ -39,16 +39,16 @@
 - `lib/academy/markdown.tsx` — restricted Markdown renderer with no raw HTML execution and HTTPS-only external links.
 
 ### New server/data files
-- `lib/server/academy-repository.ts` — map/query published articles, list user progress, server-owned progress writes and publish RPC wrapper.
+- `lib/server/academy-repository.ts` — map/query published articles, exact published-article lookup, related-content ranking, user progress reads/writes and publish RPC wrapper.
 - `lib/supabase/admin.ts` — service-role client used only in server code.
 - `supabase/migrations/007_academy.sql` — Academy schema, RLS, indexes and atomic publish function.
 - `supabase/migrations/008_academy_launch_content.sql` — 25+ reviewed published launch entries.
 
 ### New presentation/routes
 - `components/academy/academy-card.tsx` — `Learn in 20 seconds` Quest Feed card.
-- `components/academy/academy-library.tsx` — public browse/search result list.
+- `components/academy/academy-library.tsx` — public browse/search results plus explicit unavailable state.
 - `components/academy/academy-article.tsx` — provenance + safe Markdown article presentation.
-- `components/academy/academy-tracker.tsx` — best-effort opened/completed/still-confused progress/events.
+- `components/academy/academy-tracker.tsx` — best-effort shown/opened/completed/still-confused/search tracking and progress writes.
 - `app/learn/page.tsx` — public Academy browse/search route.
 - `app/learn/[slug]/page.tsx` — public article route with metadata and real not-found behaviour.
 - `app/api/academy/progress/route.ts` — authenticated server-owned progress write endpoint.
@@ -62,6 +62,7 @@
 - `components/dashboard/dashboard-client.tsx` — same pure selector with demo fixture; 7-card feed.
 - `app/layout.tsx` — add `metadataBase` from the site URL helper.
 - `app/page.tsx` — add a public Academy entry point.
+- `.env.example` — add optional public canonical-site override `NEXT_PUBLIC_SITE_URL`.
 - `supabase/tests/rls.sql` — verify public/read-only article policy and owner-only progress read/no client writes.
 - `README.md` — document Academy migrations, public routes and runtime boundary.
 - `tests/e2e/smoke.spec.ts` — public Academy, selection, under-18/Safe Mode and 7-card regression coverage.
@@ -447,7 +448,7 @@ Create at least these 29 substantive content keys in `008_academy_launch_content
 | `thin-file-basics` | What a thin credit file means | thin_file | MoneyHelper |
 | `new-to-uk-credit-context` | Building UK credit context carefully | new_to_uk | MoneyHelper; conservative wording only |
 | `decline-recovery` | What to do after a credit decline | red/amber readiness; application-oriented | MoneyHelper |
-| `waiting-can-be-right` | Why waiting can be the right move | red/amber readiness; `safe_mode_safe` where copy is protective | Credit Quest rules + MoneyHelper |
+| `waiting-can-be-right` | Why waiting can be the right move | red/amber readiness; safe/protective | Credit Quest rules + MoneyHelper |
 | `affordability-basics` | Affordability is more than a credit score | affordability_stability | FCA / MoneyHelper |
 | `correct-credit-file-errors` | How to challenge incorrect credit-file data | general | ICO / CRA dispute guidance |
 | `fraud-identity-protection` | Protect your identity and credit file | general + `safe_mode_safe` | NCSC / Action Fraud |
@@ -477,14 +478,14 @@ https://www.actionfraud.police.uk/
 
 - [ ] **Step 4: Add a small reviewed demo fixture**
 
-Create `lib/academy/demo-content.ts` containing at least five `AcademyArticle` values covering:
+Create `lib/academy/demo-content.ts` containing at least these five `AcademyArticle` values and exact slugs:
 
 ```text
-credit-file-basics
-credit-basics-under-18
-protect-payments-first
-electoral-roll-basics
-application-spacing
+credit-file-basics -> what-is-a-credit-file
+credit-basics-under-18 -> credit-basics-before-18
+protect-payments-first -> protect-payments-first
+electoral-roll-basics -> electoral-roll-basics
+application-spacing -> application-spacing
 ```
 
 The fixture is explicitly demo/test-only and is used only when `getSupabasePublicEnv()` returns `null`. It must use the same provenance/safety fields as production rows and must not be used as a production fallback when configured Supabase reads fail.
@@ -516,7 +517,7 @@ git commit -m "feat: seed Academy launch curriculum"
 - Test: `tests/unit/academy-markdown.test.tsx`
 
 **Interfaces:**
-- Produces: `mapAcademyArticleRow`, `mapAcademyProgressRow`, `listPublishedAcademyArticles`, `getPublishedAcademyArticleBySlug`, `listAcademyProgress`, `relatedAcademyArticles`.
+- Produces: `mapAcademyArticleRow`, `mapAcademyProgressRow`, `listPublishedAcademyArticles`, `getPublishedAcademyArticleBySlug`, `getPublishedAcademyArticleById`, `listAcademyProgress`, `relatedAcademyArticles`, `publishAcademyArticle`.
 - Produces component: `AcademyMarkdown({ markdown })`.
 - Consumed by: Tasks 4–8.
 
@@ -532,7 +533,14 @@ expect(mapAcademyArticleRow(row)).toMatchObject({
 });
 ```
 
-Also assert `listPublishedAcademyArticles` calls `.eq("status", "published")`, returns only mapped rows, and `getPublishedAcademyArticleBySlug` combines `.eq("slug", slug)` with `.eq("status", "published")`.
+Also assert:
+
+```text
+listPublishedAcademyArticles -> .eq("status", "published")
+getPublishedAcademyArticleBySlug -> slug + published filters
+getPublishedAcademyArticleById -> id + published filters
+publishAcademyArticle -> .rpc("publish_academy_article", { p_article_id: articleId })
+```
 
 - [ ] **Step 2: Run repository test RED**
 
@@ -557,11 +565,13 @@ export function mapAcademyArticleRow(row: Record<string, unknown>): AcademyArtic
 export function mapAcademyProgressRow(row: Record<string, unknown>): AcademyProgress;
 export async function listPublishedAcademyArticles(supabase: SupabaseClient): Promise<AcademyArticle[]>;
 export async function getPublishedAcademyArticleBySlug(supabase: SupabaseClient, slug: string): Promise<AcademyArticle | null>;
+export async function getPublishedAcademyArticleById(supabase: SupabaseClient, articleId: string): Promise<AcademyArticle | null>;
 export async function listAcademyProgress(supabase: SupabaseClient, userId: string): Promise<AcademyProgress[]>;
 export function relatedAcademyArticles(article: AcademyArticle, all: AcademyArticle[], limit = 3): AcademyArticle[];
+export async function publishAcademyArticle(admin: SupabaseClient, articleId: string): Promise<void>;
 ```
 
-`relatedAcademyArticles` ranks by count of shared `topicTags`, excludes the same `contentKey`, then stable-sorts by `contentKey`.
+`relatedAcademyArticles` ranks by count of shared `topicTags`, excludes the same `contentKey`, then stable-sorts by `contentKey`. `publishAcademyArticle` only wraps the server-only RPC; it does not expose a browser route in this slice.
 
 - [ ] **Step 4: Write failing Markdown safety tests**
 
@@ -596,7 +606,7 @@ plain paragraphs
 *emphasis*
 ```
 
-React text rendering provides escaping. Treat lines beginning with `<`/raw HTML as plain text with angle brackets removed or escaped; never use `dangerouslySetInnerHTML`. Only create anchors for `https://` URLs. External anchors use `target="_blank" rel="noreferrer"`. Unsupported Markdown remains readable plain text.
+React text rendering provides escaping. Treat raw HTML-looking text as non-executable text; never use `dangerouslySetInnerHTML`. Only create anchors for `https://` URLs. External anchors use `target="_blank" rel="noreferrer"`. Unsupported Markdown remains readable plain text.
 
 Keep the parser deliberately small: split input into blocks, parse heading/list prefixes, and apply a conservative inline-token parser for HTTPS links/bold/emphasis.
 
@@ -626,12 +636,15 @@ git commit -m "feat: add Academy repository and safe renderer"
 - Create: `lib/site-url.ts`
 - Modify: `app/layout.tsx`
 - Modify: `app/page.tsx`
+- Modify: `.env.example`
 - Test: `tests/unit/academy-components.test.tsx`
 - Test: `tests/unit/academy-sitemap.test.ts`
 
 **Interfaces:**
+- `AcademyLibrary({ articles, query, topic })` and `AcademyUnavailable()` are exported from `components/academy/academy-library.tsx`.
+- `AcademyArticleView({ article, related })` is exported from `components/academy/academy-article.tsx`.
 - Public routes consume published `AcademyArticle[]` from Task 3 or `DEMO_ACADEMY_ARTICLES` only when Supabase is unconfigured.
-- Production/configured Supabase read failure renders a temporary-unavailable state; it does not fall back to demo content.
+- Production/configured Supabase read failure renders `AcademyUnavailable`; it does not fall back to demo content.
 
 - [ ] **Step 1: Write failing presentation tests**
 
@@ -658,6 +671,8 @@ npm test -- tests/unit/academy-components.test.tsx
 
 `AcademyLibrary` receives already-published rows and deterministically filters by lower-cased title, summary and `topicTags`. The route reads `searchParams.q` and `searchParams.topic`; no separate search service is needed at launch.
 
+`AcademyUnavailable` renders a clear temporary-unavailable message and a link back to the main Credit Quest journey; it contains no substitute financial lesson.
+
 `AcademyArticleView` renders title, `summary20s` first, reading time, reviewed date, source/reviewer, `AcademyMarkdown`, related article links and an explicit educational disclaimer. No sponsored slot is accepted as a prop.
 
 - [ ] **Step 4: Implement public routes**
@@ -666,12 +681,12 @@ npm test -- tests/unit/academy-components.test.tsx
 
 ```ts
 if (!getSupabasePublicEnv()) {
-  return <AcademyLibrary articles={DEMO_ACADEMY_ARTICLES} ... />;
+  return <AcademyLibrary articles={DEMO_ACADEMY_ARTICLES} query={q} topic={topic} />;
 }
 try {
   const supabase = await createServerSupabaseClient();
   const articles = await listPublishedAcademyArticles(supabase);
-  return <AcademyLibrary articles={articles} ... />;
+  return <AcademyLibrary articles={articles} query={q} topic={topic} />;
 } catch {
   return <AcademyUnavailable />;
 }
@@ -679,7 +694,7 @@ try {
 
 `app/learn/[slug]/page.tsx` uses the same environment rule. For configured Supabase, unknown/unpublished slug calls `notFound()`. `generateMetadata` uses the published article title/summary and a canonical `/learn/{slug}` path; do not generate metadata from unreviewed data.
 
-- [ ] **Step 5: Add canonical URL helper and sitemap**
+- [ ] **Step 5: Add canonical URL helper, env override and sitemap**
 
 Create `lib/site-url.ts`:
 
@@ -693,7 +708,13 @@ export function getSiteUrl(): URL {
 }
 ```
 
-Add `NEXT_PUBLIC_SITE_URL=` to `.env.example` only if the implementation needs a custom-domain override; it is public configuration, not a secret. Set `metadataBase: getSiteUrl()` in `app/layout.tsx`.
+Add this exact line to `.env.example`:
+
+```text
+NEXT_PUBLIC_SITE_URL=
+```
+
+Set `metadataBase: getSiteUrl()` in `app/layout.tsx`.
 
 `app/sitemap.ts` returns `/`, `/learn`, and only published article URLs. In no-Supabase demo/test mode it may use `DEMO_ACADEMY_ARTICLES`; configured read failure returns core static URLs only rather than exposing unpublished data.
 
@@ -707,7 +728,7 @@ npm test -- tests/unit/academy-sitemap.test.ts
 
 - [ ] **Step 7: Add home-page Academy entry point**
 
-Add a secondary public link such as `Learn about credit` -> `/learn` without changing the primary onboarding CTA.
+Add a secondary public link `Learn about credit` -> `/learn` without changing the primary onboarding CTA.
 
 - [ ] **Step 8: Run Task 4 GREEN and build**
 
@@ -786,7 +807,7 @@ Where:
 missionMatch: 1 exact current mission, else 0
 barrierRank: 2 primary, 1 secondary, 0 none
 passportRank: 3 red, 2 amber, 1 unknown, 0 none
-a readiness state match: 1/0
+readinessMatch: 1 matching current readiness state, else 0
 novelty: 1 unseen, 0 seen
 ```
 
@@ -858,7 +879,7 @@ Update adult smoke test from 6 to 7 cards and require `Learn in 20 seconds` betw
 
 - [ ] **Step 2: Implement `AcademyCard`**
 
-Render only approved selection fields. When `selection` is null, render a neutral unavailable state such as:
+Render only approved selection fields. When `selection` is null, render a neutral unavailable state:
 
 ```text
 Learning is temporarily unavailable.
@@ -938,13 +959,14 @@ git commit -m "feat: add Academy Quest Feed card"
 - Create: `components/academy/academy-tracker.tsx`
 - Create: `app/api/academy/progress/route.ts`
 - Modify: `components/academy/academy-card.tsx`
+- Modify: `components/academy/academy-library.tsx`
 - Modify: `components/academy/academy-article.tsx`
 - Test: `tests/unit/events.test.ts`
 - Test: `tests/unit/academy-progress-route.test.ts`
 
 **Interfaces:**
 - API body: `{ action: AcademyProgressAction; contentKey: string; articleId: string; sourceContext: AcademySourceContext }`.
-- API authenticates using cookie-bound server client, validates published article identity, then writes with service-role client whose credential never reaches the browser.
+- API authenticates using cookie-bound server client, validates exact published article identity, then writes with a service-role client whose credential never reaches the browser.
 - Analytics remain best-effort and never block article readability/core guidance.
 
 - [ ] **Step 1: Extend event test RED**
@@ -984,7 +1006,8 @@ Use module mocks following existing route-test patterns. Cover:
 ```text
 400 invalid body
 401 unauthenticated user
-404 article id/content key not published/mismatched
+404 article id missing/unpublished
+404 article id exists but contentKey does not match
 204 successful progress write
 500 progress write failure
 ```
@@ -1019,7 +1042,7 @@ export async function recordAcademyProgress(
 
 Read existing row by `(user_id, content_key)`, then upsert while preserving first timestamps and only advancing the field for the requested action. Always update `last_article_id`, `last_source_context`, `updated_at`; `shown` updates `last_shown_at` and sets `first_shown_at` only if absent.
 
-- [ ] **Step 5: Implement API route**
+- [ ] **Step 5: Implement API route with exact article validation**
 
 Flow is exact:
 
@@ -1028,8 +1051,9 @@ parse body
 -> if no public/service env: 204 (demo mode, non-critical)
 -> authenticate user with cookie-bound createServerSupabaseClient
 -> 401 if no user
--> load published article by slug/id/content key using normal server client
--> 404 on mismatch/unpublished
+-> getPublishedAcademyArticleById(normal server client, articleId)
+-> 404 if missing/unpublished
+-> 404 if article.contentKey !== body.contentKey
 -> create admin client
 -> recordAcademyProgress(admin, authenticated user id, article, action, sourceContext)
 -> 204
@@ -1039,11 +1063,21 @@ Never trust a client-provided user ID, status or safety classification.
 
 - [ ] **Step 6: Implement best-effort client tracking**
 
-`AcademyTracker` is a small client component. On article mount, call `trackEvent("academy_article_opened", metadata)` and POST progress action `opened`; buttons send `academy_article_completed` / `academy_still_confused` and corresponding progress writes. Ignore tracking/progress network failures after showing a small local confirmation where appropriate.
+`components/academy/academy-tracker.tsx` exports:
 
-`AcademyCard` uses an effect to send `academy_card_shown` + progress `shown` once per mounted selection. Do not make the card wait for either request.
+```ts
+AcademyCardTracker({ selection })
+AcademyArticleTracker({ article })
+AcademySearchTracker({ query })
+```
 
-On public anonymous article pages, tracking requests may receive 401 and are ignored; the article remains fully readable. `Still confused?` can acknowledge locally and explain that signed-in users can save learning feedback; do not add an unauthenticated database-write endpoint in this slice.
+`AcademyCardTracker` sends `academy_card_shown` + progress `shown` once per mounted content key.
+
+`AcademyArticleTracker` sends `academy_article_opened` + progress `opened` on mount, and exposes accessible controls used by `AcademyArticleView` for `academy_article_completed` / `academy_still_confused` plus progress writes.
+
+`AcademySearchTracker` sends `academy_search_used` only when a non-empty `query` is present; include the query string and result count only, never profile/commercial fields. Render it from `AcademyLibrary`.
+
+All calls are best-effort. `AcademyCard` and article content never wait for tracking. On public anonymous article pages, event/progress requests may receive 401 and are ignored; content remains fully readable. `Still confused?` acknowledges locally and may explain that signing in preserves learning feedback. Do not add an unauthenticated database-write endpoint.
 
 - [ ] **Step 7: Run Task 7 GREEN**
 
@@ -1054,7 +1088,7 @@ npm test -- tests/unit/events.test.ts tests/unit/academy-progress-route.test.ts 
 - [ ] **Step 8: Commit**
 
 ```bash
-git add lib/supabase/admin.ts lib/supabase/env.ts lib/server/academy-repository.ts lib/events.ts components/academy/academy-tracker.tsx components/academy/academy-card.tsx components/academy/academy-article.tsx app/api/academy/progress/route.ts tests/unit/events.test.ts tests/unit/academy-progress-route.test.ts tests/unit/academy-components.test.tsx
+git add lib/supabase/admin.ts lib/supabase/env.ts lib/server/academy-repository.ts lib/events.ts components/academy/academy-tracker.tsx components/academy/academy-card.tsx components/academy/academy-library.tsx components/academy/academy-article.tsx app/api/academy/progress/route.ts tests/unit/events.test.ts tests/unit/academy-progress-route.test.ts tests/unit/academy-components.test.tsx
 git commit -m "feat: track Academy learning progress"
 ```
 
@@ -1065,7 +1099,7 @@ git commit -m "feat: track Academy learning progress"
 **Files:**
 - Modify: `tests/e2e/smoke.spec.ts`
 - Modify: `README.md`
-- Modify: `supabase/tests/rls.sql` if DB verification reveals any missing assertion.
+- Modify: `supabase/tests/rls.sql` if DB verification reveals a missing assertion.
 
 **Interfaces:**
 - Final release must prove existing V2.1 strategy/commercial boundaries are unchanged.
@@ -1076,7 +1110,7 @@ Add tests that, in no-Supabase demo mode:
 
 ```text
 GET /learn is public and shows Credit Quest Academy
-GET /learn/what-is-a-credit-file (or the exact demo slug) renders without login
+GET /learn/what-is-a-credit-file renders without login
 unknown slug returns the not-found experience
 adult onboarding yields exactly 7 feed cards
 an electoral-roll mission selects electoral-roll education
@@ -1085,9 +1119,9 @@ Learn more opens the canonical /learn/[slug] page
 
 - [ ] **Step 2: Expand protective browser cases**
 
-Existing under-18 test must also assert the Academy card is `under18_safe` content (`Credit basics before 18`) and still has no product eligibility CTA.
+Existing under-18 test must also assert the Academy card is `Credit basics before 18` and still has no product eligibility CTA.
 
-Existing Safe Mode test must also assert the Academy card is protective (`Protect payments first`) and still has no product/referral CTA.
+Existing Safe Mode test must also assert the Academy card is `Protect payments first` and still has no product/referral CTA.
 
 Existing amber/no-countdown, Passport, Readiness, mission-start and offer-separation tests must remain unchanged apart from the feed-card count/index additions.
 
@@ -1136,17 +1170,17 @@ Expected: all green on the exact branch head.
 
 - [ ] **Step 6: Run local Supabase database verification before production DDL**
 
-With Supabase CLI available:
+With the local Supabase stack running:
 
 ```bash
 npx supabase start
 npx supabase db reset
-psql "$LOCAL_SUPABASE_DB_URL" -f supabase/tests/rls.sql
+psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -f supabase/tests/rls.sql
 ```
 
-If the repo's established local Supabase connection command differs, use `npx supabase status` to obtain the local DB URL rather than inventing credentials.
+If a non-default local DB port is configured, take the database URL from `npx supabase status`; do not invent or reuse production credentials.
 
-Verify manually/with SQL:
+Verify with SQL:
 
 ```text
 29 launch rows are present and published
@@ -1194,5 +1228,7 @@ Before execution starts, verify:
 4. Demo content is used only for unconfigured demo/test mode, never as a configured-production data-source failure fallback.
 5. Launch content includes normal, under-18 and Safe Mode fallback keys.
 6. Service-role credentials remain server-only and direct client Academy writes remain denied.
-7. No new Markdown/runtime dependency is required.
-8. Final merge remains a separate explicit user approval after exact-head verification.
+7. Progress writes validate the exact published `articleId` and matching `contentKey` before service-role upsert.
+8. `AcademyUnavailable`, exact article-by-ID lookup, publish RPC wrapper and search tracking all have explicit owning files/interfaces.
+9. No new Markdown/runtime dependency is required.
+10. Final merge remains a separate explicit user approval after exact-head verification.
