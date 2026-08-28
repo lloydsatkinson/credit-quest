@@ -136,15 +136,15 @@ function fallbackKey(context: AcademySelectionContext): string {
 function whyThisMatters(item: RankedArticle): string {
   switch (item.reasonType) {
     case "mission":
-      return "This explains the credit concept behind the mission you are working on now.";
+      return "This explains the action Credit Quest has ranked for you right now.";
     case "barrier":
-      return "This explains a factor connected to the main barrier Credit Quest has identified.";
+      return "This explains the main credit-building barrier Credit Quest has identified.";
     case "passport":
-      return "This explains one of the areas highlighted in your Credit Passport.";
+      return "This explains a Credit Passport area that currently needs attention.";
     case "readiness":
-      return "This helps explain your current Application Readiness guidance.";
+      return "This helps explain your current application-readiness guidance.";
     case "fallback":
-      return "This is a useful foundation for understanding how credit works.";
+      return "A useful foundation for understanding your next steps in Credit Quest.";
   }
 }
 
