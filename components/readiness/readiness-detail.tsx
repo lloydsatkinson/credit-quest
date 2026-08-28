@@ -38,7 +38,7 @@ export function ReadinessDetail({ readiness }: { readiness: ApplicationReadiness
       <h1 className="mt-4 text-4xl font-black tracking-tight text-slate-950 sm:text-5xl">Can I apply yet?</h1>
       <p className="mt-5 text-3xl font-black tracking-tight text-slate-950">{readiness.headline}</p>
       <p className="mt-4 max-w-2xl leading-7 text-slate-600">
-        This is Credit Quest guidance, not a lender approval prediction. A green result does not mean a lender is likely to approve an application.
+        This is Credit Quest guidance, not a lender approval prediction. A green result does not mean you will be approved by a lender.
       </p>
 
       <div className="mt-8 grid gap-4 lg:grid-cols-3">
