@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { AcademySearchTracker } from "@/components/academy/academy-tracker";
 import type { AcademyArticle } from "@/lib/academy/types";
 
 function normalise(value: string): string {
@@ -36,6 +37,7 @@ export function AcademyLibrary({
 
   return (
     <main className="mx-auto min-h-screen max-w-5xl px-6 py-10 sm:py-14">
+      <AcademySearchTracker query={query} resultCount={filtered.length} />
       <div className="max-w-3xl">
         <Link href="/" className="text-sm font-bold text-violet-700 hover:text-violet-900">
           ← Credit Quest
