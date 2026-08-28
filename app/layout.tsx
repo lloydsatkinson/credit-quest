@@ -1,8 +1,10 @@
 import type { Metadata, Viewport } from "next";
 import { ServiceWorkerRegister } from "@/components/pwa/service-worker-register";
+import { getSiteUrl } from "@/lib/site-url";
 import "./globals.css";
 
 export const metadata: Metadata = {
+  metadataBase: getSiteUrl(),
   title: "Credit Quest",
   description: "Your next best move for better credit habits.",
   manifest: "/manifest.webmanifest",
