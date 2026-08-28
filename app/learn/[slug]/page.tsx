@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { AcademyArticleView } from "@/components/academy/academy-article";
 import { AcademyUnavailable } from "@/components/academy/academy-library";
 import { DEMO_ACADEMY_ARTICLES } from "@/lib/academy/demo-content";
+import type { AcademyArticle } from "@/lib/academy/types";
 import {
   getPublishedAcademyArticleBySlug,
   listPublishedAcademyArticles,
@@ -60,16 +61,18 @@ export default async function AcademyArticlePage({
     );
   }
 
+  let article: AcademyArticle | null = null;
+  let all: AcademyArticle[] = [];
+  let readFailed = false;
   try {
     const supabase = await createServerSupabaseClient();
-    const article = await getPublishedAcademyArticleBySlug(supabase, slug);
-    if (!article) notFound();
-    const all = await listPublishedAcademyArticles(supabase);
-    return <AcademyArticleView article={article} related={relatedAcademyArticles(article, all)} />;
-  } catch (error) {
-    if (error && typeof error === "object" && "digest" in error && String(error.digest).startsWith("NEXT_HTTP_ERROR_FALLBACK;404")) {
-      throw error;
-    }
-    return <AcademyUnavailable />;
+    article = await getPublishedAcademyArticleBySlug(supabase, slug);
+    if (article) all = await listPublishedAcademyArticles(supabase);
+  } catch {
+    readFailed = true;
   }
+
+  if (readFailed) return <AcademyUnavailable />;
+  if (!article) notFound();
+  return <AcademyArticleView article={article} related={relatedAcademyArticles(article, all)} />;
 }
