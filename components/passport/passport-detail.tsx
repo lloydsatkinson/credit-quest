@@ -27,7 +27,10 @@ function EvidenceList({ title, items }: { title: string; items: string[] }) {
 
 function PillarDetail({ pillar }: { pillar: PassportPillar }) {
   return (
-    <article className="rounded-[1.75rem] border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+    <article
+      data-testid={`passport-pillar-${pillar.id}`}
+      className="rounded-[1.75rem] border border-slate-200 bg-white p-5 shadow-sm sm:p-6"
+    >
       <div className="flex items-start justify-between gap-4">
         <div>
           <h2 className="text-xl font-black text-slate-950">{pillar.title}</h2>
