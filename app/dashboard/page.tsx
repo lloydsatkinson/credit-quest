@@ -1,12 +1,15 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { ResumeActionCard } from "@/components/actions/resume-action-card";
+import { AcademyCard } from "@/components/academy/academy-card";
 import { DashboardClient } from "@/components/dashboard/dashboard-client";
 import { NextMissionCard } from "@/components/dashboard/next-mission-card";
 import { ProgressStrip } from "@/components/dashboard/progress-strip";
 import { QuestFeed, QuestFeedCard } from "@/components/dashboard/quest-feed";
 import { PassportCard } from "@/components/passport/passport-card";
 import { ReadinessCard } from "@/components/readiness/readiness-card";
+import { selectAcademyArticle } from "@/lib/academy/selector";
+import type { AcademySelection } from "@/lib/academy/types";
 import { MISSION_CATALOGUE } from "@/lib/data/missions";
 import { deriveAccountProfileSignals } from "@/lib/domain/account-missions";
 import { getAgeMode } from "@/lib/domain/age-gate";
@@ -23,13 +26,17 @@ import {
   getProviderById,
   listPendingActionAttempts,
 } from "@/lib/server/action-repository";
+import {
+  listAcademyProgress,
+  listPublishedAcademyArticles,
+} from "@/lib/server/academy-repository";
 import { syncMissionInstances } from "@/lib/server/mission-repository";
 import { getUserProfile } from "@/lib/server/profile-repository";
 import { getSupabasePublicEnv } from "@/lib/supabase/env";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 const DAY_MS = 86_400_000;
-const FEED_CARD_TOTAL = 6;
+const FEED_CARD_TOTAL = 7;
 
 function nextReviewLabel(instances: MissionInstance[], now: Date): string {
   const future = instances
@@ -73,6 +80,27 @@ export default async function DashboardPage() {
   const nextReview = nextReviewLabel(instances, now);
   const hasTrackedCreditCard = accounts.some((account) => account.accountType === "credit_card");
   const needsAccountSetup = !hasTrackedCreditCard && effectiveProfile.hasRevolvingCredit === true;
+
+  let academySelection: AcademySelection | null = null;
+  try {
+    const [articles, progressRows] = await Promise.all([
+      listPublishedAcademyArticles(supabase),
+      listAcademyProgress(supabase, user.id),
+    ]);
+    academySelection = selectAcademyArticle(articles, {
+      ageMode,
+      safety,
+      missionKey: next?.mission.slug ?? null,
+      diagnosis,
+      passport,
+      readiness,
+      seenContentKeys: progressRows
+        .filter((progress) => progress.lastShownAt)
+        .map((progress) => progress.contentKey),
+    });
+  } catch {
+    academySelection = null;
+  }
 
   let pendingView: {
     attempt: NonNullable<typeof pendingAttempt>;
@@ -196,11 +224,15 @@ export default async function DashboardPage() {
           <ReadinessCard readiness={readiness} />
         </QuestFeedCard>
 
-        <QuestFeedCard eyebrow="Your progress" index={5} total={FEED_CARD_TOTAL} tone="light">
+        <QuestFeedCard eyebrow="Learn in 20 seconds" index={5} total={FEED_CARD_TOTAL} tone="light">
+          <AcademyCard selection={academySelection} />
+        </QuestFeedCard>
+
+        <QuestFeedCard eyebrow="Your progress" index={6} total={FEED_CARD_TOTAL} tone="light">
           <ProgressStrip score={score.score} stage={stage} completed={completed} nextReview={nextReview} />
         </QuestFeedCard>
 
-        <QuestFeedCard eyebrow="Know what the score means" index={6} total={FEED_CARD_TOTAL} tone="soft">
+        <QuestFeedCard eyebrow="Know what the score means" index={7} total={FEED_CARD_TOTAL} tone="soft">
           <div className="flex flex-1 flex-col justify-center">
             <span className="w-fit rounded-full bg-violet-600 px-3 py-1.5 text-xs font-black uppercase tracking-wider text-white">Setup → Stabilise → Build → Optimise → Maintain</span>
             <h2 className="mt-5 text-3xl font-black tracking-tight sm:text-4xl">Progress, not a lender prediction.</h2>
