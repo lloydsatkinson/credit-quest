@@ -143,9 +143,9 @@ export async function recordAcademyProgress(
     last_article_id: article.id,
     first_shown_at: existing?.firstShownAt ?? (action === "shown" ? timestamp : null),
     last_shown_at: action === "shown" ? timestamp : existing?.lastShownAt ?? null,
-    opened_at: action === "opened" ? timestamp : existing?.openedAt ?? null,
-    completed_at: action === "completed" ? timestamp : existing?.completedAt ?? null,
-    still_confused_at: action === "still_confused" ? timestamp : existing?.stillConfusedAt ?? null,
+    opened_at: existing?.openedAt ?? (action === "opened" ? timestamp : null),
+    completed_at: existing?.completedAt ?? (action === "completed" ? timestamp : null),
+    still_confused_at: existing?.stillConfusedAt ?? (action === "still_confused" ? timestamp : null),
     last_source_context: sourceContext,
     updated_at: timestamp,
   };
