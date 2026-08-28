@@ -108,7 +108,7 @@ The application remains responsible for rendering, selection and safety. Supabas
 
 The first release does not include a large editorial/admin application.
 
-Initial launch content will be seeded through controlled database migrations or server-owned seed tooling. The schema is designed so a later internal editor can support preview, review, publish, rollback and audit history without changing the public or in-Quest content APIs.
+Initial launch content will be seeded through controlled database migrations or server-owned seed tooling. Subsequent content versions can be published through controlled database/server tooling without an application deployment. The schema is designed so a later internal editor can support preview, review, publish, rollback and audit history without changing the public or in-Quest content APIs.
 
 ## 5. Content model
 
@@ -128,9 +128,10 @@ supersedes_id uuid null
 
 title text not null
 summary_20s text not null
-body text not null
+body_markdown text not null
 reading_minutes integer not null
 
+topic_tags text[] not null default '{}'
 audiences text[] not null default '{}'
 mission_keys text[] not null default '{}'
 barrier_types text[] not null default '{}'
@@ -152,6 +153,8 @@ updated_at timestamptz not null default now()
 
 `content_key` is the stable logical identity of the article across versions. `id` identifies a specific version.
 
+`body_markdown` is a restricted Markdown format. Raw HTML, JavaScript, iframes and arbitrary embedded scripts are not supported. Rendering must use a sanitised/allowlisted Markdown path so Academy content cannot become an executable-content channel.
+
 Allowed publication states:
 
 ```text
@@ -166,28 +169,65 @@ Recommended constraints:
 - `version >= 1`;
 - unique `(content_key, version)`;
 - `reading_minutes >= 1`;
-- status constrained to approved values;
+- status constrained to `draft`, `reviewed`, `published`, `superseded`, `archived`;
 - sensitivity constrained to `standard`, `sensitive`, or `regulated_adjacent`;
 - only one currently published row per `content_key`;
 - only one currently published row per `slug`.
 
-### 5.2 Publication/version rules
+### 5.2 Mapping vocabulary
+
+Mappings must use controlled values rather than arbitrary prose where they drive selection.
+
+`audiences` allowed values for V2.1:
+
+```text
+general
+adult
+under18
+```
+
+`safety_tags` allowed values for V2.1:
+
+```text
+general
+under18_safe
+safe_mode_safe
+application_oriented
+borrowing_oriented
+```
+
+An article may carry more than one safety tag. Empty safety tags mean the content is not eligible for personalised protective selection until explicitly classified.
+
+The selector applies these rules:
+
+- under-18: only articles tagged `under18_safe` are eligible;
+- Safe Mode: only articles tagged `safe_mode_safe` are eligible;
+- normal adult mode: `general` content is eligible, while `application_oriented` or `borrowing_oriented` content remains subject to the user's existing readiness/safety context;
+- an article tagged `application_oriented` or `borrowing_oriented` is never made eligible merely because it is also generally relevant.
+
+`mission_keys`, `barrier_types`, `passport_pillars`, and `readiness_states` must be validated against the existing Credit Quest domain identifiers rather than accepting invented labels.
+
+`topic_tags` are editorial discovery/search categories only. They may help public browsing and related-article links but do not outrank the deterministic personalisation rules above.
+
+### 5.3 Publication/version rules
 
 Published content is immutable in product workflow.
 
 A material edit creates a new version with the same `content_key` and a `supersedes_id` pointing to the previous version. Publication of the new version happens atomically with moving the old version to `superseded`.
 
+The implementation should expose one server-owned publish operation so the two state changes cannot leave two active published versions or temporarily remove the current article.
+
 This prevents silent historical rewrites and preserves the exact text/source/reviewer state that was live at any point.
 
 Minor non-content operational fields may be corrected only through controlled server tooling with an audit event.
 
-### 5.3 Public read policy
+### 5.4 Public read policy
 
 Anonymous and authenticated public reads may access only rows with `status = 'published'`.
 
 Draft, reviewed, superseded and archived content must not be exposed through public application queries.
 
-Create/update/delete permissions remain server/admin-controlled. Browser clients do not receive authoring rights.
+Create/update/delete/publish permissions remain server/admin-controlled. Browser clients do not receive authoring rights.
 
 ## 6. User learning progress
 
@@ -213,7 +253,7 @@ primary key (user_id, content_key)
 
 Using `content_key` rather than a specific article-version ID for the primary key means a new editorial version does not reset the user's entire seen/completed history. `last_article_id` records which content version was most recently interacted with.
 
-RLS permits authenticated users to read/update only their own progress. Server routes validate allowed state transitions and source contexts.
+Authenticated users may SELECT only their own progress rows. Direct browser insert/update/delete access is not granted. Progress writes go through server-owned API routes that authenticate the user, force the row `user_id` to the authenticated user, validate allowed transitions/source contexts, and then perform the write.
 
 Academy progress must not be read by readiness, passport, diagnosis, safety or mission-ranking modules.
 
@@ -224,8 +264,8 @@ Academy progress must not be read by readiness, passport, diagnosis, safety or m
 The public Academy landing page should:
 
 - explain what Credit Quest Academy is;
-- expose topic/category browsing;
-- support a simple text search over published title/summary/tags;
+- expose topic/category browsing from `topic_tags`;
+- support a simple text search over published title, summary and topic tags;
 - show reading time;
 - prioritise clarity over volume;
 - link to individual article pages;
@@ -249,6 +289,8 @@ Each published article page should include:
 - explicit separation from any commercial content.
 
 The route returns a real not-found response for unpublished or unknown slugs.
+
+External links from article content must use safe link handling and may not execute supplied script/HTML.
 
 ### 7.3 SEO
 
@@ -320,6 +362,7 @@ Commercial or offer information is not part of this interface.
 Selection is deterministic and follows this priority:
 
 1. **Protective eligibility filter**
+   - apply the controlled `safety_tags` rules before calculating relevance;
    - apply under-18 restrictions;
    - apply Safe Mode restrictions;
    - exclude any content not allowed for that context.
@@ -340,9 +383,9 @@ Selection is deterministic and follows this priority:
    - prefer an unseen `content_key` over a previously shown one where relevance is otherwise equal.
 
 7. **Stable deterministic tie-break**
-   - use a stable content field such as `content_key` alphabetical order rather than randomness.
+   - use `content_key` alphabetical order rather than randomness.
 
-If no relevant topic exists, show a safe general credit-basics topic rather than manufacturing a match.
+If no relevant topic exists, show a specifically designated published fallback article that is safe for the current age/safety context. The implementation must ship at least one `under18_safe` fallback, one `safe_mode_safe` fallback and one normal-adult fallback. It must not manufacture a relevance claim.
 
 ### 9.3 Examples
 
@@ -389,6 +432,8 @@ Required topic coverage includes:
 
 Where one concept needs beginner and deeper treatment, separate useful entries are acceptable. Duplicate filler is not.
 
+At least one launch entry must satisfy each protective fallback class: `under18_safe`, `safe_mode_safe`, and normal adult/general.
+
 ## 11. Analytics and events
 
 Track useful learning outcomes rather than screen-time optimisation.
@@ -428,11 +473,11 @@ Do not optimise for raw screen time, streaks, cards viewed per session or infini
 ## 12. Error and fallback behaviour
 
 - Supabase content-read failure on `/learn`: render a clear temporary-unavailable state; do not substitute unreviewed hard-coded financial content.
-- Personalised selector with no eligible match: use a reviewed general fallback article.
+- Personalised selector with no eligible match: use the reviewed protective fallback for the current context.
 - Missing or invalid profile state: selection must remain conservative and avoid personalised claims that require missing evidence.
 - Unpublished slug: return not found.
 - Progress-write failure: article remains readable; learning progress is non-critical and should fail safely.
-- If the Academy data source is unavailable, core dashboard missions/readiness/passport must continue functioning. Academy must not become a dependency for core guidance availability.
+- If the Academy data source is unavailable, core dashboard missions/readiness/passport must continue functioning. The Academy card may degrade to a clearly unavailable education state or be omitted without changing the other feed guidance. Academy must not become a dependency for core guidance availability.
 
 ## 13. Security and RLS
 
@@ -441,14 +486,15 @@ The Academy introduces public content, so read/write boundaries must be explicit
 `academy_articles`:
 
 - anonymous/authenticated users: SELECT published rows only;
-- authoring: server/admin role only;
+- authoring/publishing: server/admin role only;
 - no browser-side insert/update/delete rights.
 
 `academy_progress`:
 
-- authenticated users: own rows only;
+- authenticated users: SELECT own rows only;
 - anonymous users: no progress rows;
-- server routes validate progress event semantics.
+- direct browser writes are denied;
+- authenticated server routes own progress writes and validate event semantics.
 
 Database migrations follow the established expand -> deploy -> verify discipline. No destructive cutover is needed for the first Academy slice.
 
@@ -461,9 +507,12 @@ Verify:
 - publication-state constraints;
 - one published version per `content_key`/slug;
 - version uniqueness;
+- allowed mapping/safety-tag values;
 - public reads expose published rows only;
 - non-public states are not anonymously readable;
-- progress RLS isolates users.
+- public clients cannot author/publish Academy content;
+- progress SELECT isolates users;
+- direct browser progress writes are denied.
 
 ### 14.2 Domain selector tests
 
@@ -471,16 +520,17 @@ Verify at minimum:
 
 - under-18 filter wins before relevance;
 - Safe Mode filter wins before relevance;
+- application/borrowing-oriented tags cannot bypass protective filtering;
 - exact mission match wins;
 - primary barrier match wins when mission has no match;
 - red Passport pillar outranks amber;
 - readiness match works as lower-priority relevance;
 - unseen content wins equal-relevance tie;
-- deterministic stable tie-break;
-- reviewed fallback when no match;
+- deterministic `content_key` tie-break;
+- correct protective fallback when no match;
 - selector input has no commercial fields.
 
-### 14.3 Component tests
+### 14.3 Component/content-rendering tests
 
 Verify:
 
@@ -488,7 +538,8 @@ Verify:
 - no sponsored/commercial labelling exists inside Academy component inputs;
 - article provenance/review date renders appropriately;
 - `Still confused?` control is accessible;
-- unpublished article data cannot be rendered through public component path.
+- unpublished article data cannot be rendered through public component path;
+- raw HTML/script/iframe content is not executed from `body_markdown`.
 
 ### 14.4 Playwright/E2E
 
@@ -499,9 +550,10 @@ Verify:
 - unknown/unpublished slug is not publicly available;
 - completed onboarding produces a seven-card Quest Feed;
 - relevant Academy card is selected for a known mission case;
-- under-18 case shows safe education and no credit-product CTA;
-- Safe Mode case shows protective education;
+- under-18 case shows `under18_safe` education and no credit-product CTA;
+- Safe Mode case shows `safe_mode_safe` protective education;
 - `Learn more` opens the canonical article;
+- progress-write failure does not break article reading/core guidance;
 - existing mission action, Passport, Readiness and offer-separation behavior still passes.
 
 ### 14.5 Release gate
@@ -526,15 +578,16 @@ Every launch article must have:
 - reviewer attribution;
 - reviewed date;
 - sensitivity classification;
+- controlled safety/audience mappings;
 - plain-English 20-second summary;
-- full article body;
-- correct mappings;
+- restricted-Markdown full article body;
+- correct mission/barrier/passport/readiness mappings where used;
 - no unsupported lender-specific claims;
 - no commercial placement hidden as education.
 
 High-sensitivity or regulated-adjacent topics should use authoritative UK sources and conservative wording.
 
-The content team should review stale or time-sensitive articles by `review_due_at`. Expired review dates do not automatically rewrite or hallucinate content; they create an editorial maintenance obligation.
+The content team should review stale or time-sensitive articles by `review_due_at`. Expired review dates do not automatically rewrite, unpublish or hallucinate content; they create an editorial maintenance obligation. A later admin workflow may add alerts/queues for overdue review.
 
 ## 16. Out of scope for this slice
 
@@ -560,14 +613,15 @@ The following are explicitly deferred:
 Recommended implementation order:
 
 1. Academy contracts + schema/RLS migration.
-2. Seed-quality canonical launch content.
-3. Server repository/query layer.
-4. Public `/learn` and `/learn/[slug]` surfaces + SEO/sitemap.
-5. Deterministic Academy selector.
-6. Academy card and seven-card Quest Feed integration.
-7. Progress/events and `Still confused?` feedback.
-8. Protective under-18/Safe Mode E2E tests.
-9. Full CI/build/database/advisor/release verification.
+2. Seed-quality canonical launch content, including protective fallbacks.
+3. Server repository/query/publish/progress layer.
+4. Restricted Markdown renderer.
+5. Public `/learn` and `/learn/[slug]` surfaces + SEO/sitemap.
+6. Deterministic Academy selector.
+7. Academy card and seven-card Quest Feed integration.
+8. Progress/events and `Still confused?` feedback.
+9. Protective under-18/Safe Mode E2E tests.
+10. Full CI/build/database/advisor/release verification.
 
 The later speed-to-market phase can add a lightweight internal editor on top of these same records without changing the customer-facing contracts.
 
@@ -577,12 +631,14 @@ V2.1 Academy is complete when:
 
 - at least 25 launch-quality reviewed entries exist in the canonical Supabase source;
 - public `/learn` and article routes work from published content;
-- published content can change without an application redeploy;
+- published content can be changed through controlled content tooling without an application redeploy;
 - the Quest Feed has one personalised Academy card and remains finite;
 - selection is deterministic and commercially isolated;
 - under-18 and Safe Mode filtering is enforced before selection;
-- public/private RLS boundaries are proven;
+- protective fallback content exists for under-18, Safe Mode and normal adult contexts;
+- public/private RLS boundaries and server-owned progress writes are proven;
 - content provenance/version/review data is preserved;
+- restricted Markdown cannot execute raw article-supplied HTML/script/iframe content;
 - useful learning analytics exist without addictive engagement mechanics;
 - existing Credit Quest strategy, mission, Passport, Readiness and offer behavior remains regression-safe;
 - full CI, E2E, build and database checks pass before release.
