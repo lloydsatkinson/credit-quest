@@ -1,5 +1,6 @@
 import { AcademyLibrary, AcademyUnavailable } from "@/components/academy/academy-library";
 import { DEMO_ACADEMY_ARTICLES } from "@/lib/academy/demo-content";
+import type { AcademyArticle } from "@/lib/academy/types";
 import { listPublishedAcademyArticles } from "@/lib/server/academy-repository";
 import { getSupabasePublicEnv } from "@/lib/supabase/env";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
@@ -23,11 +24,15 @@ export default async function LearnPage({
     return <AcademyLibrary articles={DEMO_ACADEMY_ARTICLES} query={query} topic={topic} />;
   }
 
+  let articles: AcademyArticle[] = [];
+  let readFailed = false;
   try {
     const supabase = await createServerSupabaseClient();
-    const articles = await listPublishedAcademyArticles(supabase);
-    return <AcademyLibrary articles={articles} query={query} topic={topic} />;
+    articles = await listPublishedAcademyArticles(supabase);
   } catch {
-    return <AcademyUnavailable />;
+    readFailed = true;
   }
+
+  if (readFailed) return <AcademyUnavailable />;
+  return <AcademyLibrary articles={articles} query={query} topic={topic} />;
 }
