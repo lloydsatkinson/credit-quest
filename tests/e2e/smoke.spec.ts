@@ -1,6 +1,12 @@
 import { expect, test, type Page } from "@playwright/test";
 
-async function completeOnboarding(page: Page, dateOfBirth: string, electoralRoll = true) {
+async function completeOnboarding(
+  page: Page,
+  dateOfBirth: string,
+  electoralRoll = true,
+  missedPayments = 0,
+  hardApplications = 0,
+) {
   await page.goto("/onboarding", { waitUntil: "networkidle" });
   await page.getByTestId("dob").fill(dateOfBirth);
   await expect(page.getByTestId("next")).toBeEnabled();
@@ -19,10 +25,10 @@ async function completeOnboarding(page: Page, dateOfBirth: string, electoralRoll
   await page.getByRole("button", { name: "No", exact: true }).click();
   await page.getByTestId("next").click();
 
-  await page.getByLabel("Missed payments").fill("0");
+  await page.getByLabel("Missed payments").fill(String(missedPayments));
   await page.getByTestId("next").click();
 
-  await page.getByLabel("Hard applications").fill("0");
+  await page.getByLabel("Hard applications").fill(String(hardApplications));
   await page.getByTestId("next").click();
 
   await page.getByTestId("finish").click();
@@ -90,9 +96,39 @@ test("17-year-old gets education mode with no credit-product referral", async ({
   await expect(page.getByText("Your next move")).toBeVisible();
   await expect(page.getByRole("link", { name: "Check eligibility with provider" })).toHaveCount(0);
 
+  await page.goto("/readiness", { waitUntil: "networkidle" });
+  await expect(page.getByText("Products can wait", { exact: true })).toBeVisible();
+  await expect(page.getByText("Unknown", { exact: true })).toBeVisible();
+  await expect(page.getByText("Green", { exact: true })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: /check eligibility/i })).toHaveCount(0);
+
   await page.goto("/offers", { waitUntil: "networkidle" });
   await expect(page.getByText("Learn now. Products can wait.")).toBeVisible();
   await expect(page.getByRole("button", { name: "Check eligibility with provider" })).toHaveCount(0);
+});
+
+test("Safe Mode keeps readiness red and suppresses product routes", async ({ page }) => {
+  await completeOnboarding(page, "1990-01-01", true, 2, 3);
+
+  await expect(page.getByText("Safe Mode", { exact: true })).toBeVisible();
+  await expect(page.getByText("Do not apply yet", { exact: true }).first()).toBeVisible();
+  await expect(page.getByRole("link", { name: "Check eligibility with provider" })).toHaveCount(0);
+
+  await page.goto("/readiness", { waitUntil: "networkidle" });
+  await expect(page.getByText("Red", { exact: true })).toBeVisible();
+  await expect(page.getByText("Do not apply yet", { exact: true })).toBeVisible();
+  await expect(page.getByText("Green", { exact: true })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: /check eligibility/i })).toHaveCount(0);
+});
+
+test("amber readiness does not invent a reassessment countdown", async ({ page }) => {
+  await completeOnboarding(page, "1990-01-01", true, 0, 2);
+
+  await page.goto("/readiness", { waitUntil: "networkidle" });
+  await expect(page.getByText("Amber", { exact: true })).toBeVisible();
+  await expect(page.getByText("Getting closer", { exact: true })).toBeVisible();
+  await expect(page.getByText(/no exact reassessment date/i)).toBeVisible();
+  await expect(page.getByText(/\b\d+\s+days?\b/i)).toHaveCount(0);
 });
 
 test("accounts and actions routes keep safe demo-mode boundaries", async ({ page }) => {
