@@ -4,3 +4,10 @@ export function getSupabasePublicEnv() {
   if (!url || !anonKey) return null;
   return { url, anonKey };
 }
+
+export function getSupabaseServiceEnv() {
+  const publicEnv = getSupabasePublicEnv();
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!publicEnv || !serviceRoleKey) return null;
+  return { ...publicEnv, serviceRoleKey };
+}
