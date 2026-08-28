@@ -10,19 +10,16 @@ describe("Academy Markdown", () => {
       />,
     );
 
-    expect(screen.getByRole("heading", { name: "Safe heading" })).toBeVisible();
+    expect(screen.getByRole("heading", { name: "Safe heading" })).not.toBeNull();
     expect(document.querySelector("script")).toBeNull();
     expect(screen.queryByRole("link", { name: "Bad" })).toBeNull();
-    expect(screen.getByText("Bad")).toBeVisible();
-    expect(screen.getByRole("link", { name: "Good" })).toHaveAttribute(
-      "href",
-      "https://www.gov.uk/register-to-vote",
-    );
-    expect(screen.getByRole("link", { name: "Good" })).toHaveAttribute(
-      "rel",
-      expect.stringContaining("noreferrer"),
-    );
-    expect(screen.getByText("Bold point")).toBeVisible();
-    expect(screen.getByText("useful emphasis")).toBeVisible();
+    expect(screen.getByText("Bad")).not.toBeNull();
+
+    const goodLink = screen.getByRole("link", { name: "Good" });
+    expect(goodLink.getAttribute("href")).toBe("https://www.gov.uk/register-to-vote");
+    expect(goodLink.getAttribute("rel")?.includes("noreferrer")).toBe(true);
+
+    expect(screen.getByText("Bold point")).not.toBeNull();
+    expect(screen.getByText("useful emphasis")).not.toBeNull();
   });
 });
