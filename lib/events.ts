@@ -18,6 +18,12 @@ export const eventNames = [
   "action_self_confirmed",
   "action_verified",
   "action_cancelled",
+  "academy_card_shown",
+  "academy_article_opened",
+  "academy_article_completed",
+  "academy_still_confused",
+  "academy_search_used",
+  "academy_related_mission_started",
 ] as const;
 
 export const eventPayloadSchema = z.object({
