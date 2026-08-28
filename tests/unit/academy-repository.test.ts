@@ -6,6 +6,7 @@ import {
   listPublishedAcademyArticles,
   mapAcademyArticleRow,
   publishAcademyArticle,
+  recordAcademyProgress,
   relatedAcademyArticles,
 } from "@/lib/server/academy-repository";
 import type { AcademyArticle } from "@/lib/academy/types";
@@ -94,6 +95,51 @@ describe("Academy repository", () => {
     expect((await getPublishedAcademyArticleById(idClient, "a1"))?.slug).toBe("what-is-a-credit-file");
     expect(byId.eqCalls).toContainEqual(["id", "a1"]);
     expect(byId.eqCalls).toContainEqual(["status", "published"]);
+  });
+
+  it("preserves first learning timestamps on repeated progress actions", async () => {
+    const existing = {
+      user_id: "user-1",
+      content_key: "credit-file-basics",
+      last_article_id: "a1",
+      first_shown_at: "2026-08-28T09:00:00.000Z",
+      last_shown_at: "2026-08-28T09:05:00.000Z",
+      opened_at: "2026-08-28T09:10:00.000Z",
+      completed_at: null,
+      still_confused_at: null,
+      last_source_context: "article",
+      updated_at: "2026-08-28T09:10:00.000Z",
+    };
+    let upserted: Record<string, unknown> | null = null;
+    const readQuery = {
+      select: () => readQuery,
+      eq: () => readQuery,
+      maybeSingle: async () => ({ data: existing, error: null }),
+    };
+    const admin = {
+      from: () => ({
+        ...readQuery,
+        upsert: async (value: Record<string, unknown>) => {
+          upserted = value;
+          return { error: null };
+        },
+      }),
+    } as unknown as SupabaseClient;
+
+    await recordAcademyProgress(
+      admin,
+      "user-1",
+      article(),
+      "opened",
+      "article",
+      new Date("2026-08-28T10:00:00.000Z"),
+    );
+
+    expect(upserted).toMatchObject({
+      first_shown_at: "2026-08-28T09:00:00.000Z",
+      last_shown_at: "2026-08-28T09:05:00.000Z",
+      opened_at: "2026-08-28T09:10:00.000Z",
+    });
   });
 
   it("publishes only through the server-owned RPC wrapper", async () => {
