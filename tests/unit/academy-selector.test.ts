@@ -153,4 +153,29 @@ describe("Academy selector", () => {
     };
     expect(selectAcademyArticle([restricted, fallback], context)?.article.contentKey).toBe("credit-file-basics");
   });
+
+  it("uses the approved explanation copy for every winning dimension", () => {
+    const mission = article("mission-copy", { missionKeys: ["mission-key"] });
+    expect(selectAcademyArticle([mission], { ...adultContext, missionKey: "mission-key" })?.whyThisMatters)
+      .toBe("This explains the action Credit Quest has ranked for you right now.");
+
+    const barrier = article("barrier-copy", { barrierTypes: ["thin_file"] });
+    expect(selectAcademyArticle([barrier], {
+      ...adultContext,
+      diagnosis: { primary: "thin_file", secondary: [], confidence: "medium", factors: [] },
+    })?.whyThisMatters).toBe("This explains the main credit-building barrier Credit Quest has identified.");
+
+    const passportArticle = article("passport-copy", { passportPillars: ["payment_health"] });
+    expect(selectAcademyArticle([passportArticle], {
+      ...adultContext,
+      passport: passport("red", "payment_health"),
+    })?.whyThisMatters).toBe("This explains a Credit Passport area that currently needs attention.");
+
+    const readinessArticle = article("readiness-copy", { readinessStates: ["green"] });
+    expect(selectAcademyArticle([readinessArticle], adultContext)?.whyThisMatters)
+      .toBe("This helps explain your current application-readiness guidance.");
+
+    expect(selectAcademyArticle([baseArticle], adultContext)?.whyThisMatters)
+      .toBe("A useful foundation for understanding your next steps in Credit Quest.");
+  });
 });
