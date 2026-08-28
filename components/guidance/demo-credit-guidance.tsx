@@ -46,17 +46,21 @@ export function DemoCreditGuidance({ view }: { view: GuidanceView }) {
 
   useEffect(() => {
     const raw = window.localStorage.getItem(PROFILE_KEY);
-    if (!raw) {
-      setProfile(null);
-      return;
-    }
+    const timer = window.setTimeout(() => {
+      if (!raw) {
+        setProfile(null);
+        return;
+      }
 
-    try {
-      const parsed: unknown = JSON.parse(raw);
-      setProfile(isCreditProfile(parsed) ? parsed : null);
-    } catch {
-      setProfile(null);
-    }
+      try {
+        const parsed: unknown = JSON.parse(raw);
+        setProfile(isCreditProfile(parsed) ? parsed : null);
+      } catch {
+        setProfile(null);
+      }
+    }, 0);
+
+    return () => window.clearTimeout(timer);
   }, []);
 
   if (profile === undefined) {
