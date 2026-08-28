@@ -4,10 +4,17 @@ import { ResumeActionCard } from "@/components/actions/resume-action-card";
 import { DashboardClient } from "@/components/dashboard/dashboard-client";
 import { NextMissionCard } from "@/components/dashboard/next-mission-card";
 import { ProgressStrip } from "@/components/dashboard/progress-strip";
+import { QuestFeed, QuestFeedCard } from "@/components/dashboard/quest-feed";
+import { PassportCard } from "@/components/passport/passport-card";
+import { ReadinessCard } from "@/components/readiness/readiness-card";
 import { MISSION_CATALOGUE } from "@/lib/data/missions";
 import { deriveAccountProfileSignals } from "@/lib/domain/account-missions";
+import { getAgeMode } from "@/lib/domain/age-gate";
+import { diagnoseBarrier } from "@/lib/domain/diagnosis";
 import { rankMissionInstances } from "@/lib/domain/mission-engine";
+import { buildCreditPassport } from "@/lib/domain/passport";
 import { calculateQuestScore } from "@/lib/domain/quest-score";
+import { assessApplicationReadiness } from "@/lib/domain/readiness";
 import { assessSafety } from "@/lib/domain/safety";
 import type { JourneyStage, MissionInstance } from "@/lib/domain/types";
 import { listUserAccounts } from "@/lib/server/account-repository";
@@ -22,6 +29,7 @@ import { getSupabasePublicEnv } from "@/lib/supabase/env";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 const DAY_MS = 86_400_000;
+const FEED_CARD_TOTAL = 6;
 
 function nextReviewLabel(instances: MissionInstance[], now: Date): string {
   const future = instances
@@ -56,8 +64,13 @@ export default async function DashboardPage() {
   const pendingAttempt = pendingAttempts[0] ?? null;
   const score = calculateQuestScore(effectiveProfile);
   const safety = assessSafety(effectiveProfile);
+  const ageMode = getAgeMode(effectiveProfile.dateOfBirth, now);
+  const diagnosis = diagnoseBarrier(effectiveProfile);
+  const readiness = assessApplicationReadiness(effectiveProfile, safety, ageMode);
+  const passport = buildCreditPassport(effectiveProfile, readiness);
   const completed = instances.filter((instance) => instance.state === "completed").length;
   const stage: JourneyStage = next?.mission.stage ?? "maintain";
+  const nextReview = nextReviewLabel(instances, now);
   const hasTrackedCreditCard = accounts.some((account) => account.accountType === "credit_card");
   const needsAccountSetup = !hasTrackedCreditCard && effectiveProfile.hasRevolvingCredit === true;
 
@@ -98,17 +111,20 @@ export default async function DashboardPage() {
   }
 
   return (
-    <main className="mx-auto min-h-screen max-w-2xl px-5 py-8 sm:py-12">
-      <header className="mb-8 flex items-center justify-between gap-4">
-        <Link href="/" className="font-black text-violet-700">Credit Quest</Link>
-        <nav className="flex items-center gap-4 text-sm font-bold text-slate-600">
-          <Link href="/accounts">My accounts</Link>
-          <Link href="/offers">Offers</Link>
+    <main className="mx-auto min-h-screen max-w-3xl px-4 pb-10 pt-4 sm:px-6 sm:pt-6">
+      <header className="mb-4 flex items-center justify-between gap-4">
+        <Link href="/" className="flex items-center gap-2 font-black tracking-tight text-slate-950">
+          <span className="grid size-9 place-items-center rounded-2xl bg-slate-950 text-sm text-white shadow-lg shadow-violet-200">CQ</span>
+          <span>Credit Quest</span>
+        </Link>
+        <nav className="flex items-center gap-1 rounded-full border border-white/80 bg-white/75 p-1 text-xs font-black text-slate-600 shadow-sm backdrop-blur">
+          <Link href="/accounts" className="rounded-full px-3 py-2 transition hover:bg-slate-100">Accounts</Link>
+          <Link href="/offers" className="rounded-full px-3 py-2 transition hover:bg-slate-100">Offers</Link>
         </nav>
       </header>
 
       {pendingView ? (
-        <div className="mb-6">
+        <div className="mb-4">
           <ResumeActionCard
             attempt={pendingView.attempt}
             missionSlug={pendingView.missionSlug}
@@ -118,58 +134,81 @@ export default async function DashboardPage() {
         </div>
       ) : null}
 
-      <p className="text-sm font-black uppercase tracking-widest text-violet-600">Your next best move</p>
-
       {safety.mode === "safe_mode" ? (
-        <section className="mt-3 rounded-3xl border border-amber-200 bg-amber-50 p-5 text-amber-950">
-          <h2 className="text-xl font-black">Protecting your finances comes first right now.</h2>
+        <section className="mb-4 rounded-[1.75rem] border border-amber-200 bg-amber-50 p-5 text-amber-950 shadow-sm">
+          <p className="text-xs font-black uppercase tracking-[0.18em] text-amber-700">Safe Mode</p>
+          <h2 className="mt-2 text-xl font-black">Protecting your finances comes first right now.</h2>
           <p className="mt-2 text-sm leading-6">Based on the information you gave us, we’re pausing credit-product suggestions and prioritising actions that help protect payments and financial stability.</p>
         </section>
       ) : null}
 
       {needsAccountSetup ? (
-        <section className="mt-3 rounded-3xl border border-violet-200 bg-violet-50 p-5">
-          <h2 className="text-xl font-black text-slate-950">Add your credit account</h2>
+        <section className="mb-4 rounded-[1.75rem] border border-violet-200 bg-violet-50 p-5 shadow-sm">
+          <p className="text-xs font-black uppercase tracking-[0.18em] text-violet-600">Account setup</p>
+          <h2 className="mt-2 text-xl font-black text-slate-950">Add your credit account</h2>
           <p className="mt-2 text-sm leading-6 text-slate-600">Credit Quest needs a minimal account record before it can target direct-debit or utilisation actions to the right card.</p>
-          <Link href="/accounts" className="mt-4 inline-block rounded-2xl bg-violet-700 px-4 py-3 text-sm font-black text-white">Add an account</Link>
+          <Link href="/accounts" className="mt-4 inline-flex rounded-2xl bg-violet-700 px-4 py-3 text-sm font-black text-white">Add an account</Link>
         </section>
       ) : null}
 
-      {next ? (
-        <div className="mt-3">
-          <NextMissionCard
-            rankedMission={next}
-            progress={{
-              state: next.instance.state,
-              startedAt: next.instance.startedAt,
-              completedAt: next.instance.completedAt,
-              nextReviewAt: next.instance.nextReviewAt,
-            }}
-            actionHref={`/actions/${next.instance.id}`}
-            reviewTiming={next.mission.reviewPeriodDays ? `around ${next.mission.reviewPeriodDays} days` : undefined}
-          />
-        </div>
-      ) : (
-        <div className="mt-3 rounded-3xl bg-white p-6 shadow">
-          <h2 className="text-2xl font-black">You&apos;re up to date for now.</h2>
-          <p className="mt-2 text-slate-600">Review your profile or check back after your next review date.</p>
-        </div>
-      )}
+      <QuestFeed>
+        <QuestFeedCard eyebrow="Your next move" index={1} total={FEED_CARD_TOTAL} tone="ink">
+          {next ? (
+            <NextMissionCard
+              rankedMission={next}
+              progress={{
+                state: next.instance.state,
+                startedAt: next.instance.startedAt,
+                completedAt: next.instance.completedAt,
+                nextReviewAt: next.instance.nextReviewAt,
+              }}
+              actionHref={`/actions/${next.instance.id}`}
+              reviewTiming={next.mission.reviewPeriodDays ? `around ${next.mission.reviewPeriodDays} days` : undefined}
+              embedded
+            />
+          ) : (
+            <div className="flex flex-1 flex-col justify-center">
+              <h2 className="text-4xl font-black tracking-tight">You’re up to date for now.</h2>
+              <p className="mt-4 text-base leading-7 text-slate-300">There is no eligible next-best mission at the moment. We’ll reassess when your information or review dates change.</p>
+            </div>
+          )}
+        </QuestFeedCard>
 
-      <div className="mt-5">
-        <ProgressStrip
-          score={score.score}
-          stage={stage}
-          completed={completed}
-          nextReview={nextReviewLabel(instances, now)}
-        />
-      </div>
+        <QuestFeedCard eyebrow="Why this matters" index={2} total={FEED_CARD_TOTAL} tone="violet">
+          <div className="flex flex-1 flex-col justify-center">
+            <p className="text-sm font-black uppercase tracking-[0.18em] text-white/60">Why it is ranked first</p>
+            <h2 className="mt-4 text-3xl font-black tracking-tight sm:text-4xl">
+              {next ? next.mission.rationale : "Your plan changes when your information changes."}
+            </h2>
+            {next?.reasons[0] ? (
+              <p className="mt-6 max-w-xl text-base font-semibold leading-7 text-violet-100">{next.reasons[0]}</p>
+            ) : (
+              <p className="mt-6 max-w-xl text-base leading-7 text-violet-100">Credit Quest only surfaces an action when the deterministic mission rules say it is relevant.</p>
+            )}
+          </div>
+        </QuestFeedCard>
 
-      <section className="mt-8 rounded-3xl border border-slate-200 bg-white p-6">
-        <h3 className="font-black">Your journey</h3>
-        <p className="mt-2 text-sm font-semibold text-slate-500">Setup → Stabilise → Build → Optimise → Maintain</p>
-        <p className="mt-4 text-sm leading-6 text-slate-600">Your Credit Quest Score is an internal progress indicator. It is not a bureau credit score and does not predict whether a lender will approve an application.</p>
-      </section>
+        <QuestFeedCard eyebrow="Your Credit Passport" index={3} total={FEED_CARD_TOTAL} tone="light">
+          <PassportCard passport={passport} diagnosis={diagnosis} />
+        </QuestFeedCard>
+
+        <QuestFeedCard eyebrow="Can I apply yet?" index={4} total={FEED_CARD_TOTAL} tone="soft">
+          <ReadinessCard readiness={readiness} />
+        </QuestFeedCard>
+
+        <QuestFeedCard eyebrow="Your progress" index={5} total={FEED_CARD_TOTAL} tone="light">
+          <ProgressStrip score={score.score} stage={stage} completed={completed} nextReview={nextReview} />
+        </QuestFeedCard>
+
+        <QuestFeedCard eyebrow="Know what the score means" index={6} total={FEED_CARD_TOTAL} tone="soft">
+          <div className="flex flex-1 flex-col justify-center">
+            <span className="w-fit rounded-full bg-violet-600 px-3 py-1.5 text-xs font-black uppercase tracking-wider text-white">Setup → Stabilise → Build → Optimise → Maintain</span>
+            <h2 className="mt-5 text-3xl font-black tracking-tight sm:text-4xl">Progress, not a lender prediction.</h2>
+            <p className="mt-4 max-w-xl text-base leading-7 text-slate-600">Your Credit Quest Score is an internal progress indicator. It is not a bureau credit score and it does not predict whether a lender will approve an application.</p>
+            <p className="mt-5 text-sm font-bold leading-6 text-violet-700">The goal is simple: make the next sensible move, then reassess rather than applying unnecessarily.</p>
+          </div>
+        </QuestFeedCard>
+      </QuestFeed>
     </main>
   );
 }

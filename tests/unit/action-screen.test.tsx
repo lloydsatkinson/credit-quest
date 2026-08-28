@@ -23,6 +23,9 @@ describe("ActionScreen", () => {
       missionInstanceId="mi1"
     />);
 
+    expect(screen.getByTestId("mission-action-shell")).not.toBeNull();
+    expect(screen.getByText("One clear action", { exact: true })).not.toBeNull();
+    expect(screen.getByText("What happens next", { exact: true })).not.toBeNull();
     expect(screen.getByText(/operated by GOV\.UK/i)).not.toBeNull();
     expect(screen.getByText(/does not mean the mission is complete/i)).not.toBeNull();
     expect(screen.queryByText(/mission completed/i)).toBeNull();

@@ -1,6 +1,12 @@
 import { expect, test, type Page } from "@playwright/test";
 
-async function completeOnboarding(page: Page, dateOfBirth: string, electoralRoll = true) {
+async function completeOnboarding(
+  page: Page,
+  dateOfBirth: string,
+  electoralRoll = true,
+  missedPayments = 0,
+  hardApplications = 0,
+) {
   await page.goto("/onboarding", { waitUntil: "networkidle" });
   await page.getByTestId("dob").fill(dateOfBirth);
   await expect(page.getByTestId("next")).toBeEnabled();
@@ -19,15 +25,22 @@ async function completeOnboarding(page: Page, dateOfBirth: string, electoralRoll
   await page.getByRole("button", { name: "No", exact: true }).click();
   await page.getByTestId("next").click();
 
-  await page.getByLabel("Missed payments").fill("0");
+  await page.getByLabel("Missed payments").fill(String(missedPayments));
   await page.getByTestId("next").click();
 
-  await page.getByLabel("Hard applications").fill("0");
+  await page.getByLabel("Hard applications").fill(String(hardApplications));
   await page.getByTestId("next").click();
 
   await page.getByTestId("finish").click();
   await expect(page).toHaveURL(/\/dashboard$/);
 }
+
+test("onboarding uses the new guided Quest visual shell", async ({ page }) => {
+  await page.goto("/onboarding", { waitUntil: "networkidle" });
+  await expect(page.getByTestId("onboarding-shell")).toBeVisible();
+  await expect(page.getByText("8 quick questions", { exact: true })).toBeVisible();
+  await expect(page.getByText("We only ask what changes your plan.", { exact: true })).toBeVisible();
+});
 
 test("adult can complete onboarding, receive a mission, and see a relevant referral", async ({ page }) => {
   await page.goto("/login", { waitUntil: "networkidle" });
@@ -35,7 +48,16 @@ test("adult can complete onboarding, receive a mission, and see a relevant refer
   await page.getByRole("link", { name: "Continue in demo mode" }).click();
   await completeOnboarding(page, "1990-01-01", true);
 
-  await expect(page.getByText("Your next best move")).toBeVisible();
+  const feed = page.getByTestId("quest-feed");
+  await expect(feed).toBeVisible();
+  await expect(feed.locator("[data-quest-feed-card]")).toHaveCount(6);
+  await expect(feed.getByText("Your next move", { exact: true })).toBeVisible();
+  await expect(feed.getByText("Why this matters", { exact: true })).toBeVisible();
+  await expect(feed.getByText("Your Credit Passport", { exact: true }).first()).toBeVisible();
+  await expect(feed.getByText("Can I apply yet?", { exact: true }).first()).toBeVisible();
+  await expect(feed.getByText("Your progress", { exact: true })).toBeVisible();
+  await expect(feed.getByText("Know what the score means", { exact: true })).toBeVisible();
+
   await expect(page.getByText(/Quest Score/).first()).toBeVisible();
   await expect(page.getByRole("link", { name: "Check eligibility with provider" })).toBeVisible();
   await page.getByRole("button", { name: "Start this mission" }).click();
@@ -43,6 +65,18 @@ test("adult can complete onboarding, receive a mission, and see a relevant refer
   await expect(page.getByText(/ready to continue through its action journey/i)).toBeVisible();
   await expect(page.getByRole("button", { name: "Mark complete" })).toHaveCount(0);
   await expect(page.getByTestId("missions-done")).toHaveText("0");
+});
+
+test("Passport and readiness detail routes use current demo guidance", async ({ page }) => {
+  await completeOnboarding(page, "1990-01-01", true);
+
+  await page.goto("/passport", { waitUntil: "networkidle" });
+  await expect(page.getByRole("heading", { name: "Your Credit Passport" })).toBeVisible();
+  await expect(page.getByTestId("passport-pillar-identity")).toBeVisible();
+
+  await page.goto("/readiness", { waitUntil: "networkidle" });
+  await expect(page.getByRole("heading", { name: /Can I apply yet/i })).toBeVisible();
+  await expect(page.getByText(/does not mean you will be approved/i)).toBeVisible();
 });
 
 test("starting electoral-roll guidance never counts as completion", async ({ page }) => {
@@ -59,17 +93,49 @@ test("starting electoral-roll guidance never counts as completion", async ({ pag
 
 test("17-year-old gets education mode with no credit-product referral", async ({ page }) => {
   await completeOnboarding(page, "2009-08-25", true);
-  await expect(page.getByText("Your next best move")).toBeVisible();
+  await expect(page.getByText("Your next move")).toBeVisible();
   await expect(page.getByRole("link", { name: "Check eligibility with provider" })).toHaveCount(0);
+
+  await page.goto("/readiness", { waitUntil: "networkidle" });
+  await expect(page.getByText("Products can wait", { exact: true })).toBeVisible();
+  await expect(page.getByText("Unknown", { exact: true })).toBeVisible();
+  await expect(page.getByText("Green", { exact: true })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: /check eligibility/i })).toHaveCount(0);
 
   await page.goto("/offers", { waitUntil: "networkidle" });
   await expect(page.getByText("Learn now. Products can wait.")).toBeVisible();
   await expect(page.getByRole("button", { name: "Check eligibility with provider" })).toHaveCount(0);
 });
 
+test("Safe Mode keeps readiness red and suppresses product routes", async ({ page }) => {
+  await completeOnboarding(page, "1990-01-01", true, 2, 3);
+
+  await expect(page.getByText("Safe Mode", { exact: true })).toBeVisible();
+  await expect(page.getByText("Do not apply yet", { exact: true }).first()).toBeVisible();
+  await expect(page.getByRole("link", { name: "Check eligibility with provider" })).toHaveCount(0);
+
+  await page.goto("/readiness", { waitUntil: "networkidle" });
+  await expect(page.getByText("Red", { exact: true })).toBeVisible();
+  await expect(page.getByText("Do not apply yet", { exact: true })).toBeVisible();
+  await expect(page.getByText("Green", { exact: true })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: /check eligibility/i })).toHaveCount(0);
+});
+
+test("amber readiness does not invent a reassessment countdown", async ({ page }) => {
+  await completeOnboarding(page, "1990-01-01", true, 0, 2);
+
+  await page.goto("/readiness", { waitUntil: "networkidle" });
+  await expect(page.getByText("Amber", { exact: true })).toBeVisible();
+  await expect(page.getByText("Getting closer", { exact: true })).toBeVisible();
+  await expect(page.getByText(/no exact reassessment date/i)).toBeVisible();
+  await expect(page.getByText(/\b\d+\s+days?\b/i)).toHaveCount(0);
+});
+
 test("accounts and actions routes keep safe demo-mode boundaries", async ({ page }) => {
   await page.goto("/accounts", { waitUntil: "networkidle" });
+  await expect(page.getByTestId("accounts-shell")).toBeVisible();
   await expect(page.getByRole("heading", { name: "My accounts" })).toBeVisible();
+  await expect(page.getByText("Only the details that help your plan.", { exact: true })).toBeVisible();
   await expect(page.getByText(/never enter passwords or a full card number/i)).toBeVisible();
 
   await page.goto("/actions/demo-mission", { waitUntil: "networkidle" });
