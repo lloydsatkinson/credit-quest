@@ -104,6 +104,194 @@ begin
   ) then
     raise exception 'action_registry must not expose client write policies';
   end if;
+
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'academy_articles'
+      and policyname = 'academy_articles_public_published_select'
+      and cmd = 'SELECT'
+      and qual like '%status%published%'
+  ) then
+    raise exception 'Academy published-only public select policy missing';
+  end if;
+
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'academy_progress'
+      and policyname = 'academy_progress_select_own'
+      and cmd = 'SELECT'
+      and qual like '%auth.uid()%user_id%'
+  ) then
+    raise exception 'Academy progress owner-select policy missing';
+  end if;
+
+  if exists (
+    select 1
+    from information_schema.role_table_grants
+    where table_schema = 'public'
+      and table_name in ('academy_articles', 'academy_progress')
+      and grantee in ('anon', 'authenticated')
+      and privilege_type in ('INSERT', 'UPDATE', 'DELETE')
+  ) then
+    raise exception 'Academy client write grant must not exist';
+  end if;
+
+  if exists (
+    select 1
+    from information_schema.role_table_grants
+    where table_schema = 'public'
+      and table_name = 'academy_progress'
+      and grantee = 'anon'
+      and privilege_type = 'SELECT'
+  ) then
+    raise exception 'Anonymous users must not read Academy progress';
+  end if;
+
+  if exists (
+    select 1
+    from information_schema.routine_privileges
+    where routine_schema = 'public'
+      and routine_name = 'publish_academy_article'
+      and grantee in ('PUBLIC', 'anon', 'authenticated')
+      and privilege_type = 'EXECUTE'
+  ) then
+    raise exception 'Academy publish function must not be client executable';
+  end if;
+
+  if not has_function_privilege('service_role', 'public.publish_academy_article(uuid)', 'EXECUTE') then
+    raise exception 'service_role must be able to publish Academy articles';
+  end if;
+end $$;
+
+do $$
+declare
+  launch_count integer;
+  prior_id uuid;
+  replacement_id uuid;
+begin
+  select count(*)
+  into launch_count
+  from public.academy_articles
+  where status = 'published';
+
+  if launch_count <> 29 then
+    raise exception 'Expected 29 published Academy launch rows, found %', launch_count;
+  end if;
+
+  if exists (
+    select content_key
+    from public.academy_articles
+    where status = 'published'
+    group by content_key
+    having count(*) <> 1
+  ) then
+    raise exception 'Academy launch content has duplicate published content keys';
+  end if;
+
+  if exists (
+    select slug
+    from public.academy_articles
+    where status = 'published'
+    group by slug
+    having count(*) <> 1
+  ) then
+    raise exception 'Academy launch content has duplicate published slugs';
+  end if;
+
+  select id
+  into prior_id
+  from public.academy_articles
+  where content_key = 'credit-file-basics'
+    and status = 'published';
+
+  if prior_id is null then
+    raise exception 'Academy publication test could not find the launch version';
+  end if;
+
+  insert into public.academy_articles (
+    content_key,
+    slug,
+    version,
+    status,
+    supersedes_id,
+    title,
+    summary_20s,
+    body_markdown,
+    reading_minutes,
+    topic_tags,
+    audiences,
+    mission_keys,
+    barrier_types,
+    passport_pillars,
+    readiness_states,
+    safety_tags,
+    sensitivity,
+    source_name,
+    source_url,
+    reviewer,
+    reviewed_at,
+    review_due_at,
+    published_at
+  )
+  select
+    content_key,
+    slug,
+    2,
+    'reviewed',
+    id,
+    title,
+    summary_20s,
+    body_markdown,
+    reading_minutes,
+    topic_tags,
+    audiences,
+    mission_keys,
+    barrier_types,
+    passport_pillars,
+    readiness_states,
+    safety_tags,
+    sensitivity,
+    source_name,
+    source_url,
+    reviewer,
+    now(),
+    review_due_at,
+    null
+  from public.academy_articles
+  where id = prior_id
+  returning id into replacement_id;
+
+  perform public.publish_academy_article(replacement_id);
+
+  if not exists (
+    select 1
+    from public.academy_articles
+    where id = prior_id
+      and status = 'superseded'
+  ) then
+    raise exception 'Academy publication did not supersede the prior version';
+  end if;
+
+  if not exists (
+    select 1
+    from public.academy_articles
+    where id = replacement_id
+      and status = 'published'
+      and published_at is not null
+  ) then
+    raise exception 'Academy publication did not publish the reviewed replacement';
+  end if;
+
+  select count(*)
+  into launch_count
+  from public.academy_articles
+  where status = 'published';
+
+  if launch_count <> 29 then
+    raise exception 'Academy publication changed the published article count unexpectedly: %', launch_count;
+  end if;
 end $$;
 
 rollback;

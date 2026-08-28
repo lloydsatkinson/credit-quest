@@ -18,6 +18,9 @@ export default function HomePage() {
           View demo dashboard
         </Link>
       </div>
+      <Link href="/learn" className="mt-4 w-fit font-bold text-violet-700 hover:text-violet-900">
+        Learn about credit →
+      </Link>
       <p className="mt-8 text-sm text-slate-500">Credit Quest guidance is educational and does not guarantee approval or changes to a bureau credit score.</p>
     </main>
   );

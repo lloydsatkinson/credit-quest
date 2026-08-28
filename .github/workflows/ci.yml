@@ -16,16 +16,42 @@ concurrency:
 jobs:
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      - uses: supabase/setup-cli@v3
+        with:
+          version: latest
       - run: npm install
       - run: npm audit --omit=dev --audit-level=high
       - run: npm run lint
       - run: npm test
+      - name: Verify local Supabase migrations and RLS
+        env:
+          SUPABASE_TELEMETRY_DISABLED: "1"
+        run: |
+          if [ ! -f supabase/config.toml ]; then
+            supabase init
+          fi
+          supabase db start
+          if ! command -v psql >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y postgresql-client
+          fi
+          psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" \
+            -v ON_ERROR_STOP=1 \
+            -f supabase/tests/rls.sql
+      - name: Stop local Supabase
+        if: always()
+        env:
+          SUPABASE_TELEMETRY_DISABLED: "1"
+        run: |
+          if [ -f supabase/config.toml ]; then
+            supabase stop --no-backup || true
+          fi
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e
       - run: npm run build
