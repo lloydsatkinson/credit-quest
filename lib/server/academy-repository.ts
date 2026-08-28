@@ -2,6 +2,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type {
   AcademyArticle,
   AcademyProgress,
+  AcademyProgressAction,
+  AcademySourceContext,
 } from "@/lib/academy/types";
 
 const ACADEMY_SELECT = "id,content_key,slug,version,status,supersedes_id,title,summary_20s,body_markdown,reading_minutes,topic_tags,audiences,mission_keys,barrier_types,passport_pillars,readiness_states,safety_tags,sensitivity,source_name,source_url,reviewer,reviewed_at,review_due_at,published_at,created_at,updated_at";
@@ -114,6 +116,44 @@ export async function listAcademyProgress(
     .order("updated_at", { ascending: false });
   if (error) throw error;
   return (data ?? []).map((item) => mapAcademyProgressRow(item as Record<string, unknown>));
+}
+
+export async function recordAcademyProgress(
+  admin: SupabaseClient,
+  userId: string,
+  article: AcademyArticle,
+  action: AcademyProgressAction,
+  sourceContext: AcademySourceContext,
+  now = new Date(),
+): Promise<void> {
+  const { data, error: readError } = await admin
+    .from("academy_progress")
+    .select(ACADEMY_PROGRESS_SELECT)
+    .eq("user_id", userId)
+    .eq("content_key", article.contentKey)
+    .maybeSingle();
+  if (readError) throw readError;
+
+  const existing = data ? mapAcademyProgressRow(data as Record<string, unknown>) : null;
+  const timestamp = now.toISOString();
+
+  const row = {
+    user_id: userId,
+    content_key: article.contentKey,
+    last_article_id: article.id,
+    first_shown_at: existing?.firstShownAt ?? (action === "shown" ? timestamp : null),
+    last_shown_at: action === "shown" ? timestamp : existing?.lastShownAt ?? null,
+    opened_at: action === "opened" ? timestamp : existing?.openedAt ?? null,
+    completed_at: action === "completed" ? timestamp : existing?.completedAt ?? null,
+    still_confused_at: action === "still_confused" ? timestamp : existing?.stillConfusedAt ?? null,
+    last_source_context: sourceContext,
+    updated_at: timestamp,
+  };
+
+  const { error: writeError } = await admin
+    .from("academy_progress")
+    .upsert(row, { onConflict: "user_id,content_key" });
+  if (writeError) throw writeError;
 }
 
 export function relatedAcademyArticles(
