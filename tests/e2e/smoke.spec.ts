@@ -61,6 +61,18 @@ test("adult can complete onboarding, receive a mission, and see a relevant refer
   await expect(page.getByTestId("missions-done")).toHaveText("0");
 });
 
+test("Passport and readiness detail routes use current demo guidance", async ({ page }) => {
+  await completeOnboarding(page, "1990-01-01", true);
+
+  await page.goto("/passport", { waitUntil: "networkidle" });
+  await expect(page.getByRole("heading", { name: "Your Credit Passport" })).toBeVisible();
+  await expect(page.getByTestId("passport-pillar-identity")).toBeVisible();
+
+  await page.goto("/readiness", { waitUntil: "networkidle" });
+  await expect(page.getByRole("heading", { name: /Can I apply yet/i })).toBeVisible();
+  await expect(page.getByText(/does not mean you will be approved/i)).toBeVisible();
+});
+
 test("starting electoral-roll guidance never counts as completion", async ({ page }) => {
   await completeOnboarding(page, "1990-01-01", false);
 
