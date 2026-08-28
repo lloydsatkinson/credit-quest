@@ -17,6 +17,21 @@ describe("event payload validation", () => {
     expect(eventPayloadSchema.safeParse({ name: "action_cancelled", metadata: { missionSlug: "register-electoral-roll" } }).success).toBe(true);
   });
 
+  it("accepts Academy learning events", () => {
+    const names = [
+      "academy_card_shown",
+      "academy_article_opened",
+      "academy_article_completed",
+      "academy_still_confused",
+      "academy_search_used",
+      "academy_related_mission_started",
+    ];
+
+    for (const name of names) {
+      expect(eventPayloadSchema.safeParse({ name, metadata: { contentKey: "credit-file-basics" } }).success).toBe(true);
+    }
+  });
+
   it("rejects unsupported events and client-supplied user ids", () => {
     expect(eventPayloadSchema.safeParse({ name: "credit_approved" }).success).toBe(false);
     expect(eventPayloadSchema.safeParse({ name: "offer_clicked", userId: "someone-else" }).success).toBe(false);
