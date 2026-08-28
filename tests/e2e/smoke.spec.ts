@@ -49,14 +49,16 @@ test("adult can complete onboarding, receive a mission, and see a relevant refer
   await completeOnboarding(page, "1990-01-01", true);
 
   const feed = page.getByTestId("quest-feed");
+  const cards = feed.locator("[data-quest-feed-card]");
   await expect(feed).toBeVisible();
-  await expect(feed.locator("[data-quest-feed-card]")).toHaveCount(6);
-  await expect(feed.getByText("Your next move", { exact: true })).toBeVisible();
-  await expect(feed.getByText("Why this matters", { exact: true })).toBeVisible();
-  await expect(feed.getByText("Your Credit Passport", { exact: true }).first()).toBeVisible();
-  await expect(feed.getByText("Can I apply yet?", { exact: true }).first()).toBeVisible();
-  await expect(feed.getByText("Your progress", { exact: true })).toBeVisible();
-  await expect(feed.getByText("Know what the score means", { exact: true })).toBeVisible();
+  await expect(cards).toHaveCount(7);
+  await expect(cards.nth(0)).toContainText("Your next move");
+  await expect(cards.nth(1)).toContainText("Why this matters");
+  await expect(cards.nth(2)).toContainText("Your Credit Passport");
+  await expect(cards.nth(3)).toContainText("Can I apply yet?");
+  await expect(cards.nth(4)).toContainText("Learn in 20 seconds");
+  await expect(cards.nth(5)).toContainText("Your progress");
+  await expect(cards.nth(6)).toContainText("Know what the score means");
 
   await expect(page.getByText(/Quest Score/).first()).toBeVisible();
   await expect(page.getByRole("link", { name: "Check eligibility with provider" })).toBeVisible();
