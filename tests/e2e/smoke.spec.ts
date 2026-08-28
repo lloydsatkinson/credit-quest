@@ -42,6 +42,22 @@ test("onboarding uses the new guided Quest visual shell", async ({ page }) => {
   await expect(page.getByText("We only ask what changes your plan.", { exact: true })).toBeVisible();
 });
 
+test("Academy is public, readable, canonical and returns a real 404", async ({ page }) => {
+  await page.goto("/learn", { waitUntil: "networkidle" });
+  await expect(page.getByRole("heading", { name: "Credit Quest Academy" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "What is a credit file?" })).toBeVisible();
+
+  await page.goto("/learn/what-is-a-credit-file", { waitUntil: "networkidle" });
+  await expect(page).toHaveURL(/\/learn\/what-is-a-credit-file$/);
+  await expect(page.getByRole("heading", { name: "What is a credit file?" })).toBeVisible();
+  await expect(page.getByText(/educational/i)).toBeVisible();
+  await expect(page.getByRole("button", { name: "I understand this" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Still confused?" })).toBeVisible();
+
+  const response = await page.goto("/learn/not-a-real-academy-article", { waitUntil: "networkidle" });
+  expect(response?.status()).toBe(404);
+});
+
 test("adult can complete onboarding, receive a mission, and see a relevant referral", async ({ page }) => {
   await page.goto("/login", { waitUntil: "networkidle" });
   await expect(page.getByText("Build better credit habits, one move at a time.")).toBeVisible();
@@ -69,6 +85,19 @@ test("adult can complete onboarding, receive a mission, and see a relevant refer
   await expect(page.getByTestId("missions-done")).toHaveText("0");
 });
 
+test("electoral-roll mission selects electoral-roll Academy education", async ({ page }) => {
+  await completeOnboarding(page, "1990-01-01", false);
+
+  const academyCard = page.getByTestId("quest-feed").locator("[data-quest-feed-card]").nth(4);
+  await expect(page.getByRole("heading", { name: "Get on the electoral roll" })).toBeVisible();
+  await expect(academyCard).toContainText("Learn in 20 seconds");
+  await expect(academyCard).toContainText("Why the electoral roll can matter");
+
+  await academyCard.getByRole("link", { name: "Learn more" }).click();
+  await expect(page).toHaveURL(/\/learn\/electoral-roll-basics$/);
+  await expect(page.getByRole("heading", { name: "Why the electoral roll can matter" })).toBeVisible();
+});
+
 test("Passport and readiness detail routes use current demo guidance", async ({ page }) => {
   await completeOnboarding(page, "1990-01-01", true);
 
@@ -93,9 +122,12 @@ test("starting electoral-roll guidance never counts as completion", async ({ pag
   await expect(page.getByTestId("missions-done")).toHaveText("0");
 });
 
-test("17-year-old gets education mode with no credit-product referral", async ({ page }) => {
+test("17-year-old gets education mode with protective Academy and no credit-product referral", async ({ page }) => {
   await completeOnboarding(page, "2009-08-25", true);
   await expect(page.getByText("Your next move")).toBeVisible();
+  const academyCard = page.getByTestId("quest-feed").locator("[data-quest-feed-card]").nth(4);
+  await expect(academyCard).toContainText("Credit basics before 18");
+  await expect(academyCard.getByText(/apply for|check eligibility|credit card/i)).toHaveCount(0);
   await expect(page.getByRole("link", { name: "Check eligibility with provider" })).toHaveCount(0);
 
   await page.goto("/readiness", { waitUntil: "networkidle" });
@@ -109,11 +141,14 @@ test("17-year-old gets education mode with no credit-product referral", async ({
   await expect(page.getByRole("button", { name: "Check eligibility with provider" })).toHaveCount(0);
 });
 
-test("Safe Mode keeps readiness red and suppresses product routes", async ({ page }) => {
+test("Safe Mode keeps readiness red, selects protective Academy, and suppresses product routes", async ({ page }) => {
   await completeOnboarding(page, "1990-01-01", true, 2, 3);
 
   await expect(page.getByText("Safe Mode", { exact: true })).toBeVisible();
   await expect(page.getByText("Do not apply yet", { exact: true }).first()).toBeVisible();
+  const academyCard = page.getByTestId("quest-feed").locator("[data-quest-feed-card]").nth(4);
+  await expect(academyCard).toContainText("Protect payments first");
+  await expect(academyCard.getByText(/check eligibility|apply now|new credit/i)).toHaveCount(0);
   await expect(page.getByRole("link", { name: "Check eligibility with provider" })).toHaveCount(0);
 
   await page.goto("/readiness", { waitUntil: "networkidle" });
