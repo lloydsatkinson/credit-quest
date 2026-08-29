@@ -4,7 +4,7 @@
 
 **Goal:** Build the complete dark commercial control plane: server-side hard gates, sandbox-only referral provenance, versioned disclosures, partner/route configuration, append-only revenue/audit events and a narrow Credit Quest Admin — while production live regulated credit referrals remain technically blocked.
 
-**Architecture:** Add an isolated `lib/commercial` pure gate/ordering domain downstream of existing safety/readiness; all persistence and redirects happen through server-only repositories/routes. The browser supplies only stable IDs and explicit consent, never destination URLs or customer eligibility facts. `feature_flags` from V2.2B controls runtime activation. A second server environment guard keeps live credit referrals impossible until a future explicitly approved regulatory release.
+**Architecture:** Add an isolated `lib/commercial` pure gate/ordering domain downstream of existing safety/readiness; all persistence and redirects happen through server-only repositories/routes. Route presentation first applies all protective/configuration gates and lets the customer see the current disclosure. Referral creation re-runs those gates and then requires explicit consent. The browser supplies only stable IDs and consent, never destination URLs or eligibility facts. `feature_flags` from V2.2B controls runtime activation. A second server environment guard keeps live credit referrals impossible until a future explicitly approved regulatory release.
 
 **Tech Stack:** Next.js 16 App Router, React 19, TypeScript 5.9, Supabase Auth/Postgres/RLS, Zod 3, Vitest 3, Testing Library, Playwright.
 
@@ -14,17 +14,19 @@
 
 ## Global Constraints
 
-- Live regulated credit referrals remain OFF. This plan may create sandbox referrals only in production until a later separately approved regulatory decision changes the explicit server guard.
+- Live regulated credit referrals remain OFF. V2.2 creates sandbox referrals only until a later separately approved regulatory decision changes the explicit server guard.
 - `commercial_gateway_enabled` defaults false. Turning it on is necessary but not sufficient for a live route.
-- Add `LIVE_CREDIT_REFERRALS_ALLOWED=false` as a server-only environment guard. Live route creation requires both DB flag true and env value exactly `true`; release procedures in V2.2 never set it true.
-- Under-18, Safe Mode, red/amber/unknown readiness, incomplete required evidence, missing disclosure, disabled partner/route, missing consent or unavailable config => no referral.
-- Commercial gating is downstream. Do not modify `assessApplicationReadiness`, `assessSafety`, mission ranking, Quest Score or Academy selector.
-- The known `hasRevolvingCredit === null` readiness edge remains untouched. Commercial Gateway independently requires `hasRevolvingCredit !== null`, preventing that unknown from becoming a commercial route.
+- `LIVE_CREDIT_REFERRALS_ALLOWED=false` is a server-only guard. Live route presentation/creation requires both DB flag true and env value exactly `true`; V2.2 rollout never sets it true.
+- Under-18, Safe Mode, red/amber/unknown readiness, incomplete required evidence, missing disclosure, disabled partner/route or unavailable config => no route presentation/referral.
+- Explicit consent is required at referral creation, after the disclosure has been shown. Consent is **not** required merely to list an otherwise permitted route/disclosure.
+- Commercial gating is downstream. Do not modify safety, readiness, mission ranking, Quest Score or Academy selection.
+- The known `hasRevolvingCredit === null` readiness edge remains untouched. Commercial Gateway independently requires `hasRevolvingCredit !== null`.
 - No lender underwriting criteria, approval odds or inferred lender eligibility.
 - No commission/EPC/payout fields in `commercial_routes`; route ordering cannot see revenue economics.
 - Multiple equivalent permitted routes use stable `routeKey`, then partner key ordering. Experiments may later vary presentation only within that already-permitted set.
-- Browser never supplies arbitrary destination URL, user id, readiness state, age, Safe Mode state or revenue amount.
-- Existing legacy `lib/domain/offer-matcher.ts` may remain for explicit demo-only fixtures during migration, but configured/authenticated product referrals must move behind Commercial Gateway. No production page may bypass the gateway.
+- Browser never supplies arbitrary destination URL, user id, readiness, age, Safe Mode state or revenue amount.
+- Existing `lib/domain/offer-matcher.ts` is demo-only after this stage. Configured/authenticated product referrals must go through Commercial Gateway; no production page may bypass it.
+- Referral/revenue history is append-only in application semantics: DB rejects UPDATE; clients have no DELETE; service-role DELETE remains possible for deliberate user/account data erasure.
 - Every task follows observed RED -> GREEN -> focused commit.
 
 ---
@@ -56,7 +58,7 @@
 - `app/api/admin/flags/route.ts`
 - `app/api/admin/experiments/route.ts`
 - `components/commercial/commercial-gateway-card.tsx`
-- `components/admin/*` small forms/tables used by the pages
+- narrow `components/admin/*` forms/tables
 - `supabase/migrations/011_commercial_admin.sql`
 - unit tests for migration/gates/repositories/routes/admin/auth/components
 
@@ -72,25 +74,26 @@
 
 ---
 
-### Task 1: Add commercial/admin schema with append-only provenance
+### Task 1: Add commercial/admin schema with auditable provenance and erasure-safe immutability
 
-**Files:** Create migration 011 and `tests/unit/commercial-migration.test.ts`; modify RLS tests.
+**Files:** Create migration 011 and migration test; modify RLS tests.
 
-- [ ] RED migration test asserts all tables, private grants, published disclosure uniqueness, append-only triggers and sandbox seed exist.
-- [ ] Implement these tables:
-  - `admin_members(user_id PK, role='admin', created_at)`;
+- [ ] RED migration test asserts all tables, private grants, published disclosure uniqueness, UPDATE-rejection triggers and disabled sandbox seed exist.
+- [ ] Implement:
+  - `admin_members(user_id PK FK auth.users on delete cascade, role='admin', created_at)`;
   - `commercial_partners(id, partner_key unique, display_name, enabled, sandbox_enabled, live_enabled default false, notes, timestamps)`;
   - `commercial_routes(id, route_key unique, partner_id, environment sandbox/live, destination_url, enabled, min_age >=18, required_readiness='green', disclosure_key, timestamps)`;
   - `commercial_disclosures(id, disclosure_key, version, status draft/reviewed/published/superseded/archived, body, reviewed_at, published_at, unique(disclosure_key,version))`;
-  - `referral_attempts(id, referral_key unique, user_id, partner_id, route_id, originating_mission_id nullable same-owner FK, readiness_snapshot, consented_at, disclosure_id, environment, created_at, metadata)`;
-  - `revenue_events(id, referral_attempt_id, event_type click/lead/conversion/revenue/reversal/adjustment, amount_minor nullable >=0, currency default GBP, external_reference, occurred_at, metadata)`;
+  - `referral_attempts(id, referral_key unique, user_id, partner_id, route_id, originating_mission_id nullable, readiness_snapshot, consented_at, disclosure_id, environment, created_at, metadata)` plus unique `(id,user_id)`;
+  - `revenue_events(id, user_id, referral_attempt_id, event_type click/lead/conversion/revenue/reversal/adjustment, amount_minor nullable >=0, currency default GBP, external_reference, occurred_at, metadata)` with same-owner FK `(referral_attempt_id,user_id)`;
   - `experiments(id, experiment_key unique, status draft/active/paused/ended, surface_key, variants jsonb, created_at, updated_at)`;
-  - `admin_audit_log(id, admin_user_id, action, entity_type, entity_id, metadata, occurred_at)`.
-- [ ] Enforce partial unique index: one published disclosure per `disclosure_key`.
-- [ ] Add service-role-only `publish_commercial_disclosure(uuid)` that supersedes previous published version atomically. Revoke execute from PUBLIC/anon/authenticated.
-- [ ] Add BEFORE UPDATE OR DELETE rejection triggers for `referral_attempts`, `revenue_events`, `admin_audit_log`. Subsequent referral/revenue history is appended, not rewritten.
-- [ ] RLS: enable on every table. No anon/auth direct reads/writes to partners/routes/disclosures/feature flags/experiments/revenue/admin data. No direct client referral writes. Admin UI still goes through server routes/service client after admin auth.
-- [ ] Seed only a disabled sandbox fixture, never a live lender route:
+  - `admin_audit_log(id, admin_user_id nullable FK auth.users on delete set null, action, entity_type, entity_id, metadata, occurred_at)`.
+- [ ] Route destination DB constraint: `sandbox` destination must start `/sandbox/`; `live` destination must start `https://`. No live route seed.
+- [ ] `referral_attempts` optional same-owner mission FK uses `(originating_mission_id,user_id) -> user_missions(id,user_id)` with `ON DELETE SET NULL (originating_mission_id)` so user id is preserved.
+- [ ] Enforce one published disclosure per `disclosure_key` with a partial unique index.
+- [ ] Add service-role-only `publish_commercial_disclosure(uuid)` which atomically supersedes prior published version; revoke from PUBLIC/anon/authenticated.
+- [ ] Add BEFORE UPDATE rejection triggers to `referral_attempts` and `revenue_events`. Do not reject service-role DELETE: client DELETE is revoked and app repositories expose no deletion, while data-erasure workflows must remain possible. `admin_audit_log` is append-only by repository/API design and no client grants; do not add an UPDATE trigger that would interfere with its `admin_user_id ON DELETE SET NULL` cleanup.
+- [ ] Seed only a sandbox fixture, no lender/live destination:
 
 ```sql
 insert into public.commercial_partners(partner_key, display_name, enabled, sandbox_enabled, live_enabled)
@@ -98,15 +101,14 @@ values ('credit-quest-sandbox', 'Credit Quest Sandbox Partner', true, true, fals
 on conflict (partner_key) do nothing;
 ```
 
-Seed a reviewed/published disclosure `sandbox-referral-disclosure` and a disabled-by-default sandbox route pointing to the internal absolute URL derived at runtime, not a hard-coded external lender URL. Store route destination as `/sandbox/referral-complete` and permit relative destinations only for `environment='sandbox'`; live routes require HTTPS.
-- [ ] Extend `supabase/tests/rls.sql`: verify no ordinary client grants, service publication only, append-only mutation rejection, no enabled live route, and `commercial_gateway_enabled=false` remains seeded.
+Seed reviewed/published `sandbox-referral-disclosure` and an initially disabled route whose destination is `/sandbox/referral-complete`.
+- [ ] RLS: no anon/auth direct reads/writes to partners/routes/disclosures/feature flags/experiments/revenue/admin data; no direct client referral writes. Admin uses service client after verified membership.
+- [ ] Extend RLS tests: no client grants, publication service-only, UPDATE rejection, client DELETE denied, no enabled live route, and `commercial_gateway_enabled=false` still seeded.
 - [ ] Run local DB verification GREEN and commit: `feat: add commercial control plane schema`.
 
-### Task 2: Implement pure commercial hard gates and evidence completeness
+### Task 2: Implement pure presentation/referral hard gates and evidence completeness
 
-**Files:** Create `lib/commercial/types.ts`, `gates.ts`, `ordering.ts`; tests `commercial-gates.test.ts`, `commercial-ordering.test.ts`.
-
-**Gate result:**
+**Files:** Create commercial types/gates/ordering and tests.
 
 ```ts
 export type CommercialGateReason =
@@ -127,8 +129,8 @@ export type CommercialGateResult =
   | { permitted: false; reason: CommercialGateReason };
 ```
 
-- [ ] RED tests cover every reason and precedence. The first protective failure wins before partner presentation.
-- [ ] Implement `hasRequiredCommercialEvidence(profile)` requiring:
+- [ ] RED tests cover protective precedence. First protective failure wins before partner presentation.
+- [ ] Implement `hasRequiredCommercialEvidence(profile)` exactly:
 
 ```ts
 if (profile.missedPaymentsLast12m === null) return false;
@@ -138,20 +140,23 @@ if (profile.hasRevolvingCredit === true && profile.utilisationPct === null) retu
 return true;
 ```
 
-This is deliberately stricter than the existing readiness edge without changing readiness itself.
-- [ ] Implement `evaluateCommercialGate` from already-computed `ageMode`, safety, readiness, evidence, runtime/env flags and route/partner/disclosure/consent state. Only readiness `green` is commercially permitted initially.
-- [ ] RED ordering tests create routes with fake `commission`, `epc`, `payout` extra properties and prove ordering ignores them. The typed production route model contains no such properties.
-- [ ] Implement stable sort `route.routeKey.localeCompare` then `partnerKey.localeCompare`. No random or highest-paying ordering.
-- [ ] Add source boundary test forbidding `commission`, `epc`, `payout`, `revenue` imports/terms in `gates.ts` and `ordering.ts` except test descriptions.
+- [ ] Implement two functions, not one ambiguous gate:
+
+```ts
+evaluateCommercialPresentationGate(context): CommercialGateResult
+
+evaluateCommercialReferralGate({ ...context, consent }): CommercialGateResult
+```
+
+Presentation evaluates runtime/live, age, Safe Mode, readiness green, evidence, partner, route, environment and published disclosure. Referral calls the same presentation gate and then requires `consent === true`.
+- [ ] RED ordering tests create objects with fake extra `commission`, `epc`, `payout` fields and prove ordering ignores them. Typed production route contains none.
+- [ ] Implement stable order `routeKey.localeCompare` then `partnerKey.localeCompare`.
+- [ ] Source boundary test forbids commission/EPC/payout/revenue/campaign in implementation code.
 - [ ] Run GREEN and commit: `feat: add commercial hard gates`.
 
 ### Task 3: Build server repository and Commercial Gateway
 
-**Files:** Create `lib/server/commercial-repository.ts`, `commercial-gateway.ts`; tests.
-
-**Repository responsibilities:** list enabled sandbox/config routes via service client, fetch published disclosure, append referral attempt, append revenue event, never return mutable economics to gate logic.
-
-**Gateway API:**
+**Files:** Create commercial repository/gateway and tests.
 
 ```ts
 export async function listPermittedCommercialRoutes(input: {
@@ -170,25 +175,28 @@ export async function createCommercialReferral(input: {
 }): Promise<CommercialReferralResult>
 ```
 
-- [ ] RED tests inject repository/guidance dependencies. Prove gateway calls existing `getCreditGuidanceForUser`, separately derives current age mode/safety from current effective profile, checks `hasRequiredCommercialEvidence`, reads flag, re-fetches route/partner/disclosure and never trusts client context.
-- [ ] Live hard lock:
+- [ ] Repository lists config, fetches current published disclosure, appends referral/revenue rows; it has no update/delete method for referral/revenue history.
+- [ ] RED gateway tests prove it recomputes current guidance via `getCreditGuidanceForUser`, current age/safety/evidence, feature flag and current route/disclosure; it never accepts client-provided context.
+- [ ] `listPermittedCommercialRoutes` uses **presentation** gate and therefore does not require consent. It returns display metadata + the current disclosure needed before consent.
+- [ ] `createCommercialReferral` re-fetches everything, verifies submitted disclosure id is still the current published disclosure for that route key, then runs **referral** gate with explicit consent.
+- [ ] Live lock:
 
 ```ts
 const liveAllowed = process.env.LIVE_CREDIT_REFERRALS_ALLOWED === "true";
 ```
 
-For `environment='live'`, false => `live_not_allowed` even if DB flag/route/admin state is enabled.
-- [ ] Sandbox is still subject to age, Safe Mode, readiness, evidence, disclosure and consent gates. “Sandbox” does not bypass customer protection.
-- [ ] `createCommercialReferral` inserts provenance before returning destination. Generate `referralKey` with `crypto.randomUUID()` server-side.
-- [ ] Destination validation: sandbox may be an internal relative `/sandbox/...` path only; live requires `https:` and must match an explicit route-owned host/URL. Browser never submits it.
-- [ ] Repository/config read failure returns no routes/fail closed; core guidance is not called a failure.
+For live routes, false => `live_not_allowed` even if admin/DB says enabled.
+- [ ] Sandbox still obeys age, Safe Mode, readiness, evidence, disclosure and consent protections.
+- [ ] Generate `referralKey` with `crypto.randomUUID()` server-side and persist provenance before returning destination.
+- [ ] Destination validation: sandbox internal `/sandbox/...`; live HTTPS server config only. Browser never sends destination.
+- [ ] Config/repository failure returns no routes/fails closed while core Credit Quest guidance remains available.
 - [ ] Run GREEN and commit: `feat: add sandbox commercial gateway`.
 
-### Task 4: Add strict commercial APIs and sandbox completion route
+### Task 4: Add strict APIs and internal sandbox completion
 
-**Files:** Create `app/api/commercial/routes/route.ts`, `app/api/commercial/referrals/route.ts`, sandbox page; tests `commercial-routes-api.test.ts`, `commercial-referrals-api.test.ts`.
+**Files:** Create commercial APIs, sandbox page and tests.
 
-- [ ] RED schema tests: route-list takes no eligibility body; referral POST strict schema is only:
+- [ ] Route-list endpoint takes no eligibility body. Referral strict schema is only:
 
 ```ts
 z.object({
@@ -199,50 +207,51 @@ z.object({
 }).strict()
 ```
 
-Reject destination URL, userId, readiness, commission, partner payout and approval probability.
-- [ ] APIs authenticate with cookie session and use `user.id`; no Supabase env => demo/sandbox unavailable rather than fake persisted consent.
-- [ ] `GET /api/commercial/routes` requests sandbox environment only in V2.2 production UI. Return route display metadata + current disclosure text/id, never revenue data.
-- [ ] `POST /api/commercial/referrals` calls gateway; gate failure returns 409 with safe generic customer reason; success returns `{ referralId, destinationUrl }` where destination came from server config.
-- [ ] Sandbox completion page accepts referral id for display only and says “Sandbox journey complete — no lender/application was contacted.” It does not mark a real conversion.
+Reject destination URL, userId, readiness, commission, payout, approval probability.
+- [ ] APIs authenticate cookie session, use `user.id`; no configured Supabase => no persisted sandbox referral.
+- [ ] `GET /api/commercial/routes` requests sandbox environment in V2.2 UI and returns route display metadata + current disclosure text/id, never revenue data.
+- [ ] `POST /api/commercial/referrals` gate failure -> 409 safe reason; success -> `{ referralId, destinationUrl }` from server config.
+- [ ] Sandbox page says “Sandbox journey complete — no lender/application was contacted.” It does not create a conversion/revenue event automatically.
 - [ ] Run GREEN and commit: `feat: add commercial sandbox APIs`.
 
-### Task 5: Replace configured production marketplace bypass with Gateway UI
+### Task 5: Remove configured production referral bypass and add Gateway UI
 
-**Files:** Create `components/commercial/commercial-gateway-card.tsx`; modify offers/dashboard client/server files; component/E2E tests.
+**Files:** Create gateway card; modify `/offers`, dashboard client/server, tests.
 
-- [ ] RED tests prove authenticated/configured UI cannot render `offer.affiliateUrl` directly from `lib/domain/offer-matcher`.
-- [ ] Server `/offers` becomes a gateway surface. When flag false/no permitted route: explain “No product step is available from Credit Quest right now” and preserve educational links. When sandbox route available for internal testing: clearly label `Sandbox` and require the user to view disclosure + tick explicit consent before referral creation.
-- [ ] Keep `OffersClient` only for unconfigured demo mode and change its CTA destinations to inert demo behaviour (no external affiliate navigation). Add visible “Demo only — no application is sent.”
-- [ ] Dashboard’s legacy optional partner block must not render direct `affiliateUrl` in configured mode. Any future CTA goes through the gateway route list/referral API.
-- [ ] Under-18, Safe Mode and non-green tests assert no gateway CTA. Unknown commercial evidence (including `hasRevolvingCredit=null`) also produces no CTA even if readiness happens to be green.
+- [ ] RED tests prove configured/authenticated UI cannot render `offer.affiliateUrl` from legacy `offer-matcher`.
+- [ ] Server `/offers`: when flag false/no permitted route show “No product step is available from Credit Quest right now” plus education. When sandbox route is deliberately enabled, clearly label Sandbox, show disclosure first, then require explicit consent checkbox before creating referral.
+- [ ] Keep legacy OffersClient only for unconfigured demo mode; its CTA is inert/internal and visibly says “Demo only — no application is sent.” No external affiliate navigation.
+- [ ] Configured dashboard optional partner area must not render direct affiliate URL. Future CTA uses Commercial Gateway only.
+- [ ] Under-18, Safe Mode, non-green and unknown commercial evidence — including `hasRevolvingCredit=null` — show no gateway CTA.
 - [ ] Preserve seven Quest Feed cards.
 - [ ] Run GREEN and commit: `feat: route product journeys through commercial gateway`.
 
-### Task 6: Add explicit admin membership/auth and audit repository
+### Task 6: Add explicit admin membership/auth and transactional audit
 
-**Files:** Create `lib/server/admin-auth.ts`, `admin-repository.ts`, tests `admin-auth.test.ts`, `admin-repository.test.ts`.
+**Files:** Create admin auth/repository and tests.
 
-- [ ] RED auth tests: unauthenticated false; authenticated but absent membership false; member role admin true; lookup failure false. Never trust a cookie/header claiming admin.
-- [ ] Implement `requireAdminUser()` by first authenticating with standard server Supabase client, then reading `admin_members` through service client for that exact user id. Return 403/redirect on failure.
-- [ ] Admin repository mutations accept `adminUserId` from verified auth, write target table then append `admin_audit_log`. If audit append fails, admin mutation should fail closed where transactional RPC is practical; implement service-role RPCs for config mutation + audit in one transaction for partner/route/flag/disclosure/experiment changes.
-- [ ] `feature_flags` mutation is allowlisted to known downstream flags; reject arbitrary safety/readiness/mission-looking keys.
+- [ ] RED auth tests: unauthenticated false; non-member false; admin member true; lookup failure false. Never trust header/cookie role claims.
+- [ ] Implement `requireAdminUser()` by normal auth first, then service read of `admin_members` for exact user id.
+- [ ] Admin mutation repository accepts verified `adminUserId`. Use service-role SQL/RPC transaction for each config mutation plus `admin_audit_log` insert so a successful admin change is always audited.
+- [ ] `feature_flags` mutation is allowlisted to downstream flags; reject arbitrary safety/readiness/mission-looking keys.
+- [ ] Admin audit repository exposes append/list only, no update/delete.
 - [ ] Run GREEN and commit: `feat: add admin authorization and audit`.
 
 ### Task 7: Build narrow Credit Quest Admin pages/APIs
 
-**Files:** Create admin layout/pages/API routes/components and route tests.
+**Files:** Create admin layout/pages/API routes/components and tests.
 
-- [ ] `/admin` layout calls `requireAdminUser` server-side. Non-admins never receive admin data.
-- [ ] Build simple pages: Overview, Partners, Routes, Disclosures, Flags, Experiments, Audit. No customer impersonation, SQL editor, readiness threshold or mission-priority controls.
-- [ ] API schemas are strict. Partners: display/name/enabled/sandbox/live flags/notes. Routes: partner id, route key, environment, destination, enabled, minAge fixed >=18, requiredReadiness fixed `green`, disclosure key. Flags: only existing allowlisted keys and boolean. Experiments: metadata only; actual assignment comes V2.2D.
-- [ ] Any attempt to enable a live route while `LIVE_CREDIT_REFERRALS_ALLOWED !== 'true'` is rejected server-side even for admin. In V2.2 release environment this stays false.
-- [ ] Disclosure publication uses the service-only publication RPC and records admin audit.
-- [ ] Add clear persistent warning banner: “Live credit referrals are locked pending regulatory clearance.”
-- [ ] Run route/component tests GREEN and commit: `feat: add Credit Quest admin control plane`.
+- [ ] `/admin` layout requires verified admin server-side. Non-admin never receives admin data.
+- [ ] Pages: Overview, Partners, Routes, Disclosures, Flags, Experiments, Audit. No customer impersonation, SQL editor, readiness threshold or mission priority controls.
+- [ ] Strict API fields only. Routes fix `minAge >=18` and `requiredReadiness='green'`; destinations obey sandbox/live constraint.
+- [ ] Any attempt to enable a live partner/route while `LIVE_CREDIT_REFERRALS_ALLOWED !== 'true'` is rejected server-side even for admin. V2.2 release keeps it false.
+- [ ] Disclosure publication uses locked RPC + audit.
+- [ ] Persistent warning: “Live credit referrals are locked pending regulatory clearance.”
+- [ ] Run GREEN and commit: `feat: add Credit Quest admin control plane`.
 
 ### Task 8: RLS, architecture, E2E and production-dark closeout
 
-**Files:** Create `tests/unit/commercial-boundaries.test.ts`; modify RLS/E2E/README/.env.
+**Files:** Create commercial boundary test; modify RLS/E2E/README/.env.
 
 `.env.example` add:
 
@@ -250,11 +259,11 @@ Reject destination URL, userId, readiness, commission, partner payout and approv
 LIVE_CREDIT_REFERRALS_ALLOWED=false
 ```
 
-- [ ] Architecture test scans core strategy modules and asserts no imports of `lib/commercial`, commercial repository/gateway, revenue events, admin, feature flags. Scan Commercial Gateway and assert it imports core outputs downstream but no core module imports it back.
-- [ ] RLS tests assert no ordinary client read/write on config/revenue/admin; publication RPC locked; append-only triggers active; no enabled live route.
-- [ ] E2E: under-18 no referral; Safe Mode no referral; amber/red/unknown no referral; commercial flag off no referral; sandbox referral requires consent and disclosure; sandbox completion explicitly contacts no lender; seven cards remain.
-- [ ] README: migration 011, admin bootstrap procedure, two-key live lock, sandbox-only V2.2 status, regulatory checkpoint.
-- [ ] **Admin bootstrap is a deliberate operational action:** after an authorised operator has an existing Supabase auth account, identify their UUID from `auth.users`, then insert that exact UUID into `admin_members` using the Supabase SQL/admin console. Do not auto-promote the first user and do not expose a self-grant endpoint.
+- [ ] Architecture scan proves core strategy imports no commercial/revenue/admin/feature flag modules.
+- [ ] RLS tests prove ordinary users cannot access config/revenue/admin or write referrals; disclosure RPC locked; referral/revenue UPDATE rejected; client DELETE denied; no enabled live route.
+- [ ] E2E/integration: under-18 no route; Safe Mode no route; red/amber/unknown no route; flag off no route; route presentation does not require consent; referral creation does; sandbox provenance/internal destination only; seven cards remain.
+- [ ] README: migration 011, two-key live lock, sandbox-only V2.2, regulatory checkpoint and admin bootstrap.
+- [ ] Admin bootstrap is a deliberate operational action: after an authorised operator has an existing Supabase auth account, identify that exact auth UUID and insert it into `admin_members` through the Supabase admin/SQL console. Do not auto-promote the first user and expose no self-grant endpoint.
 - [ ] Final gate:
 
 ```bash
@@ -271,4 +280,4 @@ Run local Supabase migrations/RLS as CI does.
 
 ## V2.2C Exit Gate
 
-The commercial/admin stage is complete only when every referral path goes through the server Gateway, unknown evidence blocks referral independently of readiness, configured production pages have no direct affiliate bypass, admin cannot override hard gates, sandbox provenance is auditable, commercial/revenue data is absent from strategy inputs, and live referral remains impossible with `LIVE_CREDIT_REFERRALS_ALLOWED=false`.
+Complete only when route presentation and referral consent are correctly separated, every configured referral goes through the server Gateway, unknown evidence blocks referral independently of readiness, no configured page has an affiliate bypass, admin cannot override hard gates, sandbox provenance is auditable, user erasure is not blocked by audit immutability controls, commercial/revenue data is absent from strategy inputs, and live referral remains impossible with `LIVE_CREDIT_REFERRALS_ALLOWED=false`.
