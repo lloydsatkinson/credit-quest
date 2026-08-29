@@ -64,6 +64,7 @@ The following rules are hard requirements:
 - Append-only journey outcome history.
 - Explicit reassessment scheduling and readiness-change feedback.
 - Deterministic in-app and email retention triggers.
+- Server-owned email preference and suppression state for journey reminders.
 - AI-assisted wording for approved reminder content, with deterministic trigger/reason preserved.
 - Commercial partner and route configuration.
 - Versioned disclosure records and explicit referral consent.
@@ -81,6 +82,7 @@ The following rules are hard requirements:
 - Lender underwriting or approval prediction.
 - CRA ingestion, Open Banking ingestion, payment initiation or lender eligibility APIs unless separately designed and approved.
 - Push notifications and SMS.
+- Marketing/promotional email campaigns; V2.2 email is limited to service/journey reminders.
 - A full CRM or enterprise back-office suite.
 - AI-controlled targeting, readiness decisions or contact cadence.
 - Commercially driven mission, readiness or Academy ranking.
@@ -119,6 +121,8 @@ Trigger examples:
 
 The trigger, timing, user eligibility and reason are deterministic. AI may optionally rewrite an approved base message for tone and clarity, but the generated copy must remain constrained to the approved facts and call-to-action. If AI is unavailable or rejected by validation, the approved deterministic template is sent instead.
 
+V2.2 email is limited to **service/journey reminders**, not promotional campaigns. Service reminders and future marketing communications must remain distinct classifications with separate legal/consent treatment. The Reminder Service checks the user's communication preference/suppression state before creating an email job. Where an unsubscribe/preference control is appropriate, it must update persistent server-side suppression state so later reminder scheduling respects it. Marketing consent must never be inferred from use of Credit Quest or from consent to a referral.
+
 An independent server-side email kill switch can suppress all outbound email without affecting the core product.
 
 ### 4.3 Commercial Gateway
@@ -141,6 +145,10 @@ It receives an already-computed customer context and applies hard gates in this 
 If any gate fails, no referral is created. The core journey continues normally.
 
 Live credit routes remain disabled in production until the regulatory checkpoint is cleared. Sandbox routes may be exercised for end-to-end testing.
+
+Where more than one route remains permitted after the hard gates, **commercial economics are still not ranking inputs**. The default presentation/selection mechanism must use an approved non-commercial rule such as stable deterministic ordering or fair rotation within a set of already-permitted equivalent routes. A presentation experiment may vary ordering only within that equivalent eligible set. Sponsored inventory, if introduced later, must be clearly labelled and must never elevate a route that would otherwise be less appropriate or ineligible.
+
+The gateway therefore answers only whether a configured downstream route is permitted in the current context; it does not claim lender eligibility, underwriting likelihood or approval probability.
 
 ### 4.4 Credit Quest Admin
 
@@ -291,6 +299,21 @@ Experiments may change approved wording, layout or presentation order among alre
 - Academy protective filtering;
 - whether an otherwise ineligible user becomes commercially eligible.
 
+### 5.11 `communication_preferences`
+
+Persistent server-owned preference/suppression state for outbound communications.
+
+Suggested fields:
+
+- `user_id`;
+- `journey_email_enabled`;
+- `journey_email_suppressed_at` nullable;
+- suppression source/reason;
+- future marketing-consent fields only if separately designed and legally approved;
+- `updated_at`.
+
+Referral consent and journey-email preference are separate concepts. Neither implies marketing consent.
+
 ## 6. Customer experience
 
 The V2.2 experience should make the existing product feel more complete rather than more complicated.
@@ -334,6 +357,8 @@ Generated copy must be validated against:
 
 Failure falls back to the approved static template.
 
+Before an email job is created, the system must also confirm that the message is an approved V2.2 journey/service reminder, that the channel is enabled, and that the user is not suppressed for that reminder channel. Future promotional/marketing email requires a separate design and consent/legal-basis decision rather than piggybacking on the journey-reminder pipeline.
+
 ## 8. Analytics and success measures
 
 V2.2 analytics should optimise for helping customers progress, not for maximising screen time or applications.
@@ -376,6 +401,7 @@ Examples:
 - consent write fails → no referral;
 - attribution write fails → no referral;
 - email provider unavailable → reminder marked failed/retriable, user journey unaffected;
+- communication preference unavailable → email is suppressed rather than guessed enabled;
 - AI wording fails → deterministic approved template used;
 - analytics fails → action/journey state change still succeeds if the core write is valid;
 - admin unavailable → current published configuration remains in force;
@@ -385,7 +411,7 @@ Examples:
 
 - All partner, route, disclosure, referral, revenue, feature-flag and experiment writes are server-owned.
 - Ordinary clients cannot directly mutate commercial configuration.
-- User-specific journey/reminder records use owner-based RLS.
+- User-specific journey/reminder/preference records use owner-based RLS where client reads are needed; sensitive writes remain server-owned.
 - Admin access uses explicit authorised roles and server-side enforcement.
 - Partner destinations are allowlisted and resolved server-side.
 - Credit Quest generates referral IDs and records provenance before redirecting.
@@ -440,8 +466,10 @@ Not included:
 - all journey-state transitions;
 - reassessment scheduling;
 - deterministic reminder triggers and suppression;
+- communication preference checks;
 - age/Safe Mode protection;
 - commercial hard gates;
+- neutral/non-commercial route ordering;
 - disclosure/consent requirements;
 - kill-switch behaviour;
 - AI-copy validation/fallback;
@@ -453,7 +481,7 @@ CI must fail if core strategy modules begin importing commercial/revenue/affilia
 
 ### Database/RLS tests
 
-- users can read only their own journey/reminder records where appropriate;
+- users can read only their own journey/reminder/preference records where appropriate;
 - clients cannot write protected commercial/admin tables;
 - ordinary users cannot read sensitive administrative/revenue data;
 - service/admin roles have only intended permissions;
@@ -474,8 +502,10 @@ At minimum:
 8. missing disclosure creates no referral;
 9. global commercial kill switch blocks referrals;
 10. sandbox referral records provenance and routes only to an allowlisted sandbox destination;
-11. email kill switch suppresses outbound email without breaking in-app journey state;
-12. AI wording failure falls back to an approved template.
+11. multiple equivalent sandbox routes are presented without commission/revenue ranking inputs;
+12. email kill switch suppresses outbound email without breaking in-app journey state;
+13. a user-suppressed journey-email channel produces no email job;
+14. AI wording failure falls back to an approved template.
 
 ## 14. Rollout
 
@@ -484,7 +514,7 @@ V2.2 ships dark-first in controlled slices:
 1. additive schema + RLS + event contracts;
 2. Journey Orchestrator and outcome tracking;
 3. explicit reassessment loop and customer feedback;
-4. deterministic in-app reminders;
+4. deterministic in-app reminders and communication preferences;
 5. email reminder pipeline behind kill switch;
 6. partner/route/disclosure configuration;
 7. Credit Quest Admin;
@@ -502,6 +532,7 @@ V2.2 requires at least these independent server-side controls:
 
 - `commercial_gateway_enabled` — defaults false for live regulated referrals;
 - `email_reminders_enabled` — can stop outbound mail independently;
+- per-user journey-email preference/suppression state;
 - per-partner enabled state;
 - per-route enabled state;
 - per-experiment enabled state;
@@ -516,9 +547,12 @@ V2.2 is complete when:
 - a customer can progress from mission action through scheduled reassessment with an auditable outcome trail;
 - Credit Quest can show whether readiness improved, worsened, stayed unchanged or remains unknown;
 - deterministic in-app/email retention triggers work and can be independently disabled;
+- journey-email preference/suppression is persistent and respected server-side;
+- promotional/marketing email is not silently enabled through the service-reminder pipeline;
 - AI is limited to validated message wording and cannot choose triggers or credit strategy;
 - partner, route and disclosure configuration is server-owned and manageable through the lightweight admin surface;
 - sandbox referral attempts capture consent, disclosure version, partner, route, attribution ID and originating customer context;
+- multiple permitted routes cannot be ranked using commission, EPC, partner payout or revenue data;
 - under-18, Safe Mode, WAIT/non-permitted readiness, missing consent and kill-switch states all block referral creation server-side;
 - commercial/revenue data cannot enter mission/readiness ranking code paths;
 - experiments can modify presentation only, not suitability;
