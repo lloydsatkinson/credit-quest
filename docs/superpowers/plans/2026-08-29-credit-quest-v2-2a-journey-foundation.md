@@ -17,7 +17,8 @@
 - Do not modify the known `hasRevolvingCredit === null` readiness behaviour in this work.
 - Journey writes occur only after the corresponding core state change succeeds. A journey-write failure must not roll back a valid mission/profile/account change.
 - Reassessment means re-running existing deterministic guidance from current evidence; Journey must not create alternative readiness rules.
-- `journey_outcomes` is historical audit evidence: no UPDATE/DELETE path.
+- `journey_outcomes` is historical audit evidence: application code has no UPDATE/DELETE method; UPDATE is rejected at DB level; service-role DELETE remains available solely for deliberate data-erasure/account-deletion workflows.
+- Corrections to Journey history append compensating records rather than rewriting prior evidence.
 - Unknown readiness remains `unknown`; do not turn lack of evidence into improvement.
 - All implementation tasks follow observed RED -> minimal GREEN -> refactor -> focused commit.
 - Migration 009 is additive and must be verified through `supabase/tests/rls.sql` before production application.
@@ -35,8 +36,10 @@
 - `supabase/migrations/009_journey_foundation.sql`
 - `tests/unit/journey-types.test.ts`
 - `tests/unit/journey-state-machine.test.ts`
+- `tests/unit/journey-migration.test.ts`
 - `tests/unit/journey-repository.test.ts`
 - `tests/unit/journey-orchestrator.test.ts`
+- `tests/unit/journey-hooks.test.ts`
 - `tests/unit/journey-boundaries.test.ts`
 - `tests/unit/journey-status-card.test.tsx`
 
@@ -89,6 +92,18 @@ export interface JourneyState {
   lastReadinessBand: ReadinessState | null;
   updatedAt: string;
 }
+
+export interface JourneyOutcomeInput {
+  userId: string;
+  eventType: JourneyOutcomeType;
+  source: "onboarding" | "mission" | "action" | "reassessment";
+  sourceKey: string;
+  missionInstanceId?: string | null;
+  readinessBefore?: ReadinessState | null;
+  readinessAfter?: ReadinessState | null;
+  metadata?: Record<string, unknown>;
+  occurredAt: string;
+}
 ```
 
 - [ ] Write `journey-types.test.ts` importing the above types. Run `npm test -- tests/unit/journey-types.test.ts`; observe module-not-found RED.
@@ -116,11 +131,11 @@ export function deriveJourneyLifecycle(input: {
 Do not import commercial/affiliate/offer code. Run `npm test -- tests/unit/journey-types.test.ts tests/unit/journey-state-machine.test.ts` GREEN.
 - [ ] Commit: `feat: add journey lifecycle contracts`.
 
-### Task 2: Add migration 009, owner RLS and append-only audit enforcement
+### Task 2: Add migration 009, owner RLS, idempotency and audit immutability
 
 **Files:** Create `supabase/migrations/009_journey_foundation.sql`; modify `supabase/tests/rls.sql`; create `tests/unit/journey-migration.test.ts`.
 
-- [ ] Write a RED source-contract test asserting migration 009 exists and contains `journey_state`, `journey_outcomes`, owner SELECT policies, no authenticated writes, same-owner mission FK, due indexes and an immutable trigger.
+- [ ] Write a RED source-contract test asserting migration 009 exists and contains `journey_state`, `journey_outcomes`, owner SELECT policies, no authenticated writes, same-owner mission FKs, a unique outcome source key, due indexes and an UPDATE-rejection trigger.
 - [ ] Run `npm test -- tests/unit/journey-migration.test.ts`; observe RED.
 - [ ] Implement migration 009 with these exact invariants:
 
@@ -136,15 +151,16 @@ create table public.journey_state (
   constraint journey_state_stage_check check (stage in ('onboarding','active_mission','waiting','cooldown','reassessment_due','ready','optimising')),
   constraint journey_state_readiness_check check (last_readiness_band is null or last_readiness_band in ('red','amber','green','unknown')),
   constraint journey_state_mission_owner_fkey foreign key (active_mission_id, user_id)
-    references public.user_missions(id, user_id) on delete set null
+    references public.user_missions(id, user_id) on delete set null (active_mission_id)
 );
 
 create table public.journey_outcomes (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users(id) on delete cascade,
   event_type text not null,
-  mission_instance_id uuid,
   source text not null,
+  source_key text not null,
+  mission_instance_id uuid,
   readiness_before text,
   readiness_after text,
   metadata jsonb not null default '{}'::jsonb,
@@ -153,8 +169,9 @@ create table public.journey_outcomes (
   constraint journey_outcomes_source_check check (source in ('onboarding','mission','action','reassessment')),
   constraint journey_outcomes_before_check check (readiness_before is null or readiness_before in ('red','amber','green','unknown')),
   constraint journey_outcomes_after_check check (readiness_after is null or readiness_after in ('red','amber','green','unknown')),
+  constraint journey_outcomes_source_unique unique (user_id, source_key),
   constraint journey_outcomes_mission_owner_fkey foreign key (mission_instance_id, user_id)
-    references public.user_missions(id, user_id) on delete set null
+    references public.user_missions(id, user_id) on delete set null (mission_instance_id)
 );
 
 create index journey_state_reassessment_due_idx on public.journey_state(next_reassessment_at) where next_reassessment_at is not null;
@@ -163,8 +180,8 @@ create index journey_outcomes_user_time_idx on public.journey_outcomes(user_id, 
 
 Add RLS `journey_state_select_own` and `journey_outcomes_select_own` to authenticated users. Revoke INSERT/UPDATE/DELETE from anon/authenticated on both tables. Server-owned writes use service role.
 
-For outcomes immutability add `public.reject_journey_outcome_mutation()` trigger BEFORE UPDATE OR DELETE that always raises `journey_outcomes are append-only`; revoke execute from public/anon/authenticated and do not expose a mutation RPC.
-- [ ] Extend `supabase/tests/rls.sql` to assert the policies/grants/FK/trigger and execute a rollback-only UPDATE probe that must raise the append-only exception.
+For audit immutability add `public.reject_journey_outcome_update()` as a BEFORE UPDATE trigger that always raises `journey_outcomes are append-only`. Do **not** reject service-role DELETE at database level: ordinary users have no DELETE grant and application code has no delete repository method, while service-role deletion must remain possible for deliberate account/data erasure.
+- [ ] Extend `supabase/tests/rls.sql` to assert policies/grants/FKs/unique source key/trigger; execute a rollback-only UPDATE probe that must raise; assert anon/authenticated cannot DELETE.
 - [ ] Run full local DB verification exactly as CI does (`supabase db start` then `psql ... -f supabase/tests/rls.sql`) and run the migration unit test GREEN.
 - [ ] Commit: `feat: add journey foundation schema`.
 
@@ -181,9 +198,9 @@ export async function upsertJourneyState(admin: SupabaseClient, state: JourneySt
 export async function appendJourneyOutcome(admin: SupabaseClient, input: JourneyOutcomeInput): Promise<JourneyOutcome>
 ```
 
-- [ ] Write RED mapper/query tests using a small chainable fake Supabase client; assert snake_case mapping, owner filter on reads, and no caller-supplied `user_id` override.
+- [ ] Write RED mapper/query tests using a small chainable fake Supabase client; assert snake_case mapping, owner filter on reads, and no caller-supplied DB-column override.
 - [ ] Run `npm test -- tests/unit/journey-repository.test.ts`; observe missing-module RED.
-- [ ] Implement mapping/select/upsert/insert only. `appendJourneyOutcome` inserts one row and never exposes update/delete.
+- [ ] Implement mapping/select/upsert/insert only. `appendJourneyOutcome` inserts one row; on unique `(user_id,source_key)` conflict it reads/returns the existing matching row so route retries are idempotent. It never exposes update/delete.
 - [ ] Ensure `lib/server/journey-repository.ts` imports `server-only` because its write helpers are intended for the admin/service client.
 - [ ] Re-run focused tests GREEN and commit: `feat: add journey repository`.
 
@@ -198,6 +215,7 @@ export async function observeJourneyEvent(input: {
   userId: string;
   eventType: JourneyOutcomeType;
   source: JourneyOutcome["source"];
+  sourceKey: string;
   missionInstanceId?: string | null;
   nextReviewAt?: string | null;
   now?: Date;
@@ -205,13 +223,15 @@ export async function observeJourneyEvent(input: {
 
 export async function reassessJourneyForUser(input: {
   userId: string;
+  sourceKey: string;
   now?: Date;
 }): Promise<JourneyReassessmentResult | null>
 ```
 
 Both functions create the service client internally only after the caller has authenticated/authorised the `userId`; never accept a browser-supplied user id directly through an API body.
 
-- [ ] RED tests: observing a mission completion appends outcome and stores existing `nextReviewAt`; observing cooldown stores `cooldown`; duplicate observation uses deterministic dedupe metadata only if the exact state transition is repeated in one request; reassessment calls existing `getCreditGuidanceForUser`; a red->amber/amber->green/etc change appends both `reassessment_performed` and `readiness_changed`; unchanged readiness appends only reassessment; unknown remains unknown.
+- [ ] RED tests: observing a mission completion appends outcome and stores existing `nextReviewAt`; observing cooldown stores `cooldown`; replaying the same `sourceKey` does not duplicate history; reassessment calls existing `getCreditGuidanceForUser`; a red->amber/amber->green/etc change appends both `reassessment_performed` and `readiness_changed`; unchanged readiness appends only reassessment; unknown remains unknown.
+- [ ] Reassessment uses stable keys, e.g. `reassessment:${userId}:${dueIso}` and `readiness-change:${userId}:${dueIso}:${before}:${after}` so refresh/retry cannot duplicate audit rows.
 - [ ] Add a test that source text of the orchestrator contains no `offer-matcher`, `affiliate`, `commission`, `epc`, `payout`, `revenue` or `campaign`.
 - [ ] Implement with injected internal helpers where needed for testing. Read existing journey state first, use current `getCreditGuidanceForUser`, list/sync missions through existing repositories, derive lifecycle via Task 1, then upsert the projection and append outcomes.
 - [ ] Reassessment date precedence: an explicit mission/action `nextReviewAt` is stored; otherwise no date is invented. Do not add a generic “30 days” timer to readiness.
@@ -223,14 +243,14 @@ Both functions create the service client internally only after the caller has au
 **Files:** Modify `app/api/onboarding/route.ts`, `app/api/missions/[slug]/route.ts`, `app/api/actions/attempts/[id]/route.ts`; create `tests/unit/journey-hooks.test.ts`.
 
 - [ ] Write source/integration RED tests proving the hook happens after the core write and that each route catches Journey failure instead of returning a core failure.
-- [ ] On successful configured onboarding, call `observeJourneyEvent({ eventType: "onboarding_completed", source: "onboarding" })` after profile upsert.
-- [ ] On legacy mission start/complete/defer, call the matching outcome after the mission write. Do not record completion if the mission route did not actually complete.
-- [ ] On Action Layer response, map `outcome.missionState`/`attemptStatus` to `action_submitted`, `action_verified`, `mission_completed`, `mission_deferred` or `cooldown_started` only after account/profile/mission/attempt writes succeed.
+- [ ] On successful configured onboarding, after profile upsert call `observeJourneyEvent` with `sourceKey: "onboarding-completed"`.
+- [ ] On legacy mission start/complete/defer, call the matching outcome after the mission write using `sourceKey` containing mission row id, resulting state and the persisted transition timestamp. Do not record completion if the mission route did not actually complete.
+- [ ] On Action Layer response, map `outcome.missionState`/`attemptStatus` to `action_submitted`, `action_verified`, `mission_completed`, `mission_deferred` or `cooldown_started` only after account/profile/mission/attempt writes succeed. Use the action attempt id + resulting attempt status as the stable source key.
 - [ ] Wrap each call as best effort:
 
 ```ts
 try {
-  await observeJourneyEvent({...});
+  await observeJourneyEvent({ ...input });
 } catch {
   // Journey observation must not invalidate a successful core action.
 }
@@ -244,7 +264,7 @@ try {
 
 - [ ] RED component tests for four cases: upcoming reassessment, readiness improved, readiness unchanged, unknown evidence. Copy must answer “what changed / what next / when” and never say “approved”, “approval odds”, or claim unsupported causation.
 - [ ] Implement `JourneyStatusCard` as a compact section above the existing Quest Feed, not an eighth feed card. Preserve `FEED_CARD_TOTAL = 7`.
-- [ ] Server dashboard: read Journey state/recent outcomes. If `nextReassessmentAt <= now`, best-effort call `reassessJourneyForUser`, then reload state/outcomes. If journey tables are unavailable during a dark deploy, catch and render no Journey status; the existing dashboard must still render.
+- [ ] Server dashboard: read Journey state/recent outcomes. If `nextReassessmentAt <= now`, best-effort call `reassessJourneyForUser` with source key derived from the due timestamp, then reload state/outcomes. If journey tables are unavailable during a dark deploy, catch and render no Journey status; the existing dashboard must still render.
 - [ ] Demo dashboard: add a deterministic local-only journey summary derived from existing demo progress. Do not pretend it has persisted server outcomes.
 - [ ] Remove no existing Safe Mode, Readiness, Passport or Academy card.
 - [ ] Run component tests and existing dashboard tests GREEN. Commit: `feat: surface journey status`.
@@ -273,4 +293,4 @@ Also run local Supabase reset/RLS verification. Every command must be green befo
 
 ## V2.2A Exit Gate
 
-V2.2A is ready for the next stage only when migration 009 is additive/RLS-verified, core routes still succeed if Journey observation fails, due reassessment uses the existing guidance engine, the dashboard remains seven cards, and architecture tests prove Journey/commercial concepts cannot enter core strategy.
+V2.2A is ready for the next stage only when migration 009 is additive/RLS-verified, core routes still succeed if Journey observation fails, duplicate route retries cannot duplicate Journey history, due reassessment uses the existing guidance engine, the dashboard remains seven cards, lawful service-role erasure is not blocked by an audit trigger, and architecture tests prove Journey/commercial concepts cannot enter core strategy.
