@@ -17,10 +17,13 @@ export function EmailReminderPreference({
 
   useEffect(() => {
     if (!demo) return;
-    const saved = localStorage.getItem(DEMO_EMAIL_PREFERENCE_KEY);
-    if (saved === "true" || saved === "false") {
-      setEnabled(saved === "true");
-    }
+    const timer = window.setTimeout(() => {
+      const saved = localStorage.getItem(DEMO_EMAIL_PREFERENCE_KEY);
+      if (saved === "true" || saved === "false") {
+        setEnabled(saved === "true");
+      }
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [demo]);
 
   async function changePreference(next: boolean) {
