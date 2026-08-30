@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it, vi } from "vitest";
-import { createJourneyOrchestrator } from "@/lib/server/journey-orchestrator";
+import { createJourneyOrchestrator } from "@/lib/journey/orchestrator";
 
 function state(overrides: Record<string, unknown> = {}) {
   return {
@@ -117,7 +117,7 @@ describe("Journey Orchestrator", () => {
   });
 
   it("has no commercial economics input", () => {
-    const source = readFileSync(resolve(process.cwd(), "lib/server/journey-orchestrator.ts"), "utf8").toLowerCase();
+    const source = readFileSync(resolve(process.cwd(), "lib/journey/orchestrator.ts"), "utf8").toLowerCase();
     for (const forbidden of ["offer-matcher", "affiliate", "commission", "epc", "payout", "revenue", "campaign"]) {
       expect(source).not.toContain(forbidden);
     }
