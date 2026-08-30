@@ -3,11 +3,13 @@ import type { JourneyOutcome, JourneyOutcomeSource, JourneyOutcomeType } from "@
 import {
   appendJourneyOutcome,
   getJourneyState,
+  listRecentJourneyOutcomes,
   upsertJourneyState,
 } from "@/lib/server/journey-repository";
 import { getCreditGuidanceForUser } from "@/lib/server/credit-guidance-service";
 import { listMissionInstances } from "@/lib/server/mission-repository";
 import { getUserProfile } from "@/lib/server/profile-repository";
+import { scheduleJourneyRemindersForOutcome } from "@/lib/server/reminder-service";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
@@ -19,7 +21,7 @@ async function productionOrchestrator() {
     Promise.resolve(createAdminSupabaseClient()),
   ]);
 
-  return createJourneyOrchestrator({
+  const orchestrator = createJourneyOrchestrator({
     appendOutcome: (input) => appendJourneyOutcome(admin, input),
     upsertState: (state) => upsertJourneyState(admin, state),
     getState: (userId) => getJourneyState(server, userId),
@@ -42,6 +44,20 @@ async function productionOrchestrator() {
       };
     },
   });
+
+  return { orchestrator, server };
+}
+
+async function scheduleRemindersBestEffort(input: {
+  userId: string;
+  outcome: JourneyOutcome;
+  nextReassessmentAt: string | null;
+}) {
+  try {
+    await scheduleJourneyRemindersForOutcome(input);
+  } catch {
+    // Reminder scheduling is downstream and cannot invalidate Journey history or guidance.
+  }
 }
 
 export async function observeJourneyEvent(input: {
@@ -54,8 +70,21 @@ export async function observeJourneyEvent(input: {
   metadata?: Record<string, unknown>;
   now?: Date;
 }): Promise<JourneyOutcome> {
-  const orchestrator = await productionOrchestrator();
-  return orchestrator.observeJourneyEvent(input);
+  const { orchestrator, server } = await productionOrchestrator();
+  const outcome = await orchestrator.observeJourneyEvent(input);
+
+  try {
+    const state = await getJourneyState(server, input.userId);
+    await scheduleRemindersBestEffort({
+      userId: input.userId,
+      outcome,
+      nextReassessmentAt: state?.nextReassessmentAt ?? input.nextReviewAt ?? null,
+    });
+  } catch {
+    // A post-persistence reminder read must not invalidate the core Journey event.
+  }
+
+  return outcome;
 }
 
 export async function reassessJourneyForUser(input: {
@@ -63,6 +92,26 @@ export async function reassessJourneyForUser(input: {
   sourceKey: string;
   now?: Date;
 }) {
-  const orchestrator = await productionOrchestrator();
-  return orchestrator.reassessJourneyForUser(input);
+  const { orchestrator, server } = await productionOrchestrator();
+  const result = await orchestrator.reassessJourneyForUser(input);
+  if (!result?.changed) return result;
+
+  try {
+    const sourceKey = `${input.sourceKey}:readiness:${result.before}:${result.after}`;
+    const recent = await listRecentJourneyOutcomes(server, input.userId, 20);
+    const readinessOutcome = recent.find((outcome) =>
+      outcome.eventType === "readiness_changed" && outcome.sourceKey === sourceKey,
+    );
+    if (readinessOutcome) {
+      await scheduleRemindersBestEffort({
+        userId: input.userId,
+        outcome: readinessOutcome,
+        nextReassessmentAt: result.state.nextReassessmentAt,
+      });
+    }
+  } catch {
+    // Reminder scheduling cannot alter the reassessment result.
+  }
+
+  return result;
 }
