@@ -12,6 +12,7 @@ import {
 } from "@/lib/server/account-repository";
 import { syncTrackedAccountProfileSignals } from "@/lib/server/account-signal-service";
 import { recordServerEvent, type EventName } from "@/lib/server/event-repository";
+import { observeJourneyEvent } from "@/lib/server/journey-orchestrator";
 import {
   getMissionInstance,
   updateMissionInstanceState,
@@ -160,6 +161,38 @@ export async function PATCH(
       response: parsed.data.response,
       missionState: outcome.missionState,
     });
+
+    const journeyEvent = outcome.missionState === "completed"
+      ? "mission_completed"
+      : outcome.missionState === "deferred"
+        ? "mission_deferred"
+        : outcome.missionState === "cooldown"
+          ? "cooldown_started"
+          : outcome.attemptStatus === "verified"
+            ? "action_verified"
+            : outcome.attemptStatus === "submitted"
+              ? "action_submitted"
+              : null;
+
+    if (journeyEvent) {
+      try {
+        await observeJourneyEvent({
+          userId: user.id,
+          eventType: journeyEvent,
+          source: "action",
+          sourceKey: `action:${attempt.id}:${outcome.attemptStatus}:${nowIso}`,
+          missionInstanceId: instance.id,
+          nextReviewAt: outcome.nextReviewAt,
+          metadata: {
+            missionSlug: instance.missionSlug,
+            attemptStatus: outcome.attemptStatus,
+          },
+          now,
+        });
+      } catch {
+        // Journey is downstream; a valid Action Layer write remains successful.
+      }
+    }
 
     return NextResponse.json({
       attempt: updatedAttempt,
