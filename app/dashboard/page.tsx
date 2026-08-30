@@ -6,6 +6,7 @@ import { DashboardClient } from "@/components/dashboard/dashboard-client";
 import { NextMissionCard } from "@/components/dashboard/next-mission-card";
 import { ProgressStrip } from "@/components/dashboard/progress-strip";
 import { QuestFeed, QuestFeedCard } from "@/components/dashboard/quest-feed";
+import { EmailReminderPreference } from "@/components/journey/email-reminder-preference";
 import { JourneyStatusCard } from "@/components/journey/journey-status-card";
 import { PassportCard } from "@/components/passport/passport-card";
 import { ReadinessCard } from "@/components/readiness/readiness-card";
@@ -38,6 +39,7 @@ import {
 import { reassessJourneyForUser } from "@/lib/server/journey-orchestrator";
 import { syncMissionInstances } from "@/lib/server/mission-repository";
 import { getUserProfile } from "@/lib/server/profile-repository";
+import { getCommunicationPreference } from "@/lib/server/reminder-repository";
 import { getSupabasePublicEnv } from "@/lib/supabase/env";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
@@ -128,6 +130,14 @@ export default async function DashboardPage() {
     journeyOutcomes = [];
   }
 
+  let emailReminderEnabled = false;
+  try {
+    const preference = await getCommunicationPreference(supabase, user.id);
+    emailReminderEnabled = preference?.journeyEmailEnabled === true;
+  } catch {
+    emailReminderEnabled = false;
+  }
+
   let pendingView: {
     attempt: NonNullable<typeof pendingAttempt>;
     missionSlug: string;
@@ -209,6 +219,7 @@ export default async function DashboardPage() {
         state={journeyState}
         latestOutcome={journeyOutcomes[0] ?? null}
       />
+      <EmailReminderPreference initialEnabled={emailReminderEnabled} demo={false} />
 
       <QuestFeed>
         <QuestFeedCard eyebrow="Your next move" index={1} total={FEED_CARD_TOTAL} tone="ink">

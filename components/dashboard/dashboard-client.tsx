@@ -6,6 +6,7 @@ import { AcademyCard } from "@/components/academy/academy-card";
 import { NextMissionCard } from "@/components/dashboard/next-mission-card";
 import { ProgressStrip } from "@/components/dashboard/progress-strip";
 import { QuestFeed, QuestFeedCard } from "@/components/dashboard/quest-feed";
+import { EmailReminderPreference } from "@/components/journey/email-reminder-preference";
 import { JourneyStatusCard } from "@/components/journey/journey-status-card";
 import { PassportCard } from "@/components/passport/passport-card";
 import { ReadinessCard } from "@/components/readiness/readiness-card";
@@ -248,6 +249,7 @@ export function DashboardClient() {
       )}
 
       <JourneyStatusCard state={demoJourneyState} latestOutcome={null} />
+      <EmailReminderPreference initialEnabled={false} demo={true} />
 
       <QuestFeed>
         <QuestFeedCard eyebrow="Your next move" index={1} total={FEED_CARD_TOTAL} tone="ink">
