@@ -16,13 +16,13 @@ describe("InAppReminders", () => {
   });
 
   it("renders at most three reminders", () => {
-    render(<InAppReminders reminders={[
+    const { container } = render(<InAppReminders reminders={[
       { id: "r1", reason: "reassessment_due", dueAt: "2026-09-01T08:00:00.000Z", templateKey: "reassessment-due-v1" },
       { id: "r2", reason: "mission_incomplete", dueAt: "2026-09-01T08:00:00.000Z", templateKey: "mission-incomplete-v1" },
       { id: "r3", reason: "cooldown_ending", dueAt: "2026-09-01T08:00:00.000Z", templateKey: "cooldown-ending-v1" },
       { id: "r4", reason: "readiness_changed", dueAt: "2026-09-01T08:00:00.000Z", templateKey: "readiness-changed-v1" },
     ]} />);
 
-    expect(screen.getAllByTestId("in-app-reminder")).toHaveLength(3);
+    expect(container.querySelectorAll('[data-testid="in-app-reminder"]')).toHaveLength(3);
   });
 });
