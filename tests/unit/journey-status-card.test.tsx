@@ -1,5 +1,5 @@
-import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { cleanup, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it } from "vitest";
 import { JourneyStatusCard } from "@/components/journey/journey-status-card";
 
 const baseState = {
@@ -11,6 +11,8 @@ const baseState = {
   lastReadinessBand: "green" as const,
   updatedAt: "2026-08-29T08:00:00.000Z",
 };
+
+afterEach(() => cleanup());
 
 describe("JourneyStatusCard", () => {
   it("explains a readiness improvement without promising approval", () => {
@@ -32,10 +34,10 @@ describe("JourneyStatusCard", () => {
       />,
     );
 
-    expect(screen.getByTestId("journey-status")).toBeInTheDocument();
-    expect(screen.getByText(/Amber → Green/i)).toBeInTheDocument();
-    expect(screen.getByText(/what happens next/i)).toBeInTheDocument();
-    expect(screen.queryByText(/guaranteed|approved|approval odds/i)).not.toBeInTheDocument();
+    expect(screen.getByTestId("journey-status")).toBeTruthy();
+    expect(screen.getByText(/Amber → Green/i)).toBeTruthy();
+    expect(screen.getByText(/what happens next/i)).toBeTruthy();
+    expect(screen.queryByText(/guaranteed|approved|approval odds/i)).toBeNull();
   });
 
   it("shows the next deterministic reassessment date", () => {
@@ -51,12 +53,12 @@ describe("JourneyStatusCard", () => {
       />,
     );
 
-    expect(screen.getByText(/15 Sept 2026/i)).toBeInTheDocument();
-    expect(screen.getByText(/reassess/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/15 Sept 2026/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/reassess/i).length).toBeGreaterThan(0);
   });
 
   it("renders nothing when Journey state is unavailable", () => {
     const { container } = render(<JourneyStatusCard state={null} latestOutcome={null} />);
-    expect(container).toBeEmptyDOMElement();
+    expect(container.innerHTML).toBe("");
   });
 });
