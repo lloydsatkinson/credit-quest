@@ -7,6 +7,7 @@ import { NextMissionCard } from "@/components/dashboard/next-mission-card";
 import { ProgressStrip } from "@/components/dashboard/progress-strip";
 import { QuestFeed, QuestFeedCard } from "@/components/dashboard/quest-feed";
 import { EmailReminderPreference } from "@/components/journey/email-reminder-preference";
+import { InAppReminders } from "@/components/journey/in-app-reminders";
 import { JourneyStatusCard } from "@/components/journey/journey-status-card";
 import { PassportCard } from "@/components/passport/passport-card";
 import { ReadinessCard } from "@/components/readiness/readiness-card";
@@ -39,7 +40,10 @@ import {
 import { reassessJourneyForUser } from "@/lib/server/journey-orchestrator";
 import { syncMissionInstances } from "@/lib/server/mission-repository";
 import { getUserProfile } from "@/lib/server/profile-repository";
-import { getCommunicationPreference } from "@/lib/server/reminder-repository";
+import {
+  getCommunicationPreference,
+  listUserInAppReminders,
+} from "@/lib/server/reminder-repository";
 import { getSupabasePublicEnv } from "@/lib/supabase/env";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
@@ -128,6 +132,14 @@ export default async function DashboardPage() {
     // Journey is an additive downstream layer. Core guidance must remain available.
     journeyState = null;
     journeyOutcomes = [];
+  }
+
+  let inAppReminders: Awaited<ReturnType<typeof listUserInAppReminders>> = [];
+  try {
+    inAppReminders = await listUserInAppReminders(supabase, user.id, now);
+  } catch {
+    // Reminder presentation is downstream and must not block the core dashboard.
+    inAppReminders = [];
   }
 
   let emailReminderEnabled = false;
@@ -219,6 +231,7 @@ export default async function DashboardPage() {
         state={journeyState}
         latestOutcome={journeyOutcomes[0] ?? null}
       />
+      <InAppReminders reminders={inAppReminders} />
       <EmailReminderPreference initialEnabled={emailReminderEnabled} demo={false} />
 
       <QuestFeed>
