@@ -52,6 +52,19 @@ V2.1 adds the customer-facing guidance layer while preserving deterministic stra
 
 No CRA, Open Banking or lender eligibility API was added as part of Academy.
 
+## V2.2A — Journey Foundation
+
+V2.2A adds a downstream, auditable customer lifecycle without changing Credit Quest's safety, readiness or mission decisions.
+
+- `journey_state` stores the current lifecycle projection: onboarding, active mission, waiting, cooldown, reassessment due, ready or optimising.
+- `journey_outcomes` is append-only application history for meaningful events such as onboarding completion, mission/action outcomes and reassessment results. Duplicate source keys are idempotent.
+- Journey observes successful core writes **after** they happen. Journey persistence failure cannot invalidate a valid onboarding, mission or Action Layer result.
+- Scheduled reassessment re-runs the existing deterministic guidance from current evidence; Journey does not create an alternative readiness model.
+- Unknown readiness remains unknown and a lack of evidence is never presented as improvement.
+- The dashboard shows a compact **Journey update** explaining what changed and what happens next. It sits outside the finite Quest Feed, which remains exactly seven cards.
+- Core strategy modules cannot import Journey or commercial/revenue concepts; tests enforce the one-way dependency boundary.
+- Migration `009_journey_foundation.sql` is additive and remains release-gated until compatible application code is approved for deployment.
+
 ## Product boundaries
 
 - Available from age 16.
@@ -115,8 +128,9 @@ Migrations:
 - `supabase/migrations/006_v2_0b_closeout.sql` — closes the V2.0b migration sequence and integrity boundary.
 - `supabase/migrations/007_academy.sql` — versioned Academy articles, private learning progress, RLS, indexes and service-role-only atomic publication.
 - `supabase/migrations/008_academy_launch_content.sql` — reviewed V2.1 Academy launch curriculum.
+- `supabase/migrations/009_journey_foundation.sql` — V2.2A Journey lifecycle projection, append-only outcome history, owner-readable RLS and deterministic reassessment indexing.
 
-The Action Layer rollout used staged expand/deploy/cutover migrations. Academy is additive: apply `007` and `008`, verify RLS/content invariants, then deploy/enable the Academy surfaces. Content can subsequently be versioned and published through the database workflow without requiring an application redeployment for ordinary editorial changes.
+The Action Layer rollout used staged expand/deploy/cutover migrations. Academy is additive: content can be versioned and published through the database workflow without requiring an application redeployment for ordinary editorial changes. V2.2 migrations are also additive but remain dark/release-gated until compatible application code has passed the V2.2 release checks.
 
 RLS and owner-integrity verification guidance is in `supabase/tests/rls.sql`.
 
@@ -131,9 +145,9 @@ npm run test:e2e
 npm run build
 ```
 
-The repository CI workflow runs the same audit/lint/unit/E2E/build gates for `main` and pull requests. It also starts a disposable local Supabase database inside GitHub Actions, applies every migration, runs `supabase/tests/rls.sql`, and destroys that local database. This verifies Academy migration/RLS/publication behaviour without creating a Supabase preview branch or touching production.
+The repository CI workflow runs the same audit/lint/unit/E2E/build gates for `main` and pull requests. It also starts a disposable local Supabase database inside GitHub Actions, applies every migration, runs `supabase/tests/rls.sql`, and destroys that local database. This verifies migrations/RLS without creating a Supabase preview branch or touching production.
 
-The connected production project remains unchanged until an explicit deployment decision is made. At the Academy PR stage, production is still on migrations through `006`; `007` and `008` are verified in disposable CI first rather than being silently applied.
+Production includes the approved V2.1 Academy migrations `007` and `008`. V2.2 migration `009` is verified in disposable CI on the feature branch and is **not** applied to production until the V2.2 release gate is explicitly approved.
 
 After applying migrations in a target Supabase project, run the project's security/performance advisors as an additional check; local database verification is not a substitute for a post-deployment advisor check.
 
@@ -161,9 +175,11 @@ server-side Action Registry resolution for executable actions
 internal / official / provider / referral action
   ↓
 return + verification/self-confirmation rules
+  ↓
+Journey observation + outcome history + scheduled reassessment (downstream only)
 ```
 
-Commercial offer data never flows back into safety, diagnosis, Passport, readiness, mission ranking or Academy selection. This keeps user benefit separate from commercial value.
+Commercial offer data never flows back into safety, diagnosis, Passport, readiness, mission ranking, Academy selection or Journey-derived customer strategy. Journey records outcomes from the governed core; it does not feed commercial data back upstream.
 
 ## Provider and affiliate data
 
@@ -187,3 +203,5 @@ The V2 architecture is designed for later additions including Decline Recovery, 
 - `docs/superpowers/plans/2026-08-27-credit-passport-readiness-implementation.md`
 - `docs/superpowers/specs/2026-08-28-credit-quest-academy-design.md`
 - `docs/superpowers/plans/2026-08-28-credit-quest-academy-implementation.md`
+- `docs/superpowers/specs/2026-08-29-credit-quest-v2-2-journey-growth-design.md`
+- `docs/superpowers/plans/2026-08-29-credit-quest-v2-2a-journey-foundation.md`
