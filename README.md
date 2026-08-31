@@ -65,6 +65,21 @@ V2.2A adds a downstream, auditable customer lifecycle without changing Credit Qu
 - Core strategy modules cannot import Journey or commercial/revenue concepts; tests enforce the one-way dependency boundary.
 - Migration `009_journey_foundation.sql` is additive and remains release-gated until compatible application code is approved for deployment.
 
+## V2.2B — Retention & Service Email
+
+V2.2B adds deterministic journey reminders without allowing retention or commercial logic to influence customer strategy.
+
+- Reminder reason, timing and channel eligibility are derived from Journey outcomes by deterministic rules. In-app reminders are capped at three and sit outside the seven-card Quest Feed.
+- Journey email is explicit opt-in only. `journey_email_enabled` defaults false; a missing or unreadable preference suppresses email rather than assuming consent.
+- `email_reminders_enabled` is a private server-owned runtime switch seeded **OFF**. It is re-checked after jobs are claimed so disabling it suppresses unsent work immediately.
+- `commercial_gateway_enabled` is also seeded **OFF** for the later V2.2C control plane; V2.2B does not activate commercial referrals.
+- The protected `/api/cron/journey-reminders` job runs daily at 08:00 UTC when deployed with a scheduler, but sends nothing while the runtime flag is disabled.
+- Recipient email addresses are resolved at send time from Supabase Auth Admin and are not duplicated into reminder tables.
+- Email delivery is provider-adapted through `EmailTransport`; the Resend adapter returns controlled failure codes and bounded retries. Missing provider configuration fails closed.
+- Static reviewed service copy is the production fallback. No AI or paid copy-generation dependency is required or activated.
+- Service reminders are not marketing. Journey-email preference does not imply referral consent or marketing consent, and referral consent does not imply journey-email consent.
+- Under-18 and Safe Mode wording remains protective, and reminder/email failures cannot change readiness, mission state, Journey state or customer ranking.
+
 ## Product boundaries
 
 - Available from age 16.
@@ -105,9 +120,14 @@ NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
 SUPABASE_SERVICE_ROLE_KEY=
 NEXT_PUBLIC_SITE_URL=
+CRON_SECRET=
+RESEND_API_KEY=
+JOURNEY_FROM_EMAIL=
 ```
 
 `SUPABASE_SERVICE_ROLE_KEY` is server-only. It must never be exposed with a `NEXT_PUBLIC_` prefix or imported into client components. `NEXT_PUBLIC_SITE_URL` is an optional canonical-site override used for metadata/sitemap generation.
+
+`CRON_SECRET`, `RESEND_API_KEY` and `JOURNEY_FROM_EMAIL` are server-only V2.2B settings. Supplying them does **not** enable email by itself: the database runtime flag `email_reminders_enabled` remains the kill switch and is seeded false. Do not put these values in client code or commit real secrets.
 
 ## Supabase local setup
 
@@ -129,10 +149,11 @@ Migrations:
 - `supabase/migrations/007_academy.sql` — versioned Academy articles, private learning progress, RLS, indexes and service-role-only atomic publication.
 - `supabase/migrations/008_academy_launch_content.sql` — reviewed V2.1 Academy launch curriculum.
 - `supabase/migrations/009_journey_foundation.sql` — V2.2A Journey lifecycle projection, append-only outcome history, owner-readable RLS and deterministic reassessment indexing.
+- `supabase/migrations/010_retention_runtime_flags.sql` — V2.2B reminder jobs, owner-readable communication preferences, private default-off runtime flags and service-role-only atomic email claiming.
 
 The Action Layer rollout used staged expand/deploy/cutover migrations. Academy is additive: content can be versioned and published through the database workflow without requiring an application redeployment for ordinary editorial changes. V2.2 migrations are also additive but remain dark/release-gated until compatible application code has passed the V2.2 release checks.
 
-RLS and owner-integrity verification guidance is in `supabase/tests/rls.sql`.
+RLS and owner-integrity verification guidance is in `supabase/tests/rls.sql`. V2.2B retention-specific policy, RPC and duplicate-job probes are in `supabase/tests/retention_rls.sql`; CI executes both against the same disposable database.
 
 ## Verification
 
@@ -145,9 +166,9 @@ npm run test:e2e
 npm run build
 ```
 
-The repository CI workflow runs the same audit/lint/unit/E2E/build gates for `main` and pull requests. It also starts a disposable local Supabase database inside GitHub Actions, applies every migration, runs `supabase/tests/rls.sql`, and destroys that local database. This verifies migrations/RLS without creating a Supabase preview branch or touching production.
+The repository CI workflow runs the same audit/lint/unit/E2E/build gates for `main` and pull requests. It also starts a disposable local Supabase database inside GitHub Actions, applies every migration, runs the RLS/security SQL probes, and destroys that local database. This verifies migrations/RLS without creating a Supabase preview branch or touching production.
 
-Production includes the approved V2.1 Academy migrations `007` and `008`. V2.2 migration `009` is verified in disposable CI on the feature branch and is **not** applied to production until the V2.2 release gate is explicitly approved.
+Production includes the approved V2.1 Academy migrations `007` and `008`. V2.2 migrations `009` and `010` are verified in disposable CI on the feature branch and are **not** applied to production until the V2.2 release gate is explicitly approved.
 
 After applying migrations in a target Supabase project, run the project's security/performance advisors as an additional check; local database verification is not a substitute for a post-deployment advisor check.
 
@@ -177,9 +198,11 @@ internal / official / provider / referral action
 return + verification/self-confirmation rules
   ↓
 Journey observation + outcome history + scheduled reassessment (downstream only)
+  ↓
+deterministic reminder scheduling + static service copy (downstream only)
 ```
 
-Commercial offer data never flows back into safety, diagnosis, Passport, readiness, mission ranking, Academy selection or Journey-derived customer strategy. Journey records outcomes from the governed core; it does not feed commercial data back upstream.
+Commercial offer data never flows back into safety, diagnosis, Passport, readiness, mission ranking, Academy selection, Journey-derived customer strategy or reminder timing. Journey and reminders observe outputs from the governed core; they do not feed commercial data back upstream.
 
 ## Provider and affiliate data
 
@@ -205,3 +228,4 @@ The V2 architecture is designed for later additions including Decline Recovery, 
 - `docs/superpowers/plans/2026-08-28-credit-quest-academy-implementation.md`
 - `docs/superpowers/specs/2026-08-29-credit-quest-v2-2-journey-growth-design.md`
 - `docs/superpowers/plans/2026-08-29-credit-quest-v2-2a-journey-foundation.md`
+- `docs/superpowers/plans/2026-08-29-credit-quest-v2-2b-retention-email.md`

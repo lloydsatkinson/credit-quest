@@ -43,7 +43,8 @@ jobs:
           fi
           psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" \
             -v ON_ERROR_STOP=1 \
-            -f supabase/tests/rls.sql
+            -f supabase/tests/rls.sql \
+            -f supabase/tests/retention_rls.sql
       - name: Stop local Supabase
         if: always()
         env:
