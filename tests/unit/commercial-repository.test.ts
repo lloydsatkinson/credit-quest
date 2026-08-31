@@ -81,7 +81,11 @@ describe("commercial repository", () => {
   it("inserts referral provenance without accepting a destination URL", async () => {
     const single = vi.fn().mockResolvedValue({ data: { id: "ref-1" }, error: null });
     const select = vi.fn(() => ({ single }));
-    const insert = vi.fn((payload: Record<string, unknown>) => ({ select }));
+    let insertedPayload: Record<string, unknown> | null = null;
+    const insert = vi.fn((payload: Record<string, unknown>) => {
+      insertedPayload = payload;
+      return { select };
+    });
     const client = { from: vi.fn(() => ({ insert })) };
 
     await appendReferralAttempt(client as never, {
@@ -109,7 +113,7 @@ describe("commercial repository", () => {
       environment: "sandbox",
       metadata: {},
     });
-    expect(JSON.stringify(insert.mock.calls[0][0])).not.toMatch(/destination|commission|payout|epc/i);
+    expect(JSON.stringify(insertedPayload)).not.toMatch(/destination|commission|payout|epc/i);
   });
 
   it("does not expose application update/delete helpers for append-only history", () => {

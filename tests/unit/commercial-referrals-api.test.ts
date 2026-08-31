@@ -5,15 +5,14 @@ const mocks = vi.hoisted(() => ({
   createServerSupabaseClient: vi.fn(),
   createCommercialReferral: vi.fn(),
   getUser: vi.fn(),
+  CommercialGatewayError: class MockCommercialGatewayError extends Error {},
 }));
-
-class MockCommercialGatewayError extends Error {}
 
 vi.mock("@/lib/supabase/env", () => ({ getSupabasePublicEnv: mocks.getSupabasePublicEnv }));
 vi.mock("@/lib/supabase/server", () => ({ createServerSupabaseClient: mocks.createServerSupabaseClient }));
 vi.mock("@/lib/server/commercial-gateway", () => ({
   createCommercialReferral: mocks.createCommercialReferral,
-  CommercialGatewayError: MockCommercialGatewayError,
+  CommercialGatewayError: mocks.CommercialGatewayError,
 }));
 
 import {
