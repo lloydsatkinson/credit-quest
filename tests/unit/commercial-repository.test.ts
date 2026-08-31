@@ -81,7 +81,7 @@ describe("commercial repository", () => {
   it("inserts referral provenance without accepting a destination URL", async () => {
     const single = vi.fn().mockResolvedValue({ data: { id: "ref-1" }, error: null });
     const select = vi.fn(() => ({ single }));
-    const insert = vi.fn(() => ({ select }));
+    const insert = vi.fn((payload: Record<string, unknown>) => ({ select }));
     const client = { from: vi.fn(() => ({ insert })) };
 
     await appendReferralAttempt(client as never, {
