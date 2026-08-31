@@ -58,7 +58,7 @@ test("Academy is public, readable, canonical and returns a real 404", async ({ p
   expect(response?.status()).toBe(404);
 });
 
-test("adult can complete onboarding, receive a mission, and see a relevant referral", async ({ page }) => {
+test("adult can complete onboarding, receive a mission, and see demo-only product education", async ({ page }) => {
   await page.goto("/login", { waitUntil: "networkidle" });
   await expect(page.getByText("Build better credit habits, one move at a time.")).toBeVisible();
   await page.getByRole("link", { name: "Continue in demo mode" }).click();
@@ -77,7 +77,9 @@ test("adult can complete onboarding, receive a mission, and see a relevant refer
   await expect(cards.nth(6)).toContainText("Know what the score means");
 
   await expect(page.getByText(/Quest Score/).first()).toBeVisible();
-  await expect(page.getByRole("link", { name: "Check eligibility with provider" })).toBeVisible();
+  await expect(page.getByText("Demo only — no application is sent.", { exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Check eligibility with provider" })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "Review readiness guidance" })).toBeVisible();
   await page.getByRole("button", { name: "Start this mission" }).click();
   await expect(page.getByRole("status")).toContainText("Mission started");
   await expect(page.getByText(/ready to continue through its action journey/i)).toBeVisible();
