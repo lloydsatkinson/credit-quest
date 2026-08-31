@@ -29,7 +29,8 @@ import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 export type CommercialGatewayErrorCode = CommercialGateReason
   | "configuration_unavailable"
   | "route_unavailable"
-  | "disclosure_stale";
+  | "disclosure_stale"
+  | "invalid_destination";
 
 export class CommercialGatewayError extends Error {
   constructor(public readonly code: CommercialGatewayErrorCode) {
@@ -86,6 +87,25 @@ function gateContext(
     routeEnvironment: route.environment,
     disclosurePresent: disclosure !== null,
   } as const;
+}
+
+function assertValidDestination(route: CommercialConfiguredRoute): void {
+  if (route.environment === "sandbox") {
+    if (!route.destinationUrl.startsWith("/sandbox/")) {
+      throw new CommercialGatewayError("invalid_destination");
+    }
+    return;
+  }
+
+  try {
+    const url = new URL(route.destinationUrl);
+    if (url.protocol !== "https:") {
+      throw new CommercialGatewayError("invalid_destination");
+    }
+  } catch (error) {
+    if (error instanceof CommercialGatewayError) throw error;
+    throw new CommercialGatewayError("invalid_destination");
+  }
 }
 
 export function createCommercialGateway(deps: CommercialGatewayDependencies) {
@@ -165,6 +185,8 @@ export function createCommercialGateway(deps: CommercialGatewayDependencies) {
           consent: input.consent,
         });
         if (!gate.permitted) throw new CommercialGatewayError(gate.reason);
+
+        assertValidDestination(route);
 
         const referral = await deps.appendReferral({
           referralKey: deps.makeReferralKey(),
