@@ -160,4 +160,43 @@ describe("commercial gateway", () => {
     })).rejects.toBeInstanceOf(CommercialGatewayError);
     expect(deps.appendReferral).not.toHaveBeenCalled();
   });
+
+  it("rejects invalid destinations before referral provenance is inserted", async () => {
+    const invalidSandbox = makeDeps({
+      getRoute: vi.fn().mockResolvedValue({ ...route, destinationUrl: "https://example.com" }),
+    });
+    const sandboxGateway = createCommercialGateway(invalidSandbox as never);
+
+    await expect(sandboxGateway.createCommercialReferral({
+      userId: "u1",
+      routeId: "route-1",
+      disclosureId: "disc-1",
+      consent: true,
+      originatingMissionId: null,
+      now,
+    })).rejects.toMatchObject({ code: "invalid_destination" });
+    expect(invalidSandbox.appendReferral).not.toHaveBeenCalled();
+
+    const liveRoute = {
+      ...route,
+      environment: "live" as const,
+      destinationUrl: "http://example.com",
+      partnerLiveEnabled: true,
+    };
+    const invalidLive = makeDeps({
+      getRoute: vi.fn().mockResolvedValue(liveRoute),
+      liveAllowed: true,
+    });
+    const liveGateway = createCommercialGateway(invalidLive as never);
+
+    await expect(liveGateway.createCommercialReferral({
+      userId: "u1",
+      routeId: "route-1",
+      disclosureId: "disc-1",
+      consent: true,
+      originatingMissionId: null,
+      now,
+    })).rejects.toMatchObject({ code: "invalid_destination" });
+    expect(invalidLive.appendReferral).not.toHaveBeenCalled();
+  });
 });
