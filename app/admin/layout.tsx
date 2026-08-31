@@ -2,6 +2,8 @@ import { redirect } from "next/navigation";
 import { AdminNav } from "@/components/admin/admin-nav";
 import { requireAdminUser } from "@/lib/server/admin-auth";
 
+export const dynamic = "force-dynamic";
+
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   try {
     await requireAdminUser();
