@@ -181,6 +181,12 @@ test("accounts and actions routes keep safe demo-mode boundaries", async ({ page
   await expect(page).toHaveURL(/\/dashboard$/);
 });
 
+test("sandbox completion is explicitly non-lender and non-application", async ({ page }) => {
+  await page.goto("/sandbox/referral-complete", { waitUntil: "networkidle" });
+  await expect(page.getByRole("heading", { name: "Sandbox journey complete" })).toBeVisible();
+  await expect(page.getByText(/No lender or credit application was contacted/i)).toBeVisible();
+});
+
 test("PWA manifest exposes install assets", async ({ page, request }) => {
   await page.goto("/", { waitUntil: "networkidle" });
   const manifest = await request.get("/manifest.webmanifest");
