@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { trackEvent } from "@/lib/events";
 
 export interface CommercialGatewayCardRoute {
   id: string;
@@ -16,6 +17,23 @@ export function CommercialGatewayCard({ route }: { route: CommercialGatewayCardR
   const [consent, setConsent] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    void trackEvent("commercial_routes_shown", {
+      routeId: route.id,
+      routeKey: route.routeKey,
+      environment: "sandbox",
+    });
+  }, [route.id, route.routeKey]);
+
+  function changeConsent(next: boolean) {
+    setConsent(next);
+    void trackEvent(next ? "referral_consent_accepted" : "referral_consent_declined", {
+      routeId: route.id,
+      routeKey: route.routeKey,
+      environment: "sandbox",
+    });
+  }
 
   async function continueSandboxJourney() {
     if (!consent || submitting) return;
@@ -42,6 +60,11 @@ export function CommercialGatewayCard({ route }: { route: CommercialGatewayCardR
         return;
       }
 
+      void trackEvent("sandbox_referral_created", {
+        routeId: route.id,
+        routeKey: route.routeKey,
+        environment: "sandbox",
+      });
       window.location.assign(data.destinationUrl);
     } catch {
       setError("This route is not available right now.");
@@ -69,7 +92,7 @@ export function CommercialGatewayCard({ route }: { route: CommercialGatewayCardR
           className="mt-1 size-5 accent-violet-700"
           checked={consent}
           disabled={submitting}
-          onChange={(event) => setConsent(event.target.checked)}
+          onChange={(event) => changeConsent(event.target.checked)}
         />
         <span>I understand this is a sandbox referral and no lender or credit application will be contacted.</span>
       </label>

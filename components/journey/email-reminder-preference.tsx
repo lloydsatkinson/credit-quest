@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { trackEvent } from "@/lib/events";
 
 const DEMO_EMAIL_PREFERENCE_KEY = "creditquest-journey-email-demo";
 
@@ -35,6 +36,7 @@ export function EmailReminderPreference({
       setEnabled(next);
       setSaving(false);
       setStatus("Saved on this device for demo mode only.");
+      void trackEvent("journey_email_preference_changed", { enabled: next, mode: "demo" });
       return;
     }
 
@@ -49,8 +51,10 @@ export function EmailReminderPreference({
         error?: string;
       } | null;
       if (!response.ok) throw new Error(data?.error ?? "save_failed");
-      setEnabled(data?.journeyEmailEnabled === true);
+      const savedEnabled = data?.journeyEmailEnabled === true;
+      setEnabled(savedEnabled);
       setStatus("Email reminder preference saved.");
+      void trackEvent("journey_email_preference_changed", { enabled: savedEnabled, mode: "configured" });
     } catch {
       setStatus("We could not save your email reminder preference. Please try again.");
     } finally {

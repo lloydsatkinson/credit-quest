@@ -1,3 +1,7 @@
+"use client";
+
+import { useEffect } from "react";
+import { trackEvent } from "@/lib/events";
 import type { JourneyOutcome, JourneyState } from "@/lib/journey/types";
 
 function dateLabel(value: string | null): string | null {
@@ -71,6 +75,14 @@ export function JourneyStatusCard({
   state: JourneyState | null;
   latestOutcome: JourneyOutcome | null;
 }) {
+  const stage = state?.stage ?? null;
+  const readinessBand = state?.lastReadinessBand ?? null;
+
+  useEffect(() => {
+    if (!stage) return;
+    void trackEvent("journey_status_shown", { stage, readinessBand });
+  }, [stage, readinessBand]);
+
   if (!state) return null;
 
   const reassessmentDate = dateLabel(state.nextReassessmentAt);
