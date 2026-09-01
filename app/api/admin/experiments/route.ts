@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { approvedPresentationKeys } from "@/lib/experiments/types";
 import { requireAdminUser } from "@/lib/server/admin-auth";
 import { upsertExperiment } from "@/lib/server/admin-repository";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
@@ -20,8 +21,19 @@ export const experimentSchema = z.object({
   experimentKey: z.string().regex(/^[a-z0-9-]+$/),
   status: z.enum(["draft", "active", "paused", "ended"]),
   surfaceKey: experimentSurfaceSchema,
-  variants: z.array(experimentVariantSchema).min(1).max(10),
-}).strict();
+  variants: z.array(experimentVariantSchema).min(2).max(10),
+}).strict().superRefine((value, context) => {
+  const approved = approvedPresentationKeys[value.surfaceKey];
+  for (const [index, variant] of value.variants.entries()) {
+    if (!approved.includes(variant.presentationKey)) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["variants", index, "presentationKey"],
+        message: "Presentation key is not approved for this experiment surface",
+      });
+    }
+  }
+});
 
 export async function POST(request: Request) {
   const adminUser = await requireAdminUser();
