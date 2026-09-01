@@ -24,6 +24,17 @@ export const eventNames = [
   "academy_still_confused",
   "academy_search_used",
   "academy_related_mission_started",
+  "journey_status_shown",
+  "journey_reassessment_completed",
+  "journey_readiness_changed",
+  "journey_reminder_shown",
+  "journey_email_preference_changed",
+  "journey_email_sent",
+  "commercial_routes_shown",
+  "referral_consent_accepted",
+  "referral_consent_declined",
+  "sandbox_referral_created",
+  "experiment_exposed",
 ] as const;
 
 export const eventPayloadSchema = z.object({
