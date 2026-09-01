@@ -16,7 +16,9 @@ describe("admin experiment form", () => {
     expect(Array.from(secondary.options).map((option) => option.value)).toEqual(["control", "reverse"]);
 
     fireEvent.change(surface, { target: { value: "journey_status_copy" } });
-    expect(Array.from(primary.options).map((option) => option.value)).toEqual(["control", "concise"]);
-    expect(Array.from(secondary.options).map((option) => option.value)).toEqual(["control", "concise"]);
+    const updatedPrimary = screen.getByLabelText("Primary presentation") as HTMLSelectElement;
+    const updatedSecondary = screen.getByLabelText("Secondary presentation") as HTMLSelectElement;
+    expect(Array.from(updatedPrimary.options).map((option) => option.value)).toEqual(["control", "concise"]);
+    expect(Array.from(updatedSecondary.options).map((option) => option.value)).toEqual(["control", "concise"]);
   });
 });
