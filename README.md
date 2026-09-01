@@ -96,6 +96,27 @@ V2.2C adds a deliberately dark commercial control plane downstream of existing C
 - Admin membership is bootstrapped only by an authorised operator after identifying the exact existing `auth.users.id`, then inserting that ID into `admin_members` using trusted Supabase admin/SQL tooling.
 - Enabling live regulated referrals requires a separate regulatory/FCA operating-model decision and a separate release; changing a database flag alone is insufficient because the independent server environment lock must also be explicitly changed.
 
+## V2.2D — Analytics & Release Hardening
+
+V2.2D adds observational analytics and release controls without giving analytics, experiments or revenue any authority over customer strategy.
+
+- The V2.2 analytics taxonomy records Journey status/reassessment/readiness movement, reminder exposure and service-email outcomes, commercial-route exposure/consent, sandbox referrals and experiment exposure. Event writes remain best-effort and cannot block the customer journey.
+- Operational metrics use bounded, read-only downstream queries. If a required source cannot be read, the admin view reports metrics as unavailable rather than inventing zero activity.
+- Customer progress is presented before commercial reporting. **Revenue is reporting only — it does not affect customer strategy.**
+- Experiments are restricted to exactly three presentation surfaces: `commercial_route_order`, `journey_status_copy` and `journey_email_opt_in_copy`. Each surface has an allowlisted set of presentation keys; arbitrary scripts, eligibility rules and free-form commercial weighting are not accepted.
+- Commercial presentation experiments receive only the route set already permitted by the Commercial Gateway. They can change presentation order only and cannot add a route, bypass age/Safe Mode/readiness/evidence gates or introduce an unpermitted destination.
+- Exposure telemetry carries stable IDs/keys and controlled bands/reasons only. It does not send commercial economics, lender underwriting payloads, credentials, full card data or service secrets.
+- Architecture tests enforce that Journey, reminders, commercial data, experiments, metrics, affiliate/revenue concepts and feature flags do not flow upstream into safety, diagnosis, Passport, readiness, Quest Score, mission ranking or Academy selection.
+- The final release remains dark-first. Compatible application code is verified before migrations `009` → `010` → `011`, and the base release defaults remain:
+
+```text
+email_reminders_enabled=false
+commercial_gateway_enabled=false
+LIVE_CREDIT_REFERRALS_ALLOWED=false
+```
+
+No V2.2 production migration, live referral activation or email activation is implied by passing the build. Merge/deployment and production DDL remain separate release-gated actions.
+
 ## Product boundaries
 
 - Available from age 16.
