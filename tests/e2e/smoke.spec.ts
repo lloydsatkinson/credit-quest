@@ -87,6 +87,13 @@ test("adult can complete onboarding, receive a mission, and see demo-only produc
   await expect(page.getByTestId("missions-done")).toHaveText("0");
 });
 
+test("V2.2 keeps the Quest Feed finite while showing journey controls", async ({ page }) => {
+  await completeOnboarding(page, "1990-01-01", true);
+  await expect(page.getByTestId("quest-feed").locator("[data-quest-feed-card]")).toHaveCount(7);
+  await expect(page.getByText(/what happens next/i)).toBeVisible();
+  await expect(page.getByText(/email me when it.?s time to review/i)).toBeVisible();
+});
+
 test("electoral-roll mission selects electoral-roll Academy education", async ({ page }) => {
   await completeOnboarding(page, "1990-01-01", false);
 
@@ -131,6 +138,7 @@ test("17-year-old gets education mode with protective Academy and no credit-prod
   await expect(academyCard).toContainText("Credit basics before 18");
   await expect(academyCard.getByText(/apply for|check eligibility|credit card/i)).toHaveCount(0);
   await expect(page.getByRole("link", { name: "Check eligibility with provider" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Continue sandbox journey" })).toHaveCount(0);
 
   await page.goto("/readiness", { waitUntil: "networkidle" });
   await expect(page.getByText("Products can wait", { exact: true })).toBeVisible();
@@ -141,6 +149,7 @@ test("17-year-old gets education mode with protective Academy and no credit-prod
   await page.goto("/offers", { waitUntil: "networkidle" });
   await expect(page.getByText("Learn now. Products can wait.")).toBeVisible();
   await expect(page.getByRole("button", { name: "Check eligibility with provider" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Continue sandbox journey" })).toHaveCount(0);
 });
 
 test("Safe Mode keeps readiness red, selects protective Academy, and suppresses product routes", async ({ page }) => {
@@ -152,6 +161,7 @@ test("Safe Mode keeps readiness red, selects protective Academy, and suppresses 
   await expect(academyCard).toContainText("Protect payments first");
   await expect(academyCard.getByText(/check eligibility|apply now|new credit/i)).toHaveCount(0);
   await expect(page.getByRole("link", { name: "Check eligibility with provider" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Continue sandbox journey" })).toHaveCount(0);
 
   await page.goto("/readiness", { waitUntil: "networkidle" });
   await expect(page.getByText("Red", { exact: true })).toBeVisible();
