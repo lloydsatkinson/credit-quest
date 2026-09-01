@@ -6,6 +6,8 @@ import { AcademyCard } from "@/components/academy/academy-card";
 import { NextMissionCard } from "@/components/dashboard/next-mission-card";
 import { ProgressStrip } from "@/components/dashboard/progress-strip";
 import { QuestFeed, QuestFeedCard } from "@/components/dashboard/quest-feed";
+import { EmailReminderPreference } from "@/components/journey/email-reminder-preference";
+import { JourneyStatusCard } from "@/components/journey/journey-status-card";
 import { PassportCard } from "@/components/passport/passport-card";
 import { ReadinessCard } from "@/components/readiness/readiness-card";
 import { DEMO_ACADEMY_ARTICLES } from "@/lib/academy/demo-content";
@@ -27,6 +29,7 @@ import type {
   MissionProgress,
   MissionProgressMap,
 } from "@/lib/domain/types";
+import type { JourneyState } from "@/lib/journey/types";
 
 const DEMO_PROGRESS_KEY = "creditquest-mission-progress";
 const PROFILE_KEY = "creditquest-profile";
@@ -208,6 +211,21 @@ export function DashboardClient() {
   const stage = result.rankedMission?.mission.stage ?? "maintain";
   const currentProgress = result.rankedMission ? progress[result.rankedMission.mission.slug] : undefined;
   const offer = result.offers[0];
+  const demoJourneyState: JourneyState = {
+    userId: profile.userId,
+    stage: currentProgress?.state === "started"
+      ? "active_mission"
+      : currentProgress?.state === "cooldown"
+        ? "cooldown"
+        : result.readiness.state === "green"
+          ? completed > 0 ? "optimising" : "ready"
+          : "waiting",
+    activeMissionId: null,
+    nextReassessmentAt: currentProgress?.nextReviewAt ?? result.readiness.reassessAt,
+    lastReassessedAt: null,
+    lastReadinessBand: result.readiness.state,
+    updatedAt: new Date().toISOString(),
+  };
 
   return (
     <main className="mx-auto min-h-screen max-w-3xl px-4 pb-10 pt-4 sm:px-6 sm:pt-6">
@@ -229,6 +247,9 @@ export function DashboardClient() {
           <p className="mt-2 text-sm leading-6">Based on the information you gave us, we’re pausing credit-product suggestions and prioritising actions that help protect payments and financial stability.</p>
         </section>
       )}
+
+      <JourneyStatusCard state={demoJourneyState} latestOutcome={null} />
+      <EmailReminderPreference initialEnabled={false} demo={true} />
 
       <QuestFeed>
         <QuestFeedCard eyebrow="Your next move" index={1} total={FEED_CARD_TOTAL} tone="ink">
@@ -293,14 +314,15 @@ export function DashboardClient() {
       {status && <div role="status" className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-bold text-emerald-800">{status}</div>}
 
       {offer ? (
-        <section className="mt-5 rounded-[1.75rem] border border-slate-200 bg-white p-5 shadow-sm" aria-label="Optional partner route">
+        <section className="mt-5 rounded-[1.75rem] border border-slate-200 bg-white p-5 shadow-sm" aria-label="Optional partner route demo">
           <div className="flex items-center justify-between gap-3">
-            <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">Optional partner route</p>
-            <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-black uppercase tracking-wider text-slate-500">Commercial</span>
+            <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">Optional product example</p>
+            <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-black uppercase tracking-wider text-slate-500">Demo only</span>
           </div>
           <h2 className="mt-3 text-lg font-black text-slate-950">{offer.productName}</h2>
-          <p className="mt-2 text-sm leading-6 text-slate-600">{offer.disclosure} Credit Quest does not know whether you will be approved. This route does not change the mission we ranked for you.</p>
-          <a className="mt-4 inline-flex rounded-2xl bg-slate-950 px-4 py-3 text-sm font-black text-white" href={offer.affiliateUrl} target="_blank" rel="noreferrer sponsored">Check eligibility with provider</a>
+          <p className="mt-2 text-sm leading-6 text-slate-600">{offer.disclosure} This example does not change the mission we ranked for you and it is not a lender eligibility decision.</p>
+          <p className="mt-3 text-sm font-black text-slate-700">Demo only — no application is sent.</p>
+          <Link className="mt-4 inline-flex rounded-2xl bg-slate-950 px-4 py-3 text-sm font-black text-white" href="/learn/credit-quest-readiness">Review readiness guidance</Link>
         </section>
       ) : null}
     </main>

@@ -58,7 +58,7 @@ test("Academy is public, readable, canonical and returns a real 404", async ({ p
   expect(response?.status()).toBe(404);
 });
 
-test("adult can complete onboarding, receive a mission, and see a relevant referral", async ({ page }) => {
+test("adult can complete onboarding, receive a mission, and see demo-only product education", async ({ page }) => {
   await page.goto("/login", { waitUntil: "networkidle" });
   await expect(page.getByText("Build better credit habits, one move at a time.")).toBeVisible();
   await page.getByRole("link", { name: "Continue in demo mode" }).click();
@@ -77,12 +77,21 @@ test("adult can complete onboarding, receive a mission, and see a relevant refer
   await expect(cards.nth(6)).toContainText("Know what the score means");
 
   await expect(page.getByText(/Quest Score/).first()).toBeVisible();
-  await expect(page.getByRole("link", { name: "Check eligibility with provider" })).toBeVisible();
+  await expect(page.getByText("Demo only — no application is sent.", { exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Check eligibility with provider" })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "Review readiness guidance" })).toBeVisible();
   await page.getByRole("button", { name: "Start this mission" }).click();
   await expect(page.getByRole("status")).toContainText("Mission started");
   await expect(page.getByText(/ready to continue through its action journey/i)).toBeVisible();
   await expect(page.getByRole("button", { name: "Mark complete" })).toHaveCount(0);
   await expect(page.getByTestId("missions-done")).toHaveText("0");
+});
+
+test("V2.2 keeps the Quest Feed finite while showing journey controls", async ({ page }) => {
+  await completeOnboarding(page, "1990-01-01", true);
+  await expect(page.getByTestId("quest-feed").locator("[data-quest-feed-card]")).toHaveCount(7);
+  await expect(page.getByText(/what happens next/i)).toBeVisible();
+  await expect(page.getByText(/email me when it.?s time to review/i)).toBeVisible();
 });
 
 test("electoral-roll mission selects electoral-roll Academy education", async ({ page }) => {
@@ -129,6 +138,7 @@ test("17-year-old gets education mode with protective Academy and no credit-prod
   await expect(academyCard).toContainText("Credit basics before 18");
   await expect(academyCard.getByText(/apply for|check eligibility|credit card/i)).toHaveCount(0);
   await expect(page.getByRole("link", { name: "Check eligibility with provider" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Continue sandbox journey" })).toHaveCount(0);
 
   await page.goto("/readiness", { waitUntil: "networkidle" });
   await expect(page.getByText("Products can wait", { exact: true })).toBeVisible();
@@ -139,6 +149,7 @@ test("17-year-old gets education mode with protective Academy and no credit-prod
   await page.goto("/offers", { waitUntil: "networkidle" });
   await expect(page.getByText("Learn now. Products can wait.")).toBeVisible();
   await expect(page.getByRole("button", { name: "Check eligibility with provider" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Continue sandbox journey" })).toHaveCount(0);
 });
 
 test("Safe Mode keeps readiness red, selects protective Academy, and suppresses product routes", async ({ page }) => {
@@ -150,6 +161,7 @@ test("Safe Mode keeps readiness red, selects protective Academy, and suppresses 
   await expect(academyCard).toContainText("Protect payments first");
   await expect(academyCard.getByText(/check eligibility|apply now|new credit/i)).toHaveCount(0);
   await expect(page.getByRole("link", { name: "Check eligibility with provider" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Continue sandbox journey" })).toHaveCount(0);
 
   await page.goto("/readiness", { waitUntil: "networkidle" });
   await expect(page.getByText("Red", { exact: true })).toBeVisible();
@@ -177,6 +189,12 @@ test("accounts and actions routes keep safe demo-mode boundaries", async ({ page
 
   await page.goto("/actions/demo-mission", { waitUntil: "networkidle" });
   await expect(page).toHaveURL(/\/dashboard$/);
+});
+
+test("sandbox completion is explicitly non-lender and non-application", async ({ page }) => {
+  await page.goto("/sandbox/referral-complete", { waitUntil: "networkidle" });
+  await expect(page.getByRole("heading", { name: "Sandbox journey complete" })).toBeVisible();
+  await expect(page.getByText(/No lender or credit application was contacted/i)).toBeVisible();
 });
 
 test("PWA manifest exposes install assets", async ({ page, request }) => {

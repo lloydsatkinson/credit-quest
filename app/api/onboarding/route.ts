@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { normaliseOnboardingAnswers } from "@/lib/domain/onboarding";
+import { observeJourneyEvent } from "@/lib/server/journey-orchestrator";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getSupabasePublicEnv } from "@/lib/supabase/env";
 
@@ -17,6 +18,7 @@ export async function POST(request: Request) {
     }
 
     const { profile, ageMode } = normaliseOnboardingAnswers(payload, userId);
+    const now = new Date();
 
     if (env) {
       const supabase = await createServerSupabaseClient();
@@ -33,9 +35,21 @@ export async function POST(request: Request) {
         has_revolving_credit: profile.hasRevolvingCredit,
         has_direct_debit_for_credit: profile.hasDirectDebitForCredit,
         onboarding_complete: true,
-        updated_at: new Date().toISOString(),
+        updated_at: now.toISOString(),
       });
       if (error) throw error;
+
+      try {
+        await observeJourneyEvent({
+          userId,
+          eventType: "onboarding_completed",
+          source: "onboarding",
+          sourceKey: "onboarding-completed",
+          now,
+        });
+      } catch {
+        // Journey is downstream; a valid onboarding write remains successful.
+      }
     }
 
     return NextResponse.json({ profile, ageMode });

@@ -163,6 +163,73 @@ begin
   if not has_function_privilege('service_role', 'public.publish_academy_article(uuid)', 'EXECUTE') then
     raise exception 'service_role must be able to publish Academy articles';
   end if;
+
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'journey_state'
+      and policyname = 'journey_state_select_own'
+      and cmd = 'SELECT'
+  ) then
+    raise exception 'Journey state owner-select policy missing';
+  end if;
+
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'journey_outcomes'
+      and policyname = 'journey_outcomes_select_own'
+      and cmd = 'SELECT'
+  ) then
+    raise exception 'Journey outcomes owner-select policy missing';
+  end if;
+
+  if exists (
+    select 1 from information_schema.role_table_grants
+    where table_schema = 'public'
+      and table_name in ('journey_state','journey_outcomes')
+      and grantee in ('anon','authenticated')
+      and privilege_type in ('INSERT','UPDATE','DELETE')
+  ) then
+    raise exception 'Journey client write grant must not exist';
+  end if;
+end $$;
+
+do $$
+declare
+  probe_user uuid := gen_random_uuid();
+  probe_id uuid;
+begin
+  insert into auth.users(
+    id, instance_id, aud, role, email, encrypted_password,
+    email_confirmed_at, created_at, updated_at
+  ) values (
+    probe_user,
+    '00000000-0000-0000-0000-000000000000',
+    'authenticated',
+    'authenticated',
+    'journey-probe@example.com',
+    '',
+    now(),
+    now(),
+    now()
+  );
+
+  insert into public.journey_outcomes(user_id, event_type, source, source_key)
+  values (probe_user, 'onboarding_completed', 'onboarding', 'rls-probe')
+  returning id into probe_id;
+
+  begin
+    update public.journey_outcomes
+    set metadata = '{"changed":true}'::jsonb
+    where id = probe_id;
+    raise exception 'Journey outcome update unexpectedly succeeded';
+  exception
+    when others then
+      if sqlerrm = 'Journey outcome update unexpectedly succeeded' then
+        raise;
+      end if;
+  end;
 end $$;
 
 do $$

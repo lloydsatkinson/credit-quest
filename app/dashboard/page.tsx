@@ -6,6 +6,9 @@ import { DashboardClient } from "@/components/dashboard/dashboard-client";
 import { NextMissionCard } from "@/components/dashboard/next-mission-card";
 import { ProgressStrip } from "@/components/dashboard/progress-strip";
 import { QuestFeed, QuestFeedCard } from "@/components/dashboard/quest-feed";
+import { EmailReminderPreference } from "@/components/journey/email-reminder-preference";
+import { InAppReminders } from "@/components/journey/in-app-reminders";
+import { JourneyStatusCard } from "@/components/journey/journey-status-card";
 import { PassportCard } from "@/components/passport/passport-card";
 import { ReadinessCard } from "@/components/readiness/readiness-card";
 import { selectAcademyArticle } from "@/lib/academy/selector";
@@ -30,8 +33,17 @@ import {
   listAcademyProgress,
   listPublishedAcademyArticles,
 } from "@/lib/server/academy-repository";
+import {
+  getJourneyState,
+  listRecentJourneyOutcomes,
+} from "@/lib/server/journey-repository";
+import { reassessJourneyForUser } from "@/lib/server/journey-orchestrator";
 import { syncMissionInstances } from "@/lib/server/mission-repository";
 import { getUserProfile } from "@/lib/server/profile-repository";
+import {
+  getCommunicationPreference,
+  listUserInAppReminders,
+} from "@/lib/server/reminder-repository";
 import { getSupabasePublicEnv } from "@/lib/supabase/env";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
@@ -100,6 +112,42 @@ export default async function DashboardPage() {
     });
   } catch {
     academySelection = null;
+  }
+
+  let journeyState: Awaited<ReturnType<typeof getJourneyState>> = null;
+  let journeyOutcomes: Awaited<ReturnType<typeof listRecentJourneyOutcomes>> = [];
+  try {
+    journeyState = await getJourneyState(supabase, user.id);
+    const scheduledAt = journeyState?.nextReassessmentAt ?? null;
+    if (scheduledAt && new Date(scheduledAt).getTime() <= now.getTime()) {
+      await reassessJourneyForUser({
+        userId: user.id,
+        sourceKey: `reassessment:${user.id}:${scheduledAt}`,
+        now,
+      });
+      journeyState = await getJourneyState(supabase, user.id);
+    }
+    journeyOutcomes = await listRecentJourneyOutcomes(supabase, user.id, 5);
+  } catch {
+    // Journey is an additive downstream layer. Core guidance must remain available.
+    journeyState = null;
+    journeyOutcomes = [];
+  }
+
+  let inAppReminders: Awaited<ReturnType<typeof listUserInAppReminders>> = [];
+  try {
+    inAppReminders = await listUserInAppReminders(supabase, user.id, now);
+  } catch {
+    // Reminder presentation is downstream and must not block the core dashboard.
+    inAppReminders = [];
+  }
+
+  let emailReminderEnabled = false;
+  try {
+    const preference = await getCommunicationPreference(supabase, user.id);
+    emailReminderEnabled = preference?.journeyEmailEnabled === true;
+  } catch {
+    emailReminderEnabled = false;
   }
 
   let pendingView: {
@@ -178,6 +226,13 @@ export default async function DashboardPage() {
           <Link href="/accounts" className="mt-4 inline-flex rounded-2xl bg-violet-700 px-4 py-3 text-sm font-black text-white">Add an account</Link>
         </section>
       ) : null}
+
+      <JourneyStatusCard
+        state={journeyState}
+        latestOutcome={journeyOutcomes[0] ?? null}
+      />
+      <InAppReminders reminders={inAppReminders} />
+      <EmailReminderPreference initialEnabled={emailReminderEnabled} demo={false} />
 
       <QuestFeed>
         <QuestFeedCard eyebrow="Your next move" index={1} total={FEED_CARD_TOTAL} tone="ink">

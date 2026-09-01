@@ -52,11 +52,76 @@ V2.1 adds the customer-facing guidance layer while preserving deterministic stra
 
 No CRA, Open Banking or lender eligibility API was added as part of Academy.
 
+## V2.2A — Journey Foundation
+
+V2.2A adds a downstream, auditable customer lifecycle without changing Credit Quest's safety, readiness or mission decisions.
+
+- `journey_state` stores the current lifecycle projection: onboarding, active mission, waiting, cooldown, reassessment due, ready or optimising.
+- `journey_outcomes` is append-only application history for meaningful events such as onboarding completion, mission/action outcomes and reassessment results. Duplicate source keys are idempotent.
+- Journey observes successful core writes **after** they happen. Journey persistence failure cannot invalidate a valid onboarding, mission or Action Layer result.
+- Scheduled reassessment re-runs the existing deterministic guidance from current evidence; Journey does not create an alternative readiness model.
+- Unknown readiness remains unknown and a lack of evidence is never presented as improvement.
+- The dashboard shows a compact **Journey update** explaining what changed and what happens next. It sits outside the finite Quest Feed, which remains exactly seven cards.
+- Core strategy modules cannot import Journey or commercial/revenue concepts; tests enforce the one-way dependency boundary.
+- Migration `009_journey_foundation.sql` is additive and remains release-gated until compatible application code is approved for deployment.
+
+## V2.2B — Retention & Service Email
+
+V2.2B adds deterministic journey reminders without allowing retention or commercial logic to influence customer strategy.
+
+- Reminder reason, timing and channel eligibility are derived from Journey outcomes by deterministic rules. In-app reminders are capped at three and sit outside the seven-card Quest Feed.
+- Journey email is explicit opt-in only. `journey_email_enabled` defaults false; a missing or unreadable preference suppresses email rather than assuming consent.
+- `email_reminders_enabled` is a private server-owned runtime switch seeded **OFF**. It is re-checked after jobs are claimed so disabling it suppresses unsent work immediately.
+- `commercial_gateway_enabled` is also seeded **OFF** for the later V2.2C control plane; V2.2B does not activate commercial referrals.
+- The protected `/api/cron/journey-reminders` job runs daily at 08:00 UTC when deployed with a scheduler, but sends nothing while the runtime flag is disabled.
+- Recipient email addresses are resolved at send time from Supabase Auth Admin and are not duplicated into reminder tables.
+- Email delivery is provider-adapted through `EmailTransport`; the Resend adapter returns controlled failure codes and bounded retries. Missing provider configuration fails closed.
+- Static reviewed service copy is the production fallback. No AI or paid copy-generation dependency is required or activated.
+- Service reminders are not marketing. Journey-email preference does not imply referral consent or marketing consent, and referral consent does not imply journey-email consent.
+- Under-18 and Safe Mode wording remains protective, and reminder/email failures cannot change readiness, mission state, Journey state or customer ranking.
+
+## V2.2C — Commercial Gateway & Admin Control Plane
+
+V2.2C adds a deliberately dark commercial control plane downstream of existing Credit Quest guidance.
+
+- Commercial presentation is permitted only after the existing guidance has been computed. Commercial economics never feed safety, diagnosis, Passport, readiness, Quest Score, mission ranking, Academy selection, Journey or reminder timing.
+- Under-18 users, Safe Mode users, red/amber/unknown readiness and incomplete required evidence receive no commercial route. Unknown revolving-credit evidence is independently fail-closed even if another layer were to report green readiness.
+- Configured product journeys go through the server-side Commercial Gateway. The browser cannot submit a destination URL, user ID, readiness state, safety state, age gate, commission or payout value.
+- Listing an eligible disclosure does not imply consent. Referral creation requires explicit consent, re-fetches current guidance/route/disclosure, re-runs all current gates, inserts auditable provenance first and only then returns a server-owned destination.
+- The V2.2 release ships with `commercial_gateway_enabled=false` and `LIVE_CREDIT_REFERRALS_ALLOWED=false`. The initial seeded route is sandbox-only and disabled. No lender or live credit application is contacted by the sandbox completion path.
+- Demo product cards are informational and do not navigate to affiliate URLs. The Quest Feed remains exactly seven cards.
+- Commercial/admin tables are private to the service role. Referral and revenue history are append-only for updates while authorised erasure remains possible through controlled service-role deletion.
+- Admin mutations use audited, allowlisted RPCs. Route safety requirements remain server-owned (`min_age >= 18`, `required_readiness = green`) and cannot be overridden by the admin UI.
+- Admin access requires normal authenticated identity **and** an exact matching row in `admin_members`. There is no self-promotion endpoint, role cookie/header shortcut, arbitrary SQL console, customer impersonation control, readiness-threshold editor or mission-priority editor.
+- Admin membership is bootstrapped only by an authorised operator after identifying the exact existing `auth.users.id`, then inserting that ID into `admin_members` using trusted Supabase admin/SQL tooling.
+- Enabling live regulated referrals requires a separate regulatory/FCA operating-model decision and a separate release; changing a database flag alone is insufficient because the independent server environment lock must also be explicitly changed.
+
+## V2.2D — Analytics & Release Hardening
+
+V2.2D adds observational analytics and release controls without giving analytics, experiments or revenue any authority over customer strategy.
+
+- The V2.2 analytics taxonomy records Journey status/reassessment/readiness movement, reminder exposure and service-email outcomes, commercial-route exposure/consent, sandbox referrals and experiment exposure. Event writes remain best-effort and cannot block the customer journey.
+- Operational metrics use bounded, read-only downstream queries. If a required source cannot be read, the admin view reports metrics as unavailable rather than inventing zero activity.
+- Customer progress is presented before commercial reporting. **Revenue is reporting only — it does not affect customer strategy.**
+- Experiments are restricted to exactly three presentation surfaces: `commercial_route_order`, `journey_status_copy` and `journey_email_opt_in_copy`. Each surface has an allowlisted set of presentation keys; arbitrary scripts, eligibility rules and free-form commercial weighting are not accepted.
+- Commercial presentation experiments receive only the route set already permitted by the Commercial Gateway. They can change presentation order only and cannot add a route, bypass age/Safe Mode/readiness/evidence gates or introduce an unpermitted destination.
+- Exposure telemetry carries stable IDs/keys and controlled bands/reasons only. It does not send commercial economics, lender underwriting payloads, credentials, full card data or service secrets.
+- Architecture tests enforce that Journey, reminders, commercial data, experiments, metrics, affiliate/revenue concepts and feature flags do not flow upstream into safety, diagnosis, Passport, readiness, Quest Score, mission ranking or Academy selection.
+- The final release remains dark-first. Compatible application code is verified before migrations `009` → `010` → `011`, and the base release defaults remain:
+
+```text
+email_reminders_enabled=false
+commercial_gateway_enabled=false
+LIVE_CREDIT_REFERRALS_ALLOWED=false
+```
+
+No V2.2 production migration, live referral activation or email activation is implied by passing the build. Merge/deployment and production DDL remain separate release-gated actions.
+
 ## Product boundaries
 
 - Available from age 16.
 - Ages 16–17 use education mode and receive **no credit-product referrals**.
-- Ages 18+ may receive relevant partner referrals after the mission engine has already selected the user's next-best action.
+- Ages 18+ may receive relevant partner referrals only after all applicable commercial presentation/referral gates pass; V2.2 ships those runtime paths dark.
 - The **Credit Quest Score** is an internal progress indicator. It is not an Experian, Equifax or TransUnion score and does not predict lender approval.
 - Credit Quest is an enhanced introducer: lenders own eligibility, underwriting and the credit application.
 - Affiliate commission is never used by the mission-ranking engine or Academy selector.
@@ -92,9 +157,17 @@ NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
 SUPABASE_SERVICE_ROLE_KEY=
 NEXT_PUBLIC_SITE_URL=
+CRON_SECRET=
+RESEND_API_KEY=
+JOURNEY_FROM_EMAIL=
+LIVE_CREDIT_REFERRALS_ALLOWED=false
 ```
 
 `SUPABASE_SERVICE_ROLE_KEY` is server-only. It must never be exposed with a `NEXT_PUBLIC_` prefix or imported into client components. `NEXT_PUBLIC_SITE_URL` is an optional canonical-site override used for metadata/sitemap generation.
+
+`CRON_SECRET`, `RESEND_API_KEY` and `JOURNEY_FROM_EMAIL` are server-only V2.2B settings. Supplying them does **not** enable email by itself: the database runtime flag `email_reminders_enabled` remains the kill switch and is seeded false. Do not put these values in client code or commit real secrets.
+
+`LIVE_CREDIT_REFERRALS_ALLOWED` is a server-only hard lock. V2.2 production default is `false`. `commercial_gateway_enabled` is separately seeded false in the database, so compatible code can be deployed without making a live regulated referral path available.
 
 ## Supabase local setup
 
@@ -115,10 +188,13 @@ Migrations:
 - `supabase/migrations/006_v2_0b_closeout.sql` — closes the V2.0b migration sequence and integrity boundary.
 - `supabase/migrations/007_academy.sql` — versioned Academy articles, private learning progress, RLS, indexes and service-role-only atomic publication.
 - `supabase/migrations/008_academy_launch_content.sql` — reviewed V2.1 Academy launch curriculum.
+- `supabase/migrations/009_journey_foundation.sql` — V2.2A Journey lifecycle projection, append-only outcome history, owner-readable RLS and deterministic reassessment indexing.
+- `supabase/migrations/010_retention_runtime_flags.sql` — V2.2B reminder jobs, owner-readable communication preferences, private default-off runtime flags and service-role-only atomic email claiming.
+- `supabase/migrations/011_commercial_admin.sql` — V2.2C private commercial/admin control plane, sandbox-only seed, append-only referral/revenue update protection, audited admin RPCs and service-role-only access.
 
-The Action Layer rollout used staged expand/deploy/cutover migrations. Academy is additive: apply `007` and `008`, verify RLS/content invariants, then deploy/enable the Academy surfaces. Content can subsequently be versioned and published through the database workflow without requiring an application redeployment for ordinary editorial changes.
+The Action Layer rollout used staged expand/deploy/cutover migrations. Academy is additive: content can be versioned and published through the database workflow without requiring an application redeployment for ordinary editorial changes. V2.2 migrations are also additive but remain dark/release-gated until compatible application code has passed the V2.2 release checks.
 
-RLS and owner-integrity verification guidance is in `supabase/tests/rls.sql`.
+RLS and owner-integrity verification guidance is in `supabase/tests/rls.sql`. V2.2B retention-specific policy, RPC and duplicate-job probes are in `supabase/tests/retention_rls.sql`; V2.2C commercial/admin probes are in `supabase/tests/commercial_rls.sql`. CI executes the applicable probes against the same disposable database.
 
 ## Verification
 
@@ -131,9 +207,9 @@ npm run test:e2e
 npm run build
 ```
 
-The repository CI workflow runs the same audit/lint/unit/E2E/build gates for `main` and pull requests. It also starts a disposable local Supabase database inside GitHub Actions, applies every migration, runs `supabase/tests/rls.sql`, and destroys that local database. This verifies Academy migration/RLS/publication behaviour without creating a Supabase preview branch or touching production.
+The repository CI workflow runs the same audit/lint/unit/E2E/build gates for `main` and pull requests. It also starts a disposable local Supabase database inside GitHub Actions, applies every migration, runs the RLS/security SQL probes, and destroys that local database. This verifies migrations/RLS without creating a Supabase preview branch or touching production.
 
-The connected production project remains unchanged until an explicit deployment decision is made. At the Academy PR stage, production is still on migrations through `006`; `007` and `008` are verified in disposable CI first rather than being silently applied.
+Production includes the approved V2.1 Academy migrations `007` and `008`. V2.2 migrations `009`, `010` and `011` are verified in disposable CI on the feature branch and are **not** applied to production until compatible V2.2 application code is verified and the release gate is explicitly approved. The dark-first order is compatible application code first, then additive migrations `009` → `010` → `011`, while `email_reminders_enabled=false`, `commercial_gateway_enabled=false` and `LIVE_CREDIT_REFERRALS_ALLOWED=false` remain in force.
 
 After applying migrations in a target Supabase project, run the project's security/performance advisors as an additional check; local database verification is not a substitute for a post-deployment advisor check.
 
@@ -161,15 +237,21 @@ server-side Action Registry resolution for executable actions
 internal / official / provider / referral action
   ↓
 return + verification/self-confirmation rules
+  ↓
+Journey observation + outcome history + scheduled reassessment (downstream only)
+  ↓
+deterministic reminder scheduling + static service copy (downstream only)
+  ↓
+Commercial Gateway presentation/referral gate (downstream only, dark by default)
 ```
 
-Commercial offer data never flows back into safety, diagnosis, Passport, readiness, mission ranking or Academy selection. This keeps user benefit separate from commercial value.
+Commercial offer, partner, experiment and revenue data never flows back into safety, diagnosis, Passport, readiness, mission ranking, Academy selection, Journey-derived customer strategy or reminder timing. Journey/reminders/commercial layers observe governed outputs; they do not feed commercial data back upstream.
 
 ## Provider and affiliate data
 
 The provider directory contains real UK issuer/bank names solely so a user can identify the account they already hold and, where a stable official support route has been verified, be sent to that provider's own public help journey. Listing a provider does **not** imply a commercial partnership, API integration, endorsement or data connection.
 
-Affiliate/product records committed for demonstration remain fictional unless explicitly replaced through an approved provider/network relationship. The GOV.UK electoral-roll destination is an intentionally configured official government route, not a partner integration.
+Affiliate/product records committed for demonstration remain fictional unless explicitly replaced through an approved provider/network relationship. Demo interfaces do not navigate to those affiliate URLs. The GOV.UK electoral-roll destination is an intentionally configured official government route, not a partner integration.
 
 ## Future extension points
 
@@ -187,3 +269,8 @@ The V2 architecture is designed for later additions including Decline Recovery, 
 - `docs/superpowers/plans/2026-08-27-credit-passport-readiness-implementation.md`
 - `docs/superpowers/specs/2026-08-28-credit-quest-academy-design.md`
 - `docs/superpowers/plans/2026-08-28-credit-quest-academy-implementation.md`
+- `docs/superpowers/specs/2026-08-29-credit-quest-v2-2-journey-growth-design.md`
+- `docs/superpowers/plans/2026-08-29-credit-quest-v2-2a-journey-foundation.md`
+- `docs/superpowers/plans/2026-08-29-credit-quest-v2-2b-retention-email.md`
+- `docs/superpowers/plans/2026-08-29-credit-quest-v2-2c-commercial-admin.md`
+- `docs/superpowers/plans/2026-08-29-credit-quest-v2-2d-analytics-release.md`

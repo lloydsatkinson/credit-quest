@@ -4,6 +4,7 @@ import { MISSION_CATALOGUE } from "@/lib/data/missions";
 import { canStartMission } from "@/lib/domain/mission-engine";
 import { completeMission, startMission } from "@/lib/domain/mission-lifecycle";
 import type { MissionDefinition, MissionProgress } from "@/lib/domain/types";
+import { observeJourneyEvent } from "@/lib/server/journey-orchestrator";
 import { getUserProfile, updateUserProfile } from "@/lib/server/profile-repository";
 import { getSupabasePublicEnv } from "@/lib/supabase/env";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
@@ -22,6 +23,12 @@ const eventNameByAction = {
   complete: "mission_completed",
   defer: "mission_deferred",
   dismiss: "mission_dismissed",
+} as const;
+
+const journeyEventByAction = {
+  start: "mission_started",
+  complete: "mission_completed",
+  defer: "mission_deferred",
 } as const;
 
 export function canUseLegacyMissionAction(mission: MissionDefinition, action: LegacyMissionAction): boolean {
@@ -153,6 +160,23 @@ export async function POST(
     event_name: eventNameByAction[parsed.data.action],
     metadata: { missionSlug: mission.slug },
   });
+
+  if (parsed.data.action !== "dismiss") {
+    try {
+      await observeJourneyEvent({
+        userId: user.id,
+        eventType: journeyEventByAction[parsed.data.action],
+        source: "mission",
+        sourceKey: `legacy-mission:${mission.slug}:${parsed.data.action}:${now.toISOString()}`,
+        missionInstanceId: missionRow?.id ?? null,
+        nextReviewAt: nextProgress.nextReviewAt ?? null,
+        metadata: { missionSlug: mission.slug },
+        now,
+      });
+    } catch {
+      // Journey is downstream; a valid mission write remains successful.
+    }
+  }
 
   return NextResponse.json({
     missionSlug: mission.slug,
