@@ -48,12 +48,37 @@ describe("CommercialGatewayCard", () => {
       name: /Continue sandbox journey/i,
     }));
 
-    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
-    const init = fetchMock.mock.calls[0][1] as RequestInit;
+    await waitFor(() => expect(fetchMock.mock.calls.some(([url]) => url === "/api/commercial/referrals")).toBe(true));
+    const referralCall = fetchMock.mock.calls.find(([url]) => url === "/api/commercial/referrals");
+    const init = referralCall?.[1] as RequestInit;
     expect(JSON.parse(String(init.body))).toEqual({
       routeId: route.id,
       disclosureId: route.disclosure.id,
       consent: true,
     });
+  });
+
+  it("records route exposure and explicit consent without economics", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: vi.fn().mockResolvedValue({}) });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<CommercialGatewayCard route={route} />);
+
+    await waitFor(() => expect(JSON.stringify(fetchMock.mock.calls)).toContain("commercial_routes_shown"));
+    fireEvent.click(screen.getByRole("checkbox", { name: /I understand this is a sandbox referral/i }));
+    await waitFor(() => expect(JSON.stringify(fetchMock.mock.calls)).toContain("referral_consent_accepted"));
+
+    const analyticsBodies = fetchMock.mock.calls
+      .filter(([url]) => url === "/api/events")
+      .map(([, init]) => JSON.parse(String((init as RequestInit).body)));
+    expect(analyticsBodies).toContainEqual({
+      name: "commercial_routes_shown",
+      metadata: { routeId: route.id, routeKey: route.routeKey, environment: "sandbox" },
+    });
+    expect(analyticsBodies).toContainEqual({
+      name: "referral_consent_accepted",
+      metadata: { routeId: route.id, routeKey: route.routeKey, environment: "sandbox" },
+    });
+    expect(JSON.stringify(analyticsBodies)).not.toMatch(/commission|epc|payout|revenue/i);
   });
 });
