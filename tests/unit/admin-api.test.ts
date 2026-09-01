@@ -51,9 +51,19 @@ describe("admin API schemas", () => {
       experimentKey: "route-order-v1",
       status: "draft",
       surfaceKey: "commercial_route_order",
-      variants: [{ key: "control", presentationKey: "control" }],
+      variants: [
+        { key: "control", presentationKey: "control" },
+        { key: "reverse", presentationKey: "reverse" },
+      ],
     };
     expect(experimentSchema.safeParse(experiment).success).toBe(true);
     expect(experimentSchema.safeParse({ ...experiment, eligibilityRule: "readiness=green" }).success).toBe(false);
+    expect(experimentSchema.safeParse({
+      ...experiment,
+      variants: [
+        { key: "control", presentationKey: "control" },
+        { key: "paid-first", presentationKey: "paid-first" },
+      ],
+    }).success).toBe(false);
   });
 });
