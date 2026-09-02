@@ -64,28 +64,32 @@ export function EmailReminderPreference({
 
   return (
     <section
-      className="mb-4 rounded-[1.75rem] border border-slate-200 bg-white p-5 shadow-sm"
+      data-testid="email-reminder-preference"
+      className="cq-panel mb-4 rounded-[1.75rem] p-5"
       aria-label="Journey email reminders"
     >
-      <label className="flex cursor-pointer items-start gap-3">
-        <input
-          type="checkbox"
-          className="mt-1 size-5 accent-violet-700"
-          checked={enabled}
-          disabled={saving}
-          onChange={(event) => void changePreference(event.target.checked)}
-        />
-        <span>
-          <span className="block font-bold text-slate-950">
-            Email me when it’s time to review my Credit Quest plan.
+      <div className="flex items-start gap-4">
+        <span className="grid size-10 shrink-0 place-items-center rounded-2xl border border-cyan-300/15 bg-cyan-300/[0.06] text-cyan-300" aria-hidden="true">✦</span>
+        <label className="flex flex-1 cursor-pointer items-start gap-3">
+          <input
+            type="checkbox"
+            className="mt-1 size-5 accent-cyan-300"
+            checked={enabled}
+            disabled={saving}
+            onChange={(event) => void changePreference(event.target.checked)}
+          />
+          <span>
+            <span className="block font-black text-white">
+              Email me when it’s time to review my Credit Quest plan.
+            </span>
+            <span className="mt-1 block text-sm leading-6 text-slate-400">
+              Service reminders only. This does not sign you up for marketing.
+            </span>
           </span>
-          <span className="mt-1 block text-sm leading-6 text-slate-600">
-            Service reminders only. This does not sign you up for marketing.
-          </span>
-        </span>
-      </label>
+        </label>
+      </div>
       {status ? (
-        <p role="status" className="mt-3 text-sm font-semibold text-slate-600">
+        <p role="status" className="mt-4 rounded-2xl border border-white/8 bg-white/[0.035] p-3 text-sm font-semibold text-slate-300">
           {status}
         </p>
       ) : null}
