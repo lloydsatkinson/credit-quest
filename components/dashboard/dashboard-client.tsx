@@ -229,22 +229,22 @@ export function DashboardClient() {
 
   return (
     <main className="mx-auto min-h-screen max-w-3xl px-4 pb-10 pt-4 sm:px-6 sm:pt-6">
-      <header className="mb-4 flex items-center justify-between gap-4">
-        <Link href="/" className="flex items-center gap-2 font-black tracking-tight text-slate-950">
-          <span className="grid size-9 place-items-center rounded-2xl bg-slate-950 text-sm text-white shadow-lg shadow-violet-200">CQ</span>
-          <span>Credit Quest</span>
-        </Link>
-        <nav className="flex items-center gap-1 rounded-full border border-white/80 bg-white/75 p-1 text-xs font-black text-slate-600 shadow-sm backdrop-blur">
-          <Link href="/accounts" className="rounded-full px-3 py-2 transition hover:bg-slate-100">Accounts</Link>
-          <Link href="/offers" className="rounded-full px-3 py-2 transition hover:bg-slate-100">Offers</Link>
+      <section data-testid="demo-dashboard-shortcuts" className="cq-panel mb-4 flex flex-wrap items-center justify-between gap-4 rounded-[1.5rem] p-4">
+        <div>
+          <p className="cq-kicker">Demo workspace</p>
+          <p className="mt-1 text-sm font-bold text-slate-400">Local plan · same credit rules</p>
+        </div>
+        <nav aria-label="Demo dashboard shortcuts" className="flex items-center gap-2 text-xs font-black">
+          <Link href="/accounts" className="rounded-full border border-white/10 bg-white/[0.035] px-3 py-2 text-slate-200 transition hover:border-cyan-300/20 hover:text-cyan-200">Accounts</Link>
+          <Link href="/offers" className="rounded-full border border-white/10 bg-white/[0.035] px-3 py-2 text-slate-200 transition hover:border-cyan-300/20 hover:text-cyan-200">Offers</Link>
         </nav>
-      </header>
+      </section>
 
       {result.safety.mode === "safe_mode" && (
-        <section className="mb-4 rounded-[1.75rem] border border-amber-200 bg-amber-50 p-5 text-amber-950 shadow-sm">
-          <p className="text-xs font-black uppercase tracking-[0.18em] text-amber-700">Safe Mode</p>
-          <h2 className="mt-2 text-xl font-black">Protecting your finances comes first right now.</h2>
-          <p className="mt-2 text-sm leading-6">Based on the information you gave us, we’re pausing credit-product suggestions and prioritising actions that help protect payments and financial stability.</p>
+        <section className="cq-panel mb-4 rounded-[1.75rem] border-amber-300/15 p-5 text-slate-200">
+          <p className="text-xs font-black uppercase tracking-[0.18em] text-amber-300">Safe Mode</p>
+          <h2 className="mt-2 text-xl font-black text-white">Protecting your finances comes first right now.</h2>
+          <p className="mt-2 text-sm leading-6 text-slate-300">Based on the information you gave us, we’re pausing credit-product suggestions and prioritising actions that help protect payments and financial stability.</p>
         </section>
       )}
 
@@ -278,9 +278,9 @@ export function DashboardClient() {
               {result.rankedMission ? result.rankedMission.mission.rationale : "Your plan changes when your information changes."}
             </h2>
             {result.rankedMission?.reasons[0] ? (
-              <p className="mt-6 max-w-xl text-base font-semibold leading-7 text-violet-100">{result.rankedMission.reasons[0]}</p>
+              <p className="mt-6 max-w-xl text-base font-semibold leading-7 text-fuchsia-100">{result.rankedMission.reasons[0]}</p>
             ) : (
-              <p className="mt-6 max-w-xl text-base leading-7 text-violet-100">Credit Quest only surfaces an action when the deterministic mission rules say it is relevant.</p>
+              <p className="mt-6 max-w-xl text-base leading-7 text-fuchsia-100">Credit Quest only surfaces an action when the deterministic mission rules say it is relevant.</p>
             )}
           </div>
         </QuestFeedCard>
@@ -303,26 +303,30 @@ export function DashboardClient() {
 
         <QuestFeedCard eyebrow="Know what the score means" index={7} total={FEED_CARD_TOTAL} tone="soft">
           <div className="flex flex-1 flex-col justify-center">
-            <span className="w-fit rounded-full bg-violet-600 px-3 py-1.5 text-xs font-black uppercase tracking-wider text-white">Setup → Stabilise → Build → Optimise → Maintain</span>
-            <h2 className="mt-5 text-3xl font-black tracking-tight sm:text-4xl">Progress, not a lender prediction.</h2>
-            <p className="mt-4 max-w-xl text-base leading-7 text-slate-600">Your Credit Quest Score is an internal progress indicator. It is not a bureau credit score and it does not predict whether a lender will approve an application.</p>
-            <p className="mt-5 text-sm font-bold leading-6 text-violet-700">The goal is simple: make the next sensible move, then reassess rather than applying unnecessarily.</p>
+            <span className="w-fit rounded-full border border-lime-300/15 bg-lime-300/[0.055] px-3 py-1.5 text-xs font-black uppercase tracking-wider text-lime-300">Setup → Stabilise → Build → Optimise → Maintain</span>
+            <h2 className="mt-5 text-3xl font-black tracking-tight text-white sm:text-4xl">Progress, not a lender prediction.</h2>
+            <p className="mt-4 max-w-xl text-base leading-7 text-slate-300">Your Credit Quest Score is an internal progress indicator. It is not a bureau credit score and it does not predict whether a lender will approve an application.</p>
+            <p className="mt-5 text-sm font-bold leading-6 text-cyan-300">The goal is simple: make the next sensible move, then reassess rather than applying unnecessarily.</p>
           </div>
         </QuestFeedCard>
       </QuestFeed>
 
-      {status && <div role="status" className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-bold text-emerald-800">{status}</div>}
+      {status ? (
+        <div role="status" className="cq-panel mt-4 rounded-2xl border-lime-300/15 p-4 text-sm font-bold text-lime-200">
+          {status}
+        </div>
+      ) : null}
 
       {offer ? (
-        <section className="mt-5 rounded-[1.75rem] border border-slate-200 bg-white p-5 shadow-sm" aria-label="Optional partner route demo">
+        <section className="cq-panel mt-5 rounded-[1.75rem] p-5" aria-label="Optional partner route demo">
           <div className="flex items-center justify-between gap-3">
-            <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">Optional product example</p>
-            <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-black uppercase tracking-wider text-slate-500">Demo only</span>
+            <p className="cq-kicker">Optional product example</p>
+            <span className="rounded-full border border-cyan-300/15 bg-cyan-300/[0.055] px-2.5 py-1 text-[11px] font-black uppercase tracking-wider text-cyan-300">Demo only</span>
           </div>
-          <h2 className="mt-3 text-lg font-black text-slate-950">{offer.productName}</h2>
-          <p className="mt-2 text-sm leading-6 text-slate-600">{offer.disclosure} This example does not change the mission we ranked for you and it is not a lender eligibility decision.</p>
-          <p className="mt-3 text-sm font-black text-slate-700">Demo only — no application is sent.</p>
-          <Link className="mt-4 inline-flex rounded-2xl bg-slate-950 px-4 py-3 text-sm font-black text-white" href="/learn/credit-quest-readiness">Review readiness guidance</Link>
+          <h2 className="mt-3 text-lg font-black text-white">{offer.productName}</h2>
+          <p className="mt-2 text-sm leading-6 text-slate-400">{offer.disclosure} This example does not change the mission we ranked for you and it is not a lender eligibility decision.</p>
+          <p className="mt-3 text-sm font-black text-slate-200">Demo only — no application is sent.</p>
+          <Link className="mt-4 inline-flex rounded-2xl bg-cyan-300 px-4 py-3 text-sm font-black text-slate-950 transition hover:bg-cyan-200" href="/learn/credit-quest-readiness">Review readiness guidance</Link>
         </section>
       ) : null}
     </main>

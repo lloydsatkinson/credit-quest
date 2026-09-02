@@ -23,7 +23,7 @@ function renderInline(text: string, keyPrefix: string): ReactNode[] {
             href={href}
             target="_blank"
             rel="noreferrer"
-            className="font-semibold text-violet-700 underline decoration-violet-300 underline-offset-4"
+            className="font-semibold text-cyan-300 underline decoration-cyan-300/30 underline-offset-4 hover:text-cyan-200"
           >
             {label}
           </a>,
@@ -32,9 +32,9 @@ function renderInline(text: string, keyPrefix: string): ReactNode[] {
         nodes.push(label);
       }
     } else if (match[4] !== undefined) {
-      nodes.push(<strong key={key}>{match[4]}</strong>);
+      nodes.push(<strong key={key} className="font-black text-white">{match[4]}</strong>);
     } else if (match[5] !== undefined) {
-      nodes.push(<em key={key}>{match[5]}</em>);
+      nodes.push(<em key={key} className="text-slate-200">{match[5]}</em>);
     }
 
     cursor = match.index + match[0].length;
@@ -64,7 +64,7 @@ export function AcademyMarkdown({ markdown }: { markdown: string }) {
     .filter(Boolean);
 
   return (
-    <div className="space-y-5 text-base leading-7 text-slate-700">
+    <div className="space-y-5 text-base leading-7 text-slate-300">
       {blocks.map((block, blockIndex) => {
         const lines = block.split("\n").map((line) => line.trim()).filter(Boolean);
         const first = lines[0] ?? "";
@@ -72,7 +72,7 @@ export function AcademyMarkdown({ markdown }: { markdown: string }) {
 
         if (lines.length === 1 && first.startsWith("### ")) {
           return (
-            <h3 key={key} className="text-xl font-black tracking-tight text-slate-950">
+            <h3 key={key} className="text-xl font-black tracking-tight text-white">
               {renderInline(first.slice(4), `${key}-heading`)}
             </h3>
           );
@@ -80,7 +80,7 @@ export function AcademyMarkdown({ markdown }: { markdown: string }) {
 
         if (lines.length === 1 && first.startsWith("## ")) {
           return (
-            <h2 key={key} className="text-2xl font-black tracking-tight text-slate-950">
+            <h2 key={key} className="text-2xl font-black tracking-tight text-white">
               {renderInline(first.slice(3), `${key}-heading`)}
             </h2>
           );
@@ -88,7 +88,7 @@ export function AcademyMarkdown({ markdown }: { markdown: string }) {
 
         if (isUnorderedList(lines)) {
           return (
-            <ul key={key} className="list-disc space-y-2 pl-6">
+            <ul key={key} className="list-disc space-y-2 pl-6 marker:text-cyan-300">
               {lines.map((line, lineIndex) => (
                 <li key={`${key}-${lineIndex}`}>
                   {renderInline(line.replace(/^-\s+/, ""), `${key}-${lineIndex}`)}
@@ -100,7 +100,7 @@ export function AcademyMarkdown({ markdown }: { markdown: string }) {
 
         if (isOrderedList(lines)) {
           return (
-            <ol key={key} className="list-decimal space-y-2 pl-6">
+            <ol key={key} className="list-decimal space-y-2 pl-6 marker:font-black marker:text-cyan-300">
               {lines.map((line, lineIndex) => (
                 <li key={`${key}-${lineIndex}`}>
                   {renderInline(line.replace(/^\d+\.\s+/, ""), `${key}-${lineIndex}`)}

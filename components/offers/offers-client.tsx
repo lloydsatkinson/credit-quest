@@ -28,7 +28,16 @@ export function OffersClient() {
   const offers = getMarketplaceOffers(profile);
 
   if (mode === "education") {
-    return <section className="rounded-3xl border border-slate-200 bg-white p-6"><h2 className="text-2xl font-black">Learn now. Products can wait.</h2><p className="mt-3 leading-7 text-slate-600">Credit Quest education mode is designed to help you understand credit before you are old enough for credit-product referrals. We do not show card links to under-18s.</p></section>;
+    return (
+      <section className="cq-panel relative overflow-hidden rounded-3xl p-6">
+        <div aria-hidden="true" className="absolute -right-14 -top-20 size-44 rounded-full bg-lime-300/[0.055] blur-3xl" />
+        <div className="relative">
+          <p className="cq-kicker">Education mode</p>
+          <h2 className="mt-3 text-2xl font-black text-white">Learn now. Products can wait.</h2>
+          <p className="mt-3 leading-7 text-slate-400">Credit Quest education mode is designed to help you understand credit before you are old enough for credit-product referrals. We do not show card links to under-18s.</p>
+        </div>
+      </section>
+    );
   }
 
   return <div className="grid gap-4">{offers.map((offer) => <OfferCard key={offer.id} offer={offer} />)}</div>;

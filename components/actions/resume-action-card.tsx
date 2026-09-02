@@ -65,23 +65,28 @@ export function ResumeActionCard({
   }
 
   return (
-    <section className="rounded-3xl border border-violet-200 bg-violet-50 p-5 shadow-sm">
-      <p className="text-xs font-black uppercase tracking-[0.18em] text-violet-700">Welcome back</p>
-      <h2 className="mt-2 text-xl font-black tracking-tight text-slate-950">{missionTitle}</h2>
-      <p className="mt-2 text-sm leading-6 text-slate-600">
+    <section data-testid="resume-action-card" className="cq-panel rounded-3xl p-5">
+      <div className="flex items-center justify-between gap-3">
+        <p className="cq-kicker">Welcome back</p>
+        <span className="rounded-full border border-lime-300/15 bg-lime-300/[0.055] px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.14em] text-lime-300">
+          Follow-up
+        </span>
+      </div>
+      <h2 className="mt-3 text-xl font-black tracking-tight text-white">{missionTitle}</h2>
+      <p className="mt-2 text-sm leading-6 text-slate-400">
         {providerLabel
           ? `You left Credit Quest to continue with ${providerLabel}. Tell us what happened so we can keep this mission accurate.`
           : "Tell us what happened so we can keep this mission accurate."}
       </p>
 
       {missionSlug === "reduce-utilisation" ? (
-        <p className="mt-3 rounded-2xl bg-white p-3 text-xs leading-5 text-slate-600">
+        <p className="mt-3 rounded-2xl border border-cyan-300/10 bg-cyan-300/[0.045] p-3 text-xs leading-5 text-slate-300">
           Update the card balance in My accounts first if it has changed. Credit Quest will only complete this mission when the stored balance and limit show utilisation at or below the target.
         </p>
       ) : null}
 
       {attempt.status === "submitted" ? (
-        <p className="mt-3 rounded-2xl bg-white p-3 text-xs leading-5 text-slate-600">
+        <p className="mt-3 rounded-2xl border border-amber-300/10 bg-amber-300/[0.045] p-3 text-xs leading-5 text-slate-300">
           This is a follow-up check. Confirm the real-world outcome only if it has actually happened; the earlier provider or application step did not complete the mission by itself.
         </p>
       ) : null}
@@ -91,7 +96,7 @@ export function ResumeActionCard({
           type="button"
           disabled={busy !== null}
           onClick={() => respond(primary.response)}
-          className="rounded-2xl bg-violet-700 px-4 py-3 text-sm font-black text-white disabled:opacity-50"
+          className="rounded-2xl bg-cyan-300 px-4 py-3 text-sm font-black text-slate-950 shadow-[0_0_30px_rgba(31,228,255,0.09)] disabled:opacity-50"
         >
           {busy === primary.response ? "Saving…" : primary.label}
         </button>
@@ -99,7 +104,7 @@ export function ResumeActionCard({
           type="button"
           disabled={busy !== null}
           onClick={() => respond("not_finished")}
-          className="rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm font-bold text-slate-700 disabled:opacity-50"
+          className="rounded-2xl border border-white/10 bg-white/[0.035] px-4 py-3 text-sm font-bold text-slate-200 disabled:opacity-50"
         >
           I started but did not finish
         </button>
@@ -107,7 +112,7 @@ export function ResumeActionCard({
           type="button"
           disabled={busy !== null}
           onClick={() => respond("could_not_do")}
-          className="rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm font-bold text-slate-700 disabled:opacity-50"
+          className="rounded-2xl border border-white/10 bg-white/[0.035] px-4 py-3 text-sm font-bold text-slate-200 disabled:opacity-50"
         >
           I could not do it
         </button>
@@ -121,7 +126,7 @@ export function ResumeActionCard({
         </button>
       </div>
 
-      {error ? <p className="mt-3 text-sm font-semibold text-rose-700">{error}</p> : null}
+      {error ? <p role="alert" className="mt-3 text-sm font-semibold text-rose-300">{error}</p> : null}
     </section>
   );
 }

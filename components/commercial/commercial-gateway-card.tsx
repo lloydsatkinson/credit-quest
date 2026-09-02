@@ -75,21 +75,21 @@ export function CommercialGatewayCard({ route }: { route: CommercialGatewayCardR
 
   return (
     <article
-      className="rounded-[1.75rem] border border-violet-200 bg-white p-5 shadow-sm"
+      className="cq-panel rounded-[1.75rem] p-5 text-white"
       data-route-key={route.routeKey}
     >
       <div className="flex items-center justify-between gap-3">
-        <p className="text-xs font-black uppercase tracking-[0.18em] text-violet-700">Optional Credit Quest route</p>
-        <span className="rounded-full bg-violet-100 px-2.5 py-1 text-[11px] font-black uppercase tracking-wider text-violet-700">Sandbox</span>
+        <p className="cq-kicker">Optional Credit Quest route</p>
+        <span className="rounded-full border border-fuchsia-300/15 bg-fuchsia-300/[0.055] px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.15em] text-fuchsia-200">Sandbox</span>
       </div>
-      <h2 className="mt-3 text-xl font-black text-slate-950">{route.partnerDisplayName}</h2>
-      <p className="mt-4 rounded-2xl bg-slate-50 p-4 text-sm leading-6 text-slate-700">
+      <h2 className="mt-3 text-xl font-black text-white">{route.partnerDisplayName}</h2>
+      <p className="mt-4 rounded-2xl border border-white/8 bg-white/[0.03] p-4 text-sm leading-6 text-slate-300">
         {route.disclosure.body}
       </p>
-      <label className="mt-4 flex cursor-pointer items-start gap-3 text-sm font-semibold leading-6 text-slate-700">
+      <label className="mt-4 flex cursor-pointer items-start gap-3 text-sm font-semibold leading-6 text-slate-300">
         <input
           type="checkbox"
-          className="mt-1 size-5 accent-violet-700"
+          className="mt-1 size-5 accent-cyan-300"
           checked={consent}
           disabled={submitting}
           onChange={(event) => changeConsent(event.target.checked)}
@@ -100,11 +100,11 @@ export function CommercialGatewayCard({ route }: { route: CommercialGatewayCardR
         type="button"
         disabled={!consent || submitting}
         onClick={() => void continueSandboxJourney()}
-        className="mt-5 w-full rounded-2xl bg-violet-700 px-4 py-3 font-black text-white disabled:cursor-not-allowed disabled:opacity-40"
+        className="mt-5 w-full rounded-2xl bg-cyan-300 px-4 py-3 font-black text-slate-950 shadow-[0_10px_32px_rgba(31,228,255,0.12)] transition hover:bg-cyan-200 disabled:cursor-not-allowed disabled:opacity-40"
       >
         {submitting ? "Creating sandbox journey…" : "Continue sandbox journey"}
       </button>
-      {error ? <p role="status" className="mt-3 text-sm font-bold text-rose-700">{error}</p> : null}
+      {error ? <p role="status" className="mt-3 rounded-2xl border border-rose-300/15 bg-rose-300/[0.055] p-3 text-sm font-bold text-rose-200">{error}</p> : null}
     </article>
   );
 }
