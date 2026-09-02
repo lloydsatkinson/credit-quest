@@ -5,7 +5,11 @@ import { setFeatureFlag } from "@/lib/server/admin-repository";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 
 export const flagSchema = z.object({
-  flagKey: z.enum(["email_reminders_enabled", "commercial_gateway_enabled"]),
+  flagKey: z.enum([
+    "email_reminders_enabled",
+    "commercial_gateway_enabled",
+    "commercial_sandbox_enabled",
+  ]),
   enabled: z.boolean(),
 }).strict();
 
