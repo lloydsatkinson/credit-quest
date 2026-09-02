@@ -55,6 +55,30 @@ describe("sandbox pilot control", () => {
     }));
   });
 
+  it("restores previous app_metadata when the audit write fails", async () => {
+    const target = adminClient({ app_metadata: { provider: "email", existing: "keep" } });
+    const auditError = new Error("audit unavailable");
+    target.insert.mockResolvedValue({ error: auditError });
+
+    await expect(pilotRepository.setSandboxPilot(
+      target.client as never,
+      "admin-1",
+      "00000000-0000-0000-0000-000000000002",
+      true,
+    )).rejects.toBe(auditError);
+
+    expect(target.updateUserById).toHaveBeenNthCalledWith(
+      1,
+      "00000000-0000-0000-0000-000000000002",
+      { app_metadata: { provider: "email", existing: "keep", credit_quest_sandbox_pilot: true } },
+    );
+    expect(target.updateUserById).toHaveBeenNthCalledWith(
+      2,
+      "00000000-0000-0000-0000-000000000002",
+      { app_metadata: { provider: "email", existing: "keep" } },
+    );
+  });
+
   it("adds protected narrow admin tooling without broadening runtime flags", () => {
     const routePath = "app/api/admin/sandbox-pilots/route.ts";
     const formPath = "components/admin/sandbox-pilot-form.tsx";
