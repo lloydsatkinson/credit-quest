@@ -39,5 +39,14 @@ export async function setSandboxPilot(
     entity_id: targetUserId,
     metadata: { enabled },
   });
-  if (auditError) throw auditError;
+
+  if (auditError) {
+    const { error: rollbackError } = await admin.auth.admin.updateUserById(targetUserId, {
+      app_metadata: existingMetadata,
+    });
+    if (rollbackError) {
+      throw new Error("Sandbox pilot audit failed and metadata rollback also failed");
+    }
+    throw auditError;
+  }
 }
