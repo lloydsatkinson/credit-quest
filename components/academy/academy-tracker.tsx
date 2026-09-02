@@ -84,27 +84,32 @@ export function AcademyArticleTracker({ article }: { article: AcademyArticle }) 
   }
 
   return (
-    <section className="mt-8 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm" aria-label="Academy feedback">
-      <p className="font-black text-slate-950">Did this make sense?</p>
-      <p className="mt-1 text-sm leading-6 text-slate-600">Your feedback helps Credit Quest improve explanations. It does not change your missions, Passport or readiness.</p>
-      <div className="mt-4 flex flex-wrap gap-3">
+    <section className="cq-panel mt-8 rounded-3xl p-5" aria-label="Academy feedback">
+      <div className="flex items-start gap-3">
+        <span className="grid size-9 shrink-0 place-items-center rounded-xl border border-lime-300/15 bg-lime-300/[0.055] text-sm font-black text-lime-300" aria-hidden="true">?</span>
+        <div>
+          <p className="font-black text-white">Did this make sense?</p>
+          <p className="mt-1 text-sm leading-6 text-slate-400">Your feedback helps Credit Quest improve explanations. It does not change your missions, Passport or readiness.</p>
+        </div>
+      </div>
+      <div className="mt-5 flex flex-wrap gap-3">
         <button
           type="button"
           onClick={() => recordFeedback("completed")}
-          className="rounded-2xl bg-slate-950 px-4 py-3 text-sm font-black text-white"
+          className="rounded-2xl bg-cyan-300 px-4 py-3 text-sm font-black text-slate-950 shadow-[0_10px_32px_rgba(31,228,255,0.12)] transition hover:bg-cyan-200"
         >
           I understand this
         </button>
         <button
           type="button"
           onClick={() => recordFeedback("still_confused")}
-          className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-700"
+          className="rounded-2xl border border-white/10 bg-white/[0.035] px-4 py-3 text-sm font-black text-slate-300 transition hover:border-cyan-300/20 hover:text-white"
         >
           Still confused?
         </button>
       </div>
       {feedback ? (
-        <p role="status" className="mt-3 text-sm font-bold text-violet-700">
+        <p role="status" className="mt-4 rounded-2xl border border-lime-300/15 bg-lime-300/[0.045] p-3 text-sm font-bold text-lime-100">
           {feedback === "completed" ? "Thanks — marked as understood." : "Thanks — we’ll use that signal to improve the explanation."}
         </p>
       ) : null}
