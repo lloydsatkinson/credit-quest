@@ -28,7 +28,8 @@ export default function OnboardingPage() {
               </span>
               <span className="text-xs font-bold text-slate-500">About 2 minutes</span>
             </div>
-            <h1 className="mt-5 text-4xl font-black tracking-[-0.045em] text-white sm:text-5xl">8 quick questions. One clear next move.</h1>
+            <p className="mt-5 text-sm font-black uppercase tracking-[0.18em] text-cyan-200">8 quick questions</p>
+            <h1 className="mt-2 text-4xl font-black tracking-[-0.045em] text-white sm:text-5xl">One clear next move.</h1>
             <p className="mt-3 max-w-xl text-lg font-semibold leading-7 text-slate-200">
               We only ask what changes your plan.
             </p>
