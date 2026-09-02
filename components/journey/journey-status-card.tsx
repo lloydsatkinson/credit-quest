@@ -90,26 +90,26 @@ export function JourneyStatusCard({
   return (
     <section
       data-testid="journey-status"
-      className="mb-4 rounded-[1.75rem] border border-slate-200 bg-white p-5 shadow-sm"
+      className="cq-panel mb-4 rounded-[1.75rem] p-5"
       aria-label="Your Credit Quest journey"
     >
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <p className="text-xs font-black uppercase tracking-[0.18em] text-violet-600">Journey update</p>
-          <h2 className="mt-2 text-xl font-black text-slate-950">What changed</h2>
+          <p className="cq-kicker">Journey update</p>
+          <h2 className="mt-2 text-xl font-black text-white">What changed</h2>
         </div>
         {reassessmentDate ? (
-          <span className="rounded-full bg-violet-50 px-3 py-1.5 text-xs font-black text-violet-700">
+          <span className="rounded-full border border-cyan-300/15 bg-cyan-300/[0.055] px-3 py-1.5 text-xs font-black text-cyan-300">
             Reassess {reassessmentDate}
           </span>
         ) : null}
       </div>
 
-      <p className="mt-3 text-base font-black text-slate-900">{changeLabel(latestOutcome)}</p>
+      <p className="mt-3 text-base font-black text-slate-100">{changeLabel(latestOutcome)}</p>
 
-      <div className="mt-4 rounded-2xl bg-slate-50 p-4">
+      <div className="mt-4 rounded-2xl border border-white/8 bg-white/[0.035] p-4">
         <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-500">What happens next</p>
-        <p className="mt-2 text-sm leading-6 text-slate-700">{nextStep(state)}</p>
+        <p className="mt-2 text-sm leading-6 text-slate-300">{nextStep(state)}</p>
       </div>
     </section>
   );
