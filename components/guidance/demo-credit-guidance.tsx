@@ -64,20 +64,30 @@ export function DemoCreditGuidance({ view }: { view: GuidanceView }) {
   }, []);
 
   if (profile === undefined) {
-    return <p role="status" className="py-10 text-sm font-bold text-slate-500">Loading your guidance…</p>;
+    return (
+      <div role="status" className="cq-panel rounded-[1.75rem] p-6 text-sm font-bold text-slate-400">
+        <div className="flex items-center gap-3">
+          <span className="size-2 animate-pulse rounded-full bg-cyan-300 shadow-[0_0_14px_rgba(31,228,255,0.45)]" aria-hidden="true" />
+          Loading your guidance…
+        </div>
+      </div>
+    );
   }
 
   if (profile === null) {
     return (
-      <section className="rounded-[1.75rem] border border-slate-200 bg-white p-6 shadow-sm">
-        <p className="text-xs font-black uppercase tracking-[0.18em] text-violet-600">We need more information</p>
-        <h1 className="mt-3 text-3xl font-black tracking-tight text-slate-950">Complete your Credit Quest profile</h1>
-        <p className="mt-3 max-w-xl leading-7 text-slate-600">
-          We will not guess your Passport or application readiness without the profile evidence needed to run the guidance rules.
-        </p>
-        <Link href="/onboarding" className="mt-5 inline-flex rounded-2xl bg-slate-950 px-4 py-3 text-sm font-black text-white">
-          Complete onboarding
-        </Link>
+      <section className="cq-panel relative overflow-hidden rounded-[1.75rem] p-6">
+        <div aria-hidden="true" className="absolute -right-16 -top-20 size-48 rounded-full bg-cyan-300/[0.06] blur-3xl" />
+        <div className="relative">
+          <p className="cq-kicker">We need more information</p>
+          <h1 className="mt-3 text-3xl font-black tracking-tight text-white">Complete your Credit Quest profile</h1>
+          <p className="mt-3 max-w-xl leading-7 text-slate-400">
+            We will not guess your Passport or application readiness without the profile evidence needed to run the guidance rules.
+          </p>
+          <Link href="/onboarding" className="mt-5 inline-flex rounded-2xl bg-cyan-300 px-4 py-3 text-sm font-black text-slate-950">
+            Complete onboarding
+          </Link>
+        </div>
       </section>
     );
   }
