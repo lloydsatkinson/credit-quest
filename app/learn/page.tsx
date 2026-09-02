@@ -1,4 +1,5 @@
 import { AcademyLibrary, AcademyUnavailable } from "@/components/academy/academy-library";
+import { CustomerShell } from "@/components/customer/customer-shell";
 import { DEMO_ACADEMY_ARTICLES } from "@/lib/academy/demo-content";
 import type { AcademyArticle } from "@/lib/academy/types";
 import { listPublishedAcademyArticles } from "@/lib/server/academy-repository";
@@ -8,6 +9,10 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 function firstParam(value: string | string[] | undefined): string {
   if (Array.isArray(value)) return value[0] ?? "";
   return value ?? "";
+}
+
+function LearnShell({ children }: { children: React.ReactNode }) {
+  return <CustomerShell active="learn">{children}</CustomerShell>;
 }
 
 export default async function LearnPage({
@@ -21,7 +26,11 @@ export default async function LearnPage({
   const topic = topicValue || null;
 
   if (!getSupabasePublicEnv()) {
-    return <AcademyLibrary articles={DEMO_ACADEMY_ARTICLES} query={query} topic={topic} />;
+    return (
+      <LearnShell>
+        <AcademyLibrary articles={DEMO_ACADEMY_ARTICLES} query={query} topic={topic} />
+      </LearnShell>
+    );
   }
 
   let articles: AcademyArticle[] = [];
@@ -33,6 +42,17 @@ export default async function LearnPage({
     readFailed = true;
   }
 
-  if (readFailed) return <AcademyUnavailable />;
-  return <AcademyLibrary articles={articles} query={query} topic={topic} />;
+  if (readFailed) {
+    return (
+      <LearnShell>
+        <AcademyUnavailable />
+      </LearnShell>
+    );
+  }
+
+  return (
+    <LearnShell>
+      <AcademyLibrary articles={articles} query={query} topic={topic} />
+    </LearnShell>
+  );
 }
