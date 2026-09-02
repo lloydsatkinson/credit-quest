@@ -4,9 +4,9 @@ begin;
 
 do $$
 declare
-  table_name text;
+  probe_table text;
 begin
-  foreach table_name in array array[
+  foreach probe_table in array array[
     'decline_partners',
     'decline_partner_credentials',
     'decline_intake_sessions',
@@ -20,10 +20,10 @@ begin
       from pg_class c
       join pg_namespace n on n.oid = c.relnamespace
       where n.nspname = 'public'
-        and c.relname = table_name
+        and c.relname = probe_table
         and c.relrowsecurity = true
     ) then
-      raise exception 'RLS must be enabled on public.%', table_name;
+      raise exception 'RLS must be enabled on public.%', probe_table;
     end if;
   end loop;
 
