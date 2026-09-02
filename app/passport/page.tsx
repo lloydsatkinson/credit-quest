@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
-import Link from "next/link";
 import { redirect } from "next/navigation";
+import { CustomerShell } from "@/components/customer/customer-shell";
 import { DemoCreditGuidance } from "@/components/guidance/demo-credit-guidance";
 import { PassportDetail } from "@/components/passport/passport-detail";
 import { getCreditGuidanceForUser } from "@/lib/server/credit-guidance-service";
@@ -9,15 +9,20 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 function PassportShell({ children }: { children: ReactNode }) {
   return (
-    <main data-testid="passport-shell" className="mx-auto min-h-screen max-w-3xl px-5 py-6 sm:px-8 sm:py-10">
-      <header className="mb-8 flex items-center justify-between gap-4">
-        <Link href="/dashboard" className="font-black text-violet-700">← Quest Feed</Link>
-        <span className="rounded-full border border-slate-200 bg-white/80 px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.16em] text-slate-500 shadow-sm backdrop-blur">
-          Guidance, not underwriting
-        </span>
-      </header>
-      {children}
-    </main>
+    <CustomerShell active="passport">
+      <main data-testid="passport-shell" className="mx-auto min-h-screen max-w-3xl px-5 py-7 sm:px-8 sm:py-10">
+        <header className="mb-7 flex items-center justify-between gap-4">
+          <div>
+            <p className="cq-kicker">Progress view</p>
+            <p className="mt-1 text-xs font-bold text-slate-500">Evidence changes this view — game points do not.</p>
+          </div>
+          <span className="rounded-full border border-cyan-300/15 bg-cyan-300/[0.055] px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.16em] text-cyan-200">
+            Guidance, not underwriting
+          </span>
+        </header>
+        {children}
+      </main>
+    </CustomerShell>
   );
 }
 

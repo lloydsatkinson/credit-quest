@@ -23,14 +23,14 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#6558f5",
+  themeColor: "#05070d",
   width: "device-width",
   initialScale: 1,
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en-GB">
+    <html lang="en-GB" data-scroll-behavior="smooth">
       <body>
         {children}
         <ServiceWorkerRegister />
