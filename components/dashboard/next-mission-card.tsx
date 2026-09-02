@@ -28,7 +28,7 @@ export function NextMissionCard({
     <section className={embedded ? "flex h-full flex-col" : "rounded-3xl border border-cyan-300/15 bg-slate-950 p-6 text-white shadow-2xl shadow-slate-950/40"}>
       <div className="flex items-center justify-between gap-3">
         <span className="rounded-full border border-cyan-300/15 bg-cyan-300/[0.06] px-3 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-cyan-300">{mission.impact} impact</span>
-        <span className="text-xs font-black text-lime-300">+{mission.questScoreDelta} Quest progress</span>
+        <span className="text-xs font-black text-lime-300">+{mission.questScoreDelta} Quest Score</span>
       </div>
       <h2 className="mt-6 text-4xl font-black leading-[1.02] tracking-[-0.045em] text-white sm:text-5xl">{mission.title}</h2>
       <p className="mt-4 max-w-xl text-base leading-7 text-slate-300">{mission.description}</p>
@@ -52,6 +52,7 @@ export function NextMissionCard({
         {actionHref ? (
           <Link
             href={actionHref}
+            aria-label={isStarted ? "Continue this mission" : "Start this mission"}
             className="group flex w-full items-center justify-between rounded-2xl bg-lime-300 px-5 py-4 font-black text-slate-950 shadow-[0_0_36px_rgba(200,255,56,0.12)] transition hover:bg-lime-200"
           >
             <span>{isStarted ? "Continue this mission" : "Take action"}</span>
@@ -62,7 +63,11 @@ export function NextMissionCard({
             This mission is ready to continue through its action journey.
           </div>
         ) : (
-          <button onClick={onStart} className="flex w-full items-center justify-between rounded-2xl bg-lime-300 px-5 py-4 font-black text-slate-950 shadow-[0_0_36px_rgba(200,255,56,0.12)] transition hover:bg-lime-200">
+          <button
+            onClick={onStart}
+            aria-label="Start this mission"
+            className="flex w-full items-center justify-between rounded-2xl bg-lime-300 px-5 py-4 font-black text-slate-950 shadow-[0_0_36px_rgba(200,255,56,0.12)] transition hover:bg-lime-200"
+          >
             <span>Take action</span><span className="text-xl" aria-hidden="true">→</span>
           </button>
         )}
