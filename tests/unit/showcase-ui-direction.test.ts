@@ -15,7 +15,7 @@ describe("Credit Quest showcase UI direction", () => {
     expect(shell).toContain("cq-customer-shell");
     expect(shell).toContain("cq-bottom-nav");
     for (const route of ["/dashboard", "/passport", "/readiness", "/learn", "/accounts"]) {
-      expect(shell).toContain(`href=\"${route}\"`);
+      expect(shell).toContain(`href: \"${route}\"`);
     }
   });
 
