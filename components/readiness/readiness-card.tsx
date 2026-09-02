@@ -2,10 +2,17 @@ import Link from "next/link";
 import type { ApplicationReadiness, ReadinessState } from "@/lib/domain/types";
 
 const stateClasses: Record<ReadinessState, string> = {
-  green: "bg-emerald-100 text-emerald-800",
-  amber: "bg-amber-100 text-amber-900",
-  red: "bg-rose-100 text-rose-800",
-  unknown: "bg-slate-200 text-slate-700",
+  green: "border-lime-300/25 bg-lime-300/10 text-lime-300",
+  amber: "border-amber-300/25 bg-amber-300/10 text-amber-300",
+  red: "border-rose-300/25 bg-rose-300/10 text-rose-300",
+  unknown: "border-white/10 bg-white/[0.045] text-slate-400",
+};
+
+const glowClasses: Record<ReadinessState, string> = {
+  green: "bg-lime-300/10 shadow-[0_0_70px_rgba(200,255,56,0.08)]",
+  amber: "bg-amber-300/10 shadow-[0_0_70px_rgba(252,211,77,0.07)]",
+  red: "bg-rose-300/10 shadow-[0_0_70px_rgba(253,164,175,0.07)]",
+  unknown: "bg-cyan-300/[0.055] shadow-[0_0_70px_rgba(31,228,255,0.06)]",
 };
 
 function stateLabel(state: ReadinessState): string {
@@ -15,38 +22,44 @@ function stateLabel(state: ReadinessState): string {
 export function ReadinessCard({ readiness }: { readiness: ApplicationReadiness }) {
   return (
     <div className="flex flex-1 flex-col">
-      <div className="flex items-center justify-between gap-4">
-        <h2 className="text-3xl font-black tracking-tight sm:text-4xl">Can I apply yet?</h2>
-        <span className={`rounded-full px-3 py-1 text-xs font-black uppercase tracking-wide ${stateClasses[readiness.state]}`}>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <p className="text-[10px] font-black uppercase tracking-[0.18em] text-lime-300">Application readiness</p>
+          <h2 className="mt-2 text-3xl font-black tracking-[-0.035em] text-white sm:text-4xl">Can I apply yet?</h2>
+        </div>
+        <span className={`rounded-full border px-3 py-1.5 text-[10px] font-black uppercase tracking-wide ${stateClasses[readiness.state]}`}>
           {stateLabel(readiness.state)}
         </span>
       </div>
 
-      <p className="mt-7 text-4xl font-black leading-tight tracking-tight text-slate-950 sm:text-5xl">
-        {readiness.headline}
-      </p>
-      {readiness.reasons[0] ? (
-        <p className="mt-4 max-w-xl leading-7 text-slate-600">{readiness.reasons[0]}</p>
-      ) : null}
+      <div className={`relative mt-7 overflow-hidden rounded-[1.75rem] border border-white/8 p-5 sm:p-6 ${glowClasses[readiness.state]}`}>
+        <div className="absolute -right-10 -top-12 size-36 rounded-full bg-white/[0.035] blur-2xl" aria-hidden="true" />
+        <p className="relative text-3xl font-black leading-[1.05] tracking-[-0.04em] text-white sm:text-4xl">
+          {readiness.headline}
+        </p>
+        {readiness.reasons[0] ? (
+          <p className="relative mt-4 max-w-xl text-sm leading-6 text-slate-300 sm:text-base">{readiness.reasons[0]}</p>
+        ) : null}
+      </div>
 
-      <div className="mt-7 grid gap-3 sm:grid-cols-2">
-        <div className="rounded-2xl bg-violet-50 p-4">
-          <p className="text-xs font-black uppercase tracking-wide text-violet-700">Do now</p>
-          <p className="mt-2 text-sm leading-6 text-slate-700">{readiness.actions[0] ?? "Keep your profile information up to date."}</p>
+      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+        <div className="rounded-2xl border border-cyan-300/12 bg-cyan-300/[0.055] p-4">
+          <p className="text-[10px] font-black uppercase tracking-[0.15em] text-cyan-300">Do now</p>
+          <p className="mt-2 text-sm leading-6 text-slate-300">{readiness.actions[0] ?? "Keep your profile information up to date."}</p>
         </div>
-        <div className="rounded-2xl bg-slate-100 p-4">
-          <p className="text-xs font-black uppercase tracking-wide text-slate-500">Avoid now</p>
-          <p className="mt-2 text-sm leading-6 text-slate-700">{readiness.avoid[0] ?? "Avoid unnecessary hard applications."}</p>
+        <div className="rounded-2xl border border-fuchsia-300/10 bg-fuchsia-300/[0.045] p-4">
+          <p className="text-[10px] font-black uppercase tracking-[0.15em] text-fuchsia-300">Avoid now</p>
+          <p className="mt-2 text-sm leading-6 text-slate-300">{readiness.avoid[0] ?? "Avoid unnecessary hard applications."}</p>
         </div>
       </div>
 
-      <p className="mt-5 text-xs leading-5 text-slate-500">
+      <p className="mt-4 text-[11px] leading-5 text-slate-500">
         This is Credit Quest guidance, not a lender approval prediction. Green means only that the blockers Credit Quest currently checks are not present.
       </p>
 
       <Link
         href="/readiness"
-        className="mt-auto pt-6 text-center text-sm font-black text-violet-700 underline decoration-violet-300 underline-offset-4"
+        className="mt-auto pt-5 text-center text-sm font-black text-lime-300 underline decoration-lime-300/25 underline-offset-4 hover:text-white"
       >
         Understand my readiness
       </Link>
