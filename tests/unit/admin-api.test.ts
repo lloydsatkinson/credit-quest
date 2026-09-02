@@ -37,8 +37,9 @@ describe("admin API schemas", () => {
     expect(routeSchema.safeParse({ ...valid, requiredReadiness: "amber" }).success).toBe(false);
   });
 
-  it("allows only the two runtime switches", () => {
+  it("allows only the three runtime switches", () => {
     expect(flagSchema.safeParse({ flagKey: "commercial_gateway_enabled", enabled: false }).success).toBe(true);
+    expect(flagSchema.safeParse({ flagKey: "commercial_sandbox_enabled", enabled: false }).success).toBe(true);
     expect(flagSchema.safeParse({ flagKey: "email_reminders_enabled", enabled: false }).success).toBe(true);
     expect(flagSchema.safeParse({ flagKey: "readiness_threshold", enabled: true }).success).toBe(false);
   });
