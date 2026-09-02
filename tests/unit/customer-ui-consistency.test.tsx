@@ -35,12 +35,18 @@ describe("customer UI consistency", () => {
     expect(card.className).not.toContain("bg-white");
   });
 
-  it("renders an Academy article with the premium article surface", () => {
+  it("renders an Academy article with native premium learning components", () => {
     render(<AcademyArticleView article={article} related={[]} />);
 
     const shell = screen.getByTestId("academy-article-shell");
     expect(shell.className).toContain("text-white");
     expect(screen.getByTestId("academy-review-panel").className).toContain("cq-panel");
+
+    const feedback = screen.getByRole("region", { name: "Academy feedback" });
+    expect(feedback.className).toContain("cq-panel");
+    expect(feedback.className).not.toContain("bg-white");
+
+    expect(screen.getByRole("heading", { name: article.title }).className).toContain("text-white");
     expect(screen.queryByText(/Sponsored/i)).toBeNull();
   });
 
