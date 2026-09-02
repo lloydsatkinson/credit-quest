@@ -1,12 +1,24 @@
 import { cleanup, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AcademyArticleView } from "@/components/academy/academy-article";
 import { AcademyLibrary, AcademyUnavailable } from "@/components/academy/academy-library";
 import { DEMO_ACADEMY_ARTICLES } from "@/lib/academy/demo-content";
 
+vi.mock("@/lib/events", () => ({
+  trackEvent: vi.fn().mockResolvedValue(undefined),
+}));
+
 const article = DEMO_ACADEMY_ARTICLES[0];
 
-afterEach(() => cleanup());
+beforeEach(() => {
+  vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(null, { status: 204 })));
+});
+
+afterEach(() => {
+  cleanup();
+  vi.clearAllMocks();
+  vi.unstubAllGlobals();
+});
 
 describe("customer UI consistency", () => {
   it("renders the Academy library as a premium Credit Quest surface", () => {
