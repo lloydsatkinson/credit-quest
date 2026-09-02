@@ -1,5 +1,6 @@
 import { notFound, redirect } from "next/navigation";
 import { ActionScreen } from "@/components/actions/action-screen";
+import { CustomerShell } from "@/components/customer/customer-shell";
 import { resolveOwnedMissionAction } from "@/lib/server/action-service";
 import { getSupabasePublicEnv } from "@/lib/supabase/env";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
@@ -30,12 +31,14 @@ export default async function ActionPage({
   if (!result || !result.ok) notFound();
 
   return (
-    <ActionScreen
-      missionTitle={result.context.mission.title}
-      rationale={result.context.mission.rationale}
-      resolvedAction={result.context.resolvedAction}
-      missionInstanceId={result.context.instance.id}
-      targetLabel={accountLabel(result.context.account)}
-    />
+    <CustomerShell active="quest">
+      <ActionScreen
+        missionTitle={result.context.mission.title}
+        rationale={result.context.mission.rationale}
+        resolvedAction={result.context.resolvedAction}
+        missionInstanceId={result.context.instance.id}
+        targetLabel={accountLabel(result.context.account)}
+      />
+    </CustomerShell>
   );
 }
