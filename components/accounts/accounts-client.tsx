@@ -195,210 +195,127 @@ export function AccountsClient({
   }
 
   return (
-    <div className="space-y-6">
-      <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-        <h2 className="text-xl font-black">Add a credit account</h2>
-        <p className="mt-2 text-sm leading-6 text-slate-600">
+    <div className="space-y-6 text-white">
+      <section data-testid="accounts-add-panel" className="cq-panel rounded-[2rem] p-6">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <p className="cq-kicker">Account evidence</p>
+            <h2 className="mt-2 text-xl font-black text-white">Add a credit account</h2>
+          </div>
+          <span className="rounded-full border border-lime-300/15 bg-lime-300/[0.055] px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.15em] text-lime-300">Last 4 only</span>
+        </div>
+        <p className="mt-3 text-sm leading-6 text-slate-400">
           Add only enough information for Credit Quest to target the right mission. Never enter your full card number or banking password.
         </p>
 
         <form onSubmit={addAccount} className="mt-5 grid gap-4">
-          <label className="text-sm font-bold text-slate-700">
+          <label className="text-sm font-bold text-slate-300">
             Provider
-            <select
-              aria-label="Provider"
-              className="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3"
-              value={providerId}
-              onChange={(event) => setProviderId(event.target.value)}
-            >
+            <select aria-label="Provider" className="cq-field w-full" value={providerId} onChange={(event) => setProviderId(event.target.value)}>
               <option value="">Other / not listed</option>
-              {providers.map((provider) => (
-                <option key={provider.id} value={provider.id}>{provider.displayName}</option>
-              ))}
+              {providers.map((provider) => <option key={provider.id} value={provider.id}>{provider.displayName}</option>)}
             </select>
           </label>
 
-          <label className="text-sm font-bold text-slate-700">
+          <label className="text-sm font-bold text-slate-300">
             Account nickname
-            <input
-              aria-label="Account nickname"
-              className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3"
-              value={nickname}
-              maxLength={80}
-              onChange={(event) => setNickname(event.target.value)}
-              placeholder="e.g. Everyday card"
-            />
+            <input aria-label="Account nickname" className="cq-field" value={nickname} maxLength={80} onChange={(event) => setNickname(event.target.value)} placeholder="e.g. Everyday card" />
           </label>
 
-          <label className="text-sm font-bold text-slate-700">
+          <label className="text-sm font-bold text-slate-300">
             Last four digits (optional)
-            <input
-              aria-label="Last four digits (optional)"
-              className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3"
-              value={lastFour}
-              inputMode="numeric"
-              maxLength={4}
-              onChange={(event) => setLastFour(event.target.value.replace(/\D/g, "").slice(0, 4))}
-              placeholder="1234"
-            />
+            <input aria-label="Last four digits (optional)" className="cq-field" value={lastFour} inputMode="numeric" maxLength={4} onChange={(event) => setLastFour(event.target.value.replace(/\D/g, "").slice(0, 4))} placeholder="1234" />
           </label>
 
           <div className="grid gap-4 sm:grid-cols-2">
-            <label className="text-sm font-bold text-slate-700">
+            <label className="text-sm font-bold text-slate-300">
               Current balance (£, optional)
-              <input
-                aria-label="Current balance in pounds"
-                className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3"
-                value={balance}
-                inputMode="decimal"
-                onChange={(event) => setBalance(event.target.value)}
-                placeholder="620"
-              />
+              <input aria-label="Current balance in pounds" className="cq-field" value={balance} inputMode="decimal" onChange={(event) => setBalance(event.target.value)} placeholder="620" />
             </label>
-            <label className="text-sm font-bold text-slate-700">
+            <label className="text-sm font-bold text-slate-300">
               Credit limit (£, optional)
-              <input
-                aria-label="Credit limit in pounds"
-                className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3"
-                value={creditLimit}
-                inputMode="decimal"
-                onChange={(event) => setCreditLimit(event.target.value)}
-                placeholder="1000"
-              />
+              <input aria-label="Credit limit in pounds" className="cq-field" value={creditLimit} inputMode="decimal" onChange={(event) => setCreditLimit(event.target.value)} placeholder="1000" />
             </label>
           </div>
 
-          <label className="text-sm font-bold text-slate-700">
+          <label className="text-sm font-bold text-slate-300">
             Direct debit status
-            <select
-              aria-label="Direct debit status"
-              className="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3"
-              value={directDebitStatus}
-              onChange={(event) => setDirectDebitStatus(event.target.value as DirectDebitStatus)}
-            >
+            <select aria-label="Direct debit status" className="cq-field w-full" value={directDebitStatus} onChange={(event) => setDirectDebitStatus(event.target.value as DirectDebitStatus)}>
               <option value="unknown">I don&apos;t know</option>
               <option value="yes">Set up</option>
               <option value="no">Not set up</option>
             </select>
           </label>
 
-          <button
-            type="submit"
-            disabled={saving}
-            className="rounded-2xl bg-violet-600 px-5 py-3 font-black text-white disabled:opacity-50"
-          >
+          <button type="submit" disabled={saving} className="rounded-2xl bg-cyan-300 px-5 py-3 font-black text-slate-950 shadow-[0_10px_32px_rgba(31,228,255,0.12)] disabled:opacity-50">
             {saving ? "Adding…" : "Add account"}
           </button>
         </form>
       </section>
 
       <section className="space-y-3">
-        <h2 className="text-xl font-black">Your accounts</h2>
+        <div className="flex items-center justify-between gap-4">
+          <h2 className="text-xl font-black text-white">Your accounts</h2>
+          <span className="text-[10px] font-black uppercase tracking-[0.15em] text-slate-500">Manual evidence</span>
+        </div>
         {accounts.length === 0 ? (
-          <p className="rounded-2xl border border-dashed border-slate-300 bg-white p-5 text-sm text-slate-600">No accounts added yet.</p>
+          <div className="cq-panel rounded-2xl border-dashed p-5 text-sm text-slate-400">
+            <p className="font-black text-white">No accounts added yet.</p>
+            <p className="mt-1 text-xs leading-5 text-slate-500">Add only what improves your guidance.</p>
+          </div>
         ) : accounts.map((account) => {
           const isEditing = editingId === account.id && editState !== null;
           return (
-            <article key={account.id} data-testid={`account-${account.id}`} className="rounded-3xl border border-slate-200 bg-white p-5">
+            <article key={account.id} data-testid={`account-${account.id}`} className="cq-panel rounded-3xl p-5">
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <h3 className="font-black">{account.nickname || account.providerName || "Credit account"}</h3>
+                  <h3 className="font-black text-white">{account.nickname || account.providerName || "Credit account"}</h3>
                   <p className="mt-1 text-sm text-slate-500">
-                    {account.providerName ?? "Provider not listed"}
-                    {account.lastFour ? ` • ending ${account.lastFour}` : ""}
+                    {account.providerName ?? "Provider not listed"}{account.lastFour ? ` • ending ${account.lastFour}` : ""}
                   </p>
-                  <p className="mt-2 text-sm text-slate-600">Direct debit: {account.directDebitStatus === "yes" ? "set up" : account.directDebitStatus === "no" ? "not set up" : "unknown"}</p>
-                  <p className="mt-1 text-sm text-slate-600">Balance {moneyLabel(account.balanceMinor)} • Limit {moneyLabel(account.creditLimitMinor)}</p>
+                  <p className="mt-2 text-sm text-slate-400">Direct debit: {account.directDebitStatus === "yes" ? "set up" : account.directDebitStatus === "no" ? "not set up" : "unknown"}</p>
+                  <p className="mt-1 text-sm text-slate-400">Balance {moneyLabel(account.balanceMinor)} • Limit {moneyLabel(account.creditLimitMinor)}</p>
                 </div>
                 <div className="flex gap-3">
-                  <button
-                    type="button"
-                    onClick={() => beginEdit(account)}
-                    className="text-sm font-bold text-violet-700"
-                  >
-                    Edit
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => removeAccount(account.id)}
-                    className="text-sm font-bold text-rose-700"
-                  >
-                    Remove
-                  </button>
+                  <button type="button" onClick={() => beginEdit(account)} className="text-sm font-bold text-cyan-300">Edit</button>
+                  <button type="button" onClick={() => removeAccount(account.id)} className="text-sm font-bold text-rose-300">Remove</button>
                 </div>
               </div>
 
               {isEditing ? (
-                <div data-testid={`edit-account-${account.id}`} className="mt-5 grid gap-4 border-t border-slate-100 pt-5">
-                  <label className="text-sm font-bold text-slate-700">
+                <div data-testid={`edit-account-${account.id}`} className="mt-5 grid gap-4 border-t border-white/8 pt-5">
+                  <label className="text-sm font-bold text-slate-300">
                     Provider
-                    <select
-                      aria-label="Edit provider"
-                      className="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3"
-                      value={editState.providerId}
-                      onChange={(event) => setEditState({ ...editState, providerId: event.target.value })}
-                    >
+                    <select aria-label="Edit provider" className="cq-field w-full" value={editState.providerId} onChange={(event) => setEditState({ ...editState, providerId: event.target.value })}>
                       <option value="">Other / not listed</option>
-                      {providers.map((provider) => (
-                        <option key={provider.id} value={provider.id}>{provider.displayName}</option>
-                      ))}
+                      {providers.map((provider) => <option key={provider.id} value={provider.id}>{provider.displayName}</option>)}
                     </select>
                   </label>
 
-                  <label className="text-sm font-bold text-slate-700">
+                  <label className="text-sm font-bold text-slate-300">
                     Account nickname
-                    <input
-                      aria-label="Edit account nickname"
-                      className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3"
-                      value={editState.nickname}
-                      maxLength={80}
-                      onChange={(event) => setEditState({ ...editState, nickname: event.target.value })}
-                    />
+                    <input aria-label="Edit account nickname" className="cq-field" value={editState.nickname} maxLength={80} onChange={(event) => setEditState({ ...editState, nickname: event.target.value })} />
                   </label>
 
-                  <label className="text-sm font-bold text-slate-700">
+                  <label className="text-sm font-bold text-slate-300">
                     Last four digits (optional)
-                    <input
-                      aria-label="Edit last four digits"
-                      className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3"
-                      value={editState.lastFour}
-                      inputMode="numeric"
-                      maxLength={4}
-                      onChange={(event) => setEditState({ ...editState, lastFour: event.target.value.replace(/\D/g, "").slice(0, 4) })}
-                    />
+                    <input aria-label="Edit last four digits" className="cq-field" value={editState.lastFour} inputMode="numeric" maxLength={4} onChange={(event) => setEditState({ ...editState, lastFour: event.target.value.replace(/\D/g, "").slice(0, 4) })} />
                   </label>
 
                   <div className="grid gap-4 sm:grid-cols-2">
-                    <label className="text-sm font-bold text-slate-700">
+                    <label className="text-sm font-bold text-slate-300">
                       Current balance (£, optional)
-                      <input
-                        aria-label="Edit current balance in pounds"
-                        className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3"
-                        value={editState.balance}
-                        inputMode="decimal"
-                        onChange={(event) => setEditState({ ...editState, balance: event.target.value })}
-                      />
+                      <input aria-label="Edit current balance in pounds" className="cq-field" value={editState.balance} inputMode="decimal" onChange={(event) => setEditState({ ...editState, balance: event.target.value })} />
                     </label>
-                    <label className="text-sm font-bold text-slate-700">
+                    <label className="text-sm font-bold text-slate-300">
                       Credit limit (£, optional)
-                      <input
-                        aria-label="Edit credit limit in pounds"
-                        className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3"
-                        value={editState.creditLimit}
-                        inputMode="decimal"
-                        onChange={(event) => setEditState({ ...editState, creditLimit: event.target.value })}
-                      />
+                      <input aria-label="Edit credit limit in pounds" className="cq-field" value={editState.creditLimit} inputMode="decimal" onChange={(event) => setEditState({ ...editState, creditLimit: event.target.value })} />
                     </label>
                   </div>
 
-                  <label className="text-sm font-bold text-slate-700">
+                  <label className="text-sm font-bold text-slate-300">
                     Direct debit status
-                    <select
-                      aria-label="Edit direct debit status"
-                      className="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3"
-                      value={editState.directDebitStatus}
-                      onChange={(event) => setEditState({ ...editState, directDebitStatus: event.target.value as DirectDebitStatus })}
-                    >
+                    <select aria-label="Edit direct debit status" className="cq-field w-full" value={editState.directDebitStatus} onChange={(event) => setEditState({ ...editState, directDebitStatus: event.target.value as DirectDebitStatus })}>
                       <option value="unknown">I don&apos;t know</option>
                       <option value="yes">Set up</option>
                       <option value="no">Not set up</option>
@@ -406,20 +323,10 @@ export function AccountsClient({
                   </label>
 
                   <div className="flex gap-3">
-                    <button
-                      type="button"
-                      disabled={saving}
-                      onClick={() => saveEdit(account)}
-                      className="flex-1 rounded-2xl bg-violet-600 px-4 py-3 text-sm font-black text-white disabled:opacity-50"
-                    >
+                    <button type="button" disabled={saving} onClick={() => saveEdit(account)} className="flex-1 rounded-2xl bg-cyan-300 px-4 py-3 text-sm font-black text-slate-950 disabled:opacity-50">
                       {saving ? "Saving…" : "Save changes"}
                     </button>
-                    <button
-                      type="button"
-                      disabled={saving}
-                      onClick={cancelEdit}
-                      className="rounded-2xl border border-slate-300 px-4 py-3 text-sm font-bold text-slate-700 disabled:opacity-50"
-                    >
+                    <button type="button" disabled={saving} onClick={cancelEdit} className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm font-bold text-slate-300 disabled:opacity-50">
                       Cancel
                     </button>
                   </div>
@@ -430,7 +337,7 @@ export function AccountsClient({
         })}
       </section>
 
-      {status && <p role="status" className="rounded-2xl bg-slate-100 p-4 text-sm font-semibold text-slate-700">{status}</p>}
+      {status && <p role="status" className="rounded-2xl border border-cyan-300/10 bg-cyan-300/[0.035] p-4 text-sm font-semibold text-slate-300">{status}</p>}
     </div>
   );
 }
