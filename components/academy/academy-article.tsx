@@ -75,7 +75,7 @@ export function AcademyArticleView({
             <span className="grid size-9 place-items-center rounded-xl border border-cyan-300/15 bg-cyan-300/[0.06] text-cyan-200" aria-hidden="true">✓</span>
             <div>
               <p className="font-black text-white">Source and review</p>
-              <p className="text-xs text-slate-500">Educational content with a visible source trail.</p>
+              <p className="text-xs text-slate-500">Visible source trail and review details.</p>
             </div>
           </div>
           <p className="mt-4">
