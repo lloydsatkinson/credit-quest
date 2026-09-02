@@ -1,10 +1,10 @@
 import type { CreditPassport, PassportPillar, PassportStatus } from "@/lib/domain/types";
 
 const statusClasses: Record<PassportStatus, string> = {
-  green: "bg-emerald-100 text-emerald-800",
-  amber: "bg-amber-100 text-amber-900",
-  red: "bg-rose-100 text-rose-800",
-  unknown: "bg-slate-200 text-slate-700",
+  green: "border-lime-300/20 bg-lime-300/[0.08] text-lime-300",
+  amber: "border-amber-300/20 bg-amber-300/[0.08] text-amber-200",
+  red: "border-rose-300/20 bg-rose-300/[0.08] text-rose-200",
+  unknown: "border-white/10 bg-white/[0.04] text-slate-400",
 };
 
 function statusLabel(status: PassportStatus): string {
@@ -14,11 +14,14 @@ function statusLabel(status: PassportStatus): string {
 function EvidenceList({ title, items }: { title: string; items: string[] }) {
   if (items.length === 0) return null;
   return (
-    <div>
-      <h3 className="text-xs font-black uppercase tracking-[0.15em] text-slate-400">{title}</h3>
-      <ul className="mt-2 space-y-2">
+    <div className="rounded-2xl border border-white/7 bg-white/[0.025] p-4">
+      <h3 className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-500">{title}</h3>
+      <ul className="mt-3 space-y-2">
         {items.map((item) => (
-          <li key={item} className="text-sm leading-6 text-slate-700">• {item}</li>
+          <li key={item} className="flex gap-2 text-sm leading-6 text-slate-300">
+            <span className="mt-2 size-1.5 shrink-0 rounded-full bg-cyan-300/70" aria-hidden="true" />
+            <span>{item}</span>
+          </li>
         ))}
       </ul>
     </div>
@@ -29,18 +32,18 @@ function PillarDetail({ pillar }: { pillar: PassportPillar }) {
   return (
     <article
       data-testid={`passport-pillar-${pillar.id}`}
-      className="rounded-[1.75rem] border border-slate-200 bg-white p-5 shadow-sm sm:p-6"
+      className="cq-panel rounded-[1.75rem] p-5 sm:p-6"
     >
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h2 className="text-xl font-black text-slate-950">{pillar.title}</h2>
-          <p className="mt-2 text-sm leading-6 text-slate-600">{pillar.strength}</p>
+          <h2 className="text-xl font-black text-white">{pillar.title}</h2>
+          <p className="mt-2 text-sm leading-6 text-slate-400">{pillar.strength}</p>
         </div>
-        <span className={`shrink-0 rounded-full px-3 py-1 text-xs font-black uppercase tracking-wide ${statusClasses[pillar.status]}`}>
+        <span className={`shrink-0 rounded-full border px-3 py-1 text-[10px] font-black uppercase tracking-[0.15em] ${statusClasses[pillar.status]}`}>
           {statusLabel(pillar.status)}
         </span>
       </div>
-      <div className="mt-5 grid gap-5 sm:grid-cols-2">
+      <div className="mt-5 grid gap-3 sm:grid-cols-2">
         <EvidenceList title="What is helping" items={pillar.helping} />
         <EvidenceList title="What is hurting" items={pillar.hurting} />
         <EvidenceList title="What we do not know" items={pillar.unknowns} />
@@ -52,10 +55,10 @@ function PillarDetail({ pillar }: { pillar: PassportPillar }) {
 
 export function PassportDetail({ passport }: { passport: CreditPassport }) {
   return (
-    <section>
-      <p className="text-xs font-black uppercase tracking-[0.18em] text-violet-600">Your position, explained</p>
-      <h1 className="mt-3 text-4xl font-black tracking-tight text-slate-950 sm:text-5xl">Your Credit Passport</h1>
-      <p className="mt-4 max-w-2xl leading-7 text-slate-600">
+    <section className="text-white">
+      <p className="cq-kicker">Your position, explained</p>
+      <h1 className="mt-3 text-4xl font-black tracking-[-0.045em] text-white sm:text-5xl">Your Credit Passport</h1>
+      <p className="mt-4 max-w-2xl leading-7 text-slate-400">
         This is a Credit Quest guidance framework, not a credit-reference-agency score and not a lender underwriting result.
       </p>
       <div className="mt-8 space-y-4">
