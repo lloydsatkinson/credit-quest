@@ -103,26 +103,26 @@ export function OnboardingForm() {
   }
 
   return (
-    <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-xl shadow-slate-200/60">
-      <div className="mb-6">
-        <div className="flex items-center justify-between text-xs font-bold uppercase tracking-wider text-slate-500">
+    <div data-testid="onboarding-form-panel" className="cq-panel rounded-[2rem] p-6 text-white sm:p-7">
+      <div className="mb-7">
+        <div className="flex items-center justify-between text-[10px] font-black uppercase tracking-[0.16em] text-slate-500">
           <span>{stepNames[step]}</span>
           <span>{progress}%</span>
         </div>
-        <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-100">
-          <div className="h-full rounded-full bg-violet-600" style={{ width: `${progress}%` }} />
+        <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/[0.05]">
+          <div className="h-full rounded-full bg-gradient-to-r from-cyan-300 to-lime-300 shadow-[0_0_18px_rgba(31,228,255,0.24)]" style={{ width: `${progress}%` }} />
         </div>
       </div>
 
       {step === 0 && (
         <Field title="When were you born?" hint="Credit Quest is available from age 16. Credit product referrals are only available from 18.">
-          <input data-testid="dob" type="date" className="field" value={answers.dateOfBirth} onChange={(e) => setAnswers({ ...answers, dateOfBirth: e.target.value })} />
+          <input data-testid="dob" type="date" className="cq-field" value={answers.dateOfBirth} onChange={(e) => setAnswers({ ...answers, dateOfBirth: e.target.value })} />
         </Field>
       )}
 
       {step === 1 && (
         <Field title="What best describes your work?" hint="Tell us your current employment status. If you are working, we only need a broad annual income band.">
-          <label className="block text-sm font-bold text-slate-700">
+          <label className="block text-sm font-bold text-slate-300">
             Employment status
             <Select
               ariaLabel="Employment status"
@@ -133,9 +133,9 @@ export function OnboardingForm() {
             />
           </label>
           {answers.employmentStatus === "unemployed" ? (
-            <p className="rounded-2xl bg-slate-50 p-4 text-sm leading-6 text-slate-600">No income band is needed while you are unemployed.</p>
+            <p className="rounded-2xl border border-white/8 bg-white/[0.03] p-4 text-sm leading-6 text-slate-400">No income band is needed while you are unemployed.</p>
           ) : answers.employmentStatus ? (
-            <label className="block text-sm font-bold text-slate-700">
+            <label className="block text-sm font-bold text-slate-300">
               Annual personal income (before tax)
               <Select
                 ariaLabel="Annual personal income band"
@@ -183,11 +183,11 @@ export function OnboardingForm() {
           />
           {answers.hasRevolvingCredit === true && (
             <div>
-              <label className="block text-sm font-bold text-slate-700">
+              <label className="block text-sm font-bold text-slate-300">
                 Credit utilisation (%)
                 <input
                   aria-label="Credit utilisation (%)"
-                  className="field"
+                  className="cq-field"
                   type="number"
                   inputMode="decimal"
                   min="0"
@@ -206,7 +206,7 @@ export function OnboardingForm() {
               </label>
               <button
                 type="button"
-                className="mt-3 text-sm font-bold text-violet-700 underline"
+                className="mt-3 text-sm font-bold text-cyan-300 underline decoration-cyan-300/30 underline-offset-4"
                 onClick={() => {
                   setAnswers({ ...answers, utilisationPct: null });
                   markAnswered("utilisationPct");
@@ -221,11 +221,11 @@ export function OnboardingForm() {
 
       {step === 5 && (
         <Field title="Any missed payments in the last 12 months?" hint="An estimate is useful, but do not guess if you are unsure. If you use revolving credit, we will also ask whether a direct debit protects your payments.">
-          <label className="block text-sm font-bold text-slate-700">
+          <label className="block text-sm font-bold text-slate-300">
             Number of missed payments
             <input
               aria-label="Missed payments"
-              className="field"
+              className="cq-field"
               type="number"
               min="0"
               value={answers.missedPaymentsLast12m ?? ""}
@@ -238,7 +238,7 @@ export function OnboardingForm() {
           </label>
           <button
             type="button"
-            className="text-sm font-bold text-violet-700 underline"
+            className="text-sm font-bold text-cyan-300 underline decoration-cyan-300/30 underline-offset-4"
             onClick={() => {
               setAnswers({ ...answers, missedPaymentsLast12m: null });
               markAnswered("missedPaymentsLast12m");
@@ -264,7 +264,7 @@ export function OnboardingForm() {
         <Field title="How many hard credit applications in the last 6 months?" hint="An estimate is fine. If you genuinely do not know, tell us that instead of entering zero.">
           <input
             aria-label="Hard applications"
-            className="field"
+            className="cq-field"
             type="number"
             min="0"
             value={answers.hardApplicationsLast6m ?? ""}
@@ -276,7 +276,7 @@ export function OnboardingForm() {
           />
           <button
             type="button"
-            className="text-sm font-bold text-violet-700 underline"
+            className="text-sm font-bold text-cyan-300 underline decoration-cyan-300/30 underline-offset-4"
             onClick={() => {
               setAnswers({ ...answers, hardApplicationsLast6m: null });
               markAnswered("hardApplicationsLast6m");
@@ -289,31 +289,30 @@ export function OnboardingForm() {
 
       {step === 7 && (
         <Field title="Ready for your first mission?" hint="We’ll use only the answers you gave us to choose one explainable next best move.">
-          <div className="rounded-2xl bg-violet-50 p-4 text-sm text-violet-900">Your Credit Quest Score is our own progress indicator. It is not an Experian, Equifax or TransUnion score and does not predict lender approval.</div>
+          <div className="rounded-2xl border border-cyan-300/15 bg-cyan-300/[0.055] p-4 text-sm leading-6 text-cyan-100">Your Credit Quest Score is our own progress indicator. It is not an Experian, Equifax or TransUnion score and does not predict lender approval.</div>
         </Field>
       )}
 
-      {error && <p className="mt-4 rounded-xl bg-rose-50 p-3 text-sm font-semibold text-rose-700">{error}</p>}
+      {error && <p className="mt-4 rounded-2xl border border-rose-300/15 bg-rose-300/[0.055] p-3 text-sm font-semibold text-rose-200">{error}</p>}
       <div className="mt-8 flex gap-3">
-        {step > 0 && <button className="rounded-2xl border border-slate-200 px-4 py-3 font-bold" onClick={() => setStep(step - 1)}>Back</button>}
+        {step > 0 && <button className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 font-bold text-slate-300" onClick={() => setStep(step - 1)}>Back</button>}
         {step < 7 ? (
-          <button data-testid="next" disabled={!canContinue(step, answers, answered)} className="ml-auto rounded-2xl bg-violet-600 px-5 py-3 font-bold text-white disabled:opacity-40" onClick={() => setStep(step + 1)}>Next</button>
+          <button data-testid="next" disabled={!canContinue(step, answers, answered)} className="ml-auto rounded-2xl bg-cyan-300 px-5 py-3 font-black text-slate-950 shadow-[0_10px_32px_rgba(31,228,255,0.12)] disabled:opacity-40" onClick={() => setStep(step + 1)}>Next</button>
         ) : (
-          <button data-testid="finish" className="ml-auto rounded-2xl bg-violet-600 px-5 py-3 font-bold text-white" onClick={finish}>Show my next best move</button>
+          <button data-testid="finish" className="ml-auto rounded-2xl bg-cyan-300 px-5 py-3 font-black text-slate-950 shadow-[0_10px_32px_rgba(31,228,255,0.12)]" onClick={finish}>Show my next best move</button>
         )}
       </div>
-      <style jsx>{`.field{width:100%;margin-top:12px;border:1px solid #e2e8f0;border-radius:16px;padding:12px;background:#fff}`}</style>
     </div>
   );
 }
 
 function Field({ title, hint, children }: { title: string; hint: string; children: React.ReactNode }) {
-  return <div><h2 className="text-2xl font-black">{title}</h2><p className="mt-2 text-sm leading-6 text-slate-500">{hint}</p><div className="mt-4 space-y-3">{children}</div></div>;
+  return <div><h2 className="text-2xl font-black tracking-[-0.025em] text-white">{title}</h2><p className="mt-2 text-sm leading-6 text-slate-400">{hint}</p><div className="mt-4 space-y-3">{children}</div></div>;
 }
 
 function Select({ ariaLabel, value, onChange, options, placeholder }: { ariaLabel: string; value: string; onChange: (value: string) => void; options: string[]; placeholder: string }) {
   return (
-    <select aria-label={ariaLabel} className="field w-full rounded-2xl border border-slate-200 bg-white px-4 py-3" value={value} onChange={(e) => onChange(e.target.value)}>
+    <select aria-label={ariaLabel} className="cq-field w-full" value={value} onChange={(e) => onChange(e.target.value)}>
       <option value="" disabled>{placeholder}</option>
       {options.map((option) => <option key={option} value={option}>{option.replaceAll("_", " ")}</option>)}
     </select>
@@ -329,7 +328,7 @@ function YesNoUnknown({ value, onChange, label, answered }: { value: boolean | n
 
   return (
     <div>
-      {label && <p className="mb-2 text-sm font-bold">{label}</p>}
+      {label && <p className="mb-2 text-sm font-bold text-slate-300">{label}</p>}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         {options.map((option) => {
           const selected = answered && value === option.value;
@@ -338,7 +337,7 @@ function YesNoUnknown({ value, onChange, label, answered }: { value: boolean | n
               key={option.label}
               type="button"
               aria-pressed={selected}
-              className={`rounded-2xl border px-4 py-3 font-bold ${selected ? "border-violet-600 bg-violet-50 text-violet-700" : "border-slate-200"}`}
+              className={`rounded-2xl border px-4 py-3 font-bold transition ${selected ? "border-cyan-300/35 bg-cyan-300/[0.08] text-cyan-200 shadow-[0_0_22px_rgba(31,228,255,0.06)]" : "border-white/10 bg-white/[0.025] text-slate-300 hover:border-cyan-300/20 hover:text-white"}`}
               onClick={() => onChange(option.value)}
             >
               {option.label}
