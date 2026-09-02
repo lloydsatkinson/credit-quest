@@ -5,6 +5,13 @@ import * as pilotRepository from "@/lib/server/sandbox-pilot-repository";
 
 const read = (path: string) => readFileSync(resolve(process.cwd(), path), "utf8");
 
+type SetSandboxPilot = (
+  admin: unknown,
+  adminUserId: string,
+  targetUserId: string,
+  enabled: boolean,
+) => Promise<void>;
+
 function adminClient(user: { app_metadata?: Record<string, unknown>; user_metadata?: Record<string, unknown> } | null = { app_metadata: {} }) {
   const getUserById = vi.fn().mockResolvedValue({ data: { user }, error: null });
   const updateUserById = vi.fn().mockResolvedValue({ data: { user }, error: null });
@@ -27,7 +34,7 @@ describe("sandbox pilot control", () => {
   });
 
   it("provides an audited server-side pilot mutation that preserves existing app_metadata", async () => {
-    const setSandboxPilot = (pilotRepository as unknown as { setSandboxPilot?: Function }).setSandboxPilot;
+    const setSandboxPilot = (pilotRepository as unknown as { setSandboxPilot?: SetSandboxPilot }).setSandboxPilot;
     expect(typeof setSandboxPilot).toBe("function");
     if (!setSandboxPilot) return;
 
