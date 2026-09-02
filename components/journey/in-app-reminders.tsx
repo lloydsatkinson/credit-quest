@@ -39,10 +39,10 @@ export function InAppReminders({ reminders }: { reminders: InAppReminderView[] }
           <article
             key={reminder.id}
             data-testid="in-app-reminder"
-            className="rounded-2xl border border-violet-100 bg-violet-50 p-4 text-slate-800"
+            className="cq-panel rounded-2xl border-cyan-300/10 p-4 text-slate-200"
           >
-            <p className="text-xs font-black uppercase tracking-[0.16em] text-violet-600">Plan reminder</p>
-            <p className="mt-2 text-sm font-semibold leading-6">{copy.text}</p>
+            <p className="cq-kicker">Plan reminder</p>
+            <p className="mt-2 text-sm font-semibold leading-6 text-slate-300">{copy.text}</p>
           </article>
         );
       })}
