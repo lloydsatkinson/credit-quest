@@ -16,9 +16,21 @@ describe("admin repository", () => {
       p_enabled: false,
     });
 
+    await setFeatureFlag(
+      { rpc } as never,
+      "admin-1",
+      "commercial_sandbox_enabled" as never,
+      false,
+    );
+    expect(rpc).toHaveBeenCalledWith("admin_set_feature_flag", {
+      p_admin_user_id: "admin-1",
+      p_flag_key: "commercial_sandbox_enabled",
+      p_enabled: false,
+    });
+
     await expect(setFeatureFlag({ rpc } as never, "admin-1", "readiness_threshold" as never, true))
       .rejects.toThrow("Feature flag is not admin-editable");
-    expect(rpc).toHaveBeenCalledTimes(1);
+    expect(rpc).toHaveBeenCalledTimes(2);
   });
 
   it("keeps commercial route safety requirements server-owned", async () => {
