@@ -48,6 +48,7 @@ function makeDeps(overrides: Record<string, unknown> = {}) {
     }),
     isGatewayEnabled: vi.fn().mockResolvedValue(false),
     isSandboxEnabled: vi.fn().mockResolvedValue(true),
+    isSandboxPilot: vi.fn().mockResolvedValue(true),
     listRoutes: vi.fn().mockResolvedValue([route]),
     getRoute: vi.fn().mockResolvedValue(route),
     getDisclosure: vi.fn().mockResolvedValue(disclosure),
@@ -65,6 +66,30 @@ describe("commercial gateway", () => {
 
     expect(routes).toHaveLength(1);
     expect(routes[0].disclosure.body).toMatch(/Sandbox only/i);
+  });
+
+  it("blocks sandbox presentation for users outside the internal pilot", async () => {
+    const deps = makeDeps({ isSandboxPilot: vi.fn().mockResolvedValue(false) });
+    const gateway = createCommercialGateway(deps as never);
+
+    await expect(gateway.listPermittedCommercialRoutes({ userId: "u1", environment: "sandbox", now }))
+      .resolves.toEqual([]);
+    expect(deps.listRoutes).not.toHaveBeenCalled();
+  });
+
+  it("blocks sandbox referral creation for users outside the internal pilot", async () => {
+    const deps = makeDeps({ isSandboxPilot: vi.fn().mockResolvedValue(false) });
+    const gateway = createCommercialGateway(deps as never);
+
+    await expect(gateway.createCommercialReferral({
+      userId: "u1",
+      routeId: "route-1",
+      disclosureId: "disc-1",
+      consent: true,
+      originatingMissionId: null,
+      now,
+    })).rejects.toMatchObject({ code: "route_unavailable" });
+    expect(deps.appendReferral).not.toHaveBeenCalled();
   });
 
   it("keeps sandbox dark when its dedicated switch is off even if the live gateway is on", async () => {
@@ -119,15 +144,18 @@ describe("commercial gateway", () => {
       destinationUrl: "https://example.com",
       partnerLiveEnabled: true,
     };
-    const gateway = createCommercialGateway(makeDeps({
+    const deps = makeDeps({
       listRoutes: vi.fn().mockResolvedValue([liveRoute]),
       isSandboxEnabled: vi.fn().mockResolvedValue(true),
+      isSandboxPilot: vi.fn().mockResolvedValue(false),
       isGatewayEnabled: vi.fn().mockResolvedValue(false),
       liveAllowed: true,
-    }) as never);
+    });
+    const gateway = createCommercialGateway(deps as never);
 
     await expect(gateway.listPermittedCommercialRoutes({ userId: "u1", environment: "live", now }))
       .resolves.toEqual([]);
+    expect(deps.isSandboxPilot).not.toHaveBeenCalled();
   });
 
   it("keeps live routes behind the independent environment server guard", async () => {

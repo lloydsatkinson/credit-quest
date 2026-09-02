@@ -24,6 +24,7 @@ import {
   type AppendReferralInput,
   type CommercialConfiguredRoute,
 } from "@/lib/server/commercial-repository";
+import { isSandboxPilot } from "@/lib/server/sandbox-pilot-repository";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 
 export type CommercialGatewayErrorCode = CommercialGateReason
@@ -48,6 +49,7 @@ export interface CommercialGatewayDependencies {
   getGuidance(userId: string, now: Date): Promise<GatewayGuidance | null>;
   isGatewayEnabled(): Promise<boolean>;
   isSandboxEnabled(): Promise<boolean>;
+  isSandboxPilot(userId: string): Promise<boolean>;
   listRoutes(environment: CommercialEnvironment): Promise<CommercialConfiguredRoute[]>;
   getRoute(routeId: string): Promise<CommercialConfiguredRoute | null>;
   getDisclosure(disclosureKey: string): Promise<CommercialDisclosure | null>;
@@ -72,6 +74,15 @@ function runtimeEnabledForEnvironment(
   return environment === "sandbox"
     ? deps.isSandboxEnabled()
     : deps.isGatewayEnabled();
+}
+
+async function pilotAllowedForEnvironment(
+  deps: CommercialGatewayDependencies,
+  environment: CommercialEnvironment,
+  userId: string,
+): Promise<boolean> {
+  if (environment !== "sandbox") return true;
+  return deps.isSandboxPilot(userId);
 }
 
 function gateContext(
@@ -126,11 +137,12 @@ export function createCommercialGateway(deps: CommercialGatewayDependencies) {
       now: Date;
     }) {
       try {
-        const [gatewayEnabled, guidance] = await Promise.all([
+        const [gatewayEnabled, pilotAllowed, guidance] = await Promise.all([
           runtimeEnabledForEnvironment(deps, input.environment),
+          pilotAllowedForEnvironment(deps, input.environment, input.userId),
           deps.getGuidance(input.userId, input.now),
         ]);
-        if (!guidance) return [];
+        if (!gatewayEnabled || !pilotAllowed || !guidance) return [];
 
         const routes = orderEquivalentCommercialRoutes(await deps.listRoutes(input.environment));
         const permitted: Array<{
@@ -174,6 +186,10 @@ export function createCommercialGateway(deps: CommercialGatewayDependencies) {
           deps.getRoute(input.routeId),
         ]);
         if (!guidance || !route) throw new CommercialGatewayError("route_unavailable");
+
+        if (!(await pilotAllowedForEnvironment(deps, route.environment, input.userId))) {
+          throw new CommercialGatewayError("route_unavailable");
+        }
 
         const [gatewayEnabled, disclosure] = await Promise.all([
           runtimeEnabledForEnvironment(deps, route.environment),
@@ -231,6 +247,7 @@ function createProductionCommercialGateway() {
     getGuidance: (userId, now) => getCreditGuidanceForUser(admin, userId, now),
     isGatewayEnabled: () => isFeatureEnabled(admin, "commercial_gateway_enabled"),
     isSandboxEnabled: () => isFeatureEnabled(admin, "commercial_sandbox_enabled"),
+    isSandboxPilot: (userId) => isSandboxPilot(admin, userId),
     listRoutes: (environment) => listCommercialRoutes(admin, environment),
     getRoute: (routeId) => getCommercialRoute(admin, routeId),
     getDisclosure: (disclosureKey) => getPublishedCommercialDisclosure(admin, disclosureKey),
