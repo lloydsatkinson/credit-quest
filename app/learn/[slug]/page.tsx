@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { AcademyArticleView } from "@/components/academy/academy-article";
 import { AcademyUnavailable } from "@/components/academy/academy-library";
+import { CustomerShell } from "@/components/customer/customer-shell";
 import { DEMO_ACADEMY_ARTICLES } from "@/lib/academy/demo-content";
 import type { AcademyArticle } from "@/lib/academy/types";
 import {
@@ -43,6 +44,10 @@ export async function generateMetadata({
   }
 }
 
+function ArticleShell({ children }: { children: React.ReactNode }) {
+  return <CustomerShell active="learn">{children}</CustomerShell>;
+}
+
 export default async function AcademyArticlePage({
   params,
 }: {
@@ -54,10 +59,12 @@ export default async function AcademyArticlePage({
     const article = DEMO_ACADEMY_ARTICLES.find((item) => item.slug === slug);
     if (!article) notFound();
     return (
-      <AcademyArticleView
-        article={article}
-        related={relatedAcademyArticles(article, DEMO_ACADEMY_ARTICLES)}
-      />
+      <ArticleShell>
+        <AcademyArticleView
+          article={article}
+          related={relatedAcademyArticles(article, DEMO_ACADEMY_ARTICLES)}
+        />
+      </ArticleShell>
     );
   }
 
@@ -72,7 +79,17 @@ export default async function AcademyArticlePage({
     readFailed = true;
   }
 
-  if (readFailed) return <AcademyUnavailable />;
+  if (readFailed) {
+    return (
+      <ArticleShell>
+        <AcademyUnavailable />
+      </ArticleShell>
+    );
+  }
   if (!article) notFound();
-  return <AcademyArticleView article={article} related={relatedAcademyArticles(article, all)} />;
+  return (
+    <ArticleShell>
+      <AcademyArticleView article={article} related={relatedAcademyArticles(article, all)} />
+    </ArticleShell>
+  );
 }
