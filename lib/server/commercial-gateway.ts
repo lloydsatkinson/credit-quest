@@ -47,6 +47,7 @@ interface GatewayGuidance {
 export interface CommercialGatewayDependencies {
   getGuidance(userId: string, now: Date): Promise<GatewayGuidance | null>;
   isGatewayEnabled(): Promise<boolean>;
+  isSandboxEnabled(): Promise<boolean>;
   listRoutes(environment: CommercialEnvironment): Promise<CommercialConfiguredRoute[]>;
   getRoute(routeId: string): Promise<CommercialConfiguredRoute | null>;
   getDisclosure(disclosureKey: string): Promise<CommercialDisclosure | null>;
@@ -62,6 +63,15 @@ function partnerEnvironmentEnabled(
   return environment === "sandbox"
     ? route.partnerSandboxEnabled
     : route.partnerLiveEnabled;
+}
+
+function runtimeEnabledForEnvironment(
+  deps: CommercialGatewayDependencies,
+  environment: CommercialEnvironment,
+): Promise<boolean> {
+  return environment === "sandbox"
+    ? deps.isSandboxEnabled()
+    : deps.isGatewayEnabled();
 }
 
 function gateContext(
@@ -117,7 +127,7 @@ export function createCommercialGateway(deps: CommercialGatewayDependencies) {
     }) {
       try {
         const [gatewayEnabled, guidance] = await Promise.all([
-          deps.isGatewayEnabled(),
+          runtimeEnabledForEnvironment(deps, input.environment),
           deps.getGuidance(input.userId, input.now),
         ]);
         if (!guidance) return [];
@@ -159,14 +169,16 @@ export function createCommercialGateway(deps: CommercialGatewayDependencies) {
       now: Date;
     }) {
       try {
-        const [gatewayEnabled, guidance, route] = await Promise.all([
-          deps.isGatewayEnabled(),
+        const [guidance, route] = await Promise.all([
           deps.getGuidance(input.userId, input.now),
           deps.getRoute(input.routeId),
         ]);
         if (!guidance || !route) throw new CommercialGatewayError("route_unavailable");
 
-        const disclosure = await deps.getDisclosure(route.disclosureKey);
+        const [gatewayEnabled, disclosure] = await Promise.all([
+          runtimeEnabledForEnvironment(deps, route.environment),
+          deps.getDisclosure(route.disclosureKey),
+        ]);
         if (!disclosure) throw new CommercialGatewayError("configuration_unavailable");
         if (disclosure.id !== input.disclosureId) {
           throw new CommercialGatewayError("disclosure_stale");
@@ -218,6 +230,7 @@ function createProductionCommercialGateway() {
   return createCommercialGateway({
     getGuidance: (userId, now) => getCreditGuidanceForUser(admin, userId, now),
     isGatewayEnabled: () => isFeatureEnabled(admin, "commercial_gateway_enabled"),
+    isSandboxEnabled: () => isFeatureEnabled(admin, "commercial_sandbox_enabled"),
     listRoutes: (environment) => listCommercialRoutes(admin, environment),
     getRoute: (routeId) => getCommercialRoute(admin, routeId),
     getDisclosure: (disclosureKey) => getPublishedCommercialDisclosure(admin, disclosureKey),

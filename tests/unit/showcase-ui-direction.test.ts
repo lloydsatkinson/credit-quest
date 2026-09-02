@@ -54,6 +54,7 @@ describe("Credit Quest showcase UI direction", () => {
       "app/readiness/page.tsx",
       "app/learn/page.tsx",
       "app/onboarding/page.tsx",
+      "app/sandbox/referral-complete/page.tsx",
     ]) {
       expect(read(path)).toContain("CustomerShell");
     }

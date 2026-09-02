@@ -46,7 +46,8 @@ function makeDeps(overrides: Record<string, unknown> = {}) {
       profile,
       readiness: { state: "green" },
     }),
-    isGatewayEnabled: vi.fn().mockResolvedValue(true),
+    isGatewayEnabled: vi.fn().mockResolvedValue(false),
+    isSandboxEnabled: vi.fn().mockResolvedValue(true),
     listRoutes: vi.fn().mockResolvedValue([route]),
     getRoute: vi.fn().mockResolvedValue(route),
     getDisclosure: vi.fn().mockResolvedValue(disclosure),
@@ -58,7 +59,7 @@ function makeDeps(overrides: Record<string, unknown> = {}) {
 }
 
 describe("commercial gateway", () => {
-  it("does not require consent to list a permitted disclosure", async () => {
+  it("permits sandbox presentation from the sandbox switch while the live gateway remains off", async () => {
     const gateway = createCommercialGateway(makeDeps() as never);
     const routes = await gateway.listPermittedCommercialRoutes({ userId: "u1", environment: "sandbox", now });
 
@@ -66,7 +67,17 @@ describe("commercial gateway", () => {
     expect(routes[0].disclosure.body).toMatch(/Sandbox only/i);
   });
 
-  it("re-fetches current disclosure and requires consent before insert", async () => {
+  it("keeps sandbox dark when its dedicated switch is off even if the live gateway is on", async () => {
+    const gateway = createCommercialGateway(makeDeps({
+      isSandboxEnabled: vi.fn().mockResolvedValue(false),
+      isGatewayEnabled: vi.fn().mockResolvedValue(true),
+    }) as never);
+
+    await expect(gateway.listPermittedCommercialRoutes({ userId: "u1", environment: "sandbox", now }))
+      .resolves.toEqual([]);
+  });
+
+  it("re-fetches current disclosure and requires consent before sandbox insert", async () => {
     const deps = makeDeps();
     const gateway = createCommercialGateway(deps as never);
 
@@ -101,9 +112,36 @@ describe("commercial gateway", () => {
     }));
   });
 
-  it("keeps live routes dark behind the independent server guard", async () => {
-    const liveRoute = { ...route, environment: "live" as const, destinationUrl: "https://example.com", partnerLiveEnabled: true };
-    const gateway = createCommercialGateway(makeDeps({ listRoutes: vi.fn().mockResolvedValue([liveRoute]) }) as never);
+  it("keeps live routes dark even when sandbox is enabled", async () => {
+    const liveRoute = {
+      ...route,
+      environment: "live" as const,
+      destinationUrl: "https://example.com",
+      partnerLiveEnabled: true,
+    };
+    const gateway = createCommercialGateway(makeDeps({
+      listRoutes: vi.fn().mockResolvedValue([liveRoute]),
+      isSandboxEnabled: vi.fn().mockResolvedValue(true),
+      isGatewayEnabled: vi.fn().mockResolvedValue(false),
+      liveAllowed: true,
+    }) as never);
+
+    await expect(gateway.listPermittedCommercialRoutes({ userId: "u1", environment: "live", now }))
+      .resolves.toEqual([]);
+  });
+
+  it("keeps live routes behind the independent environment server guard", async () => {
+    const liveRoute = {
+      ...route,
+      environment: "live" as const,
+      destinationUrl: "https://example.com",
+      partnerLiveEnabled: true,
+    };
+    const gateway = createCommercialGateway(makeDeps({
+      listRoutes: vi.fn().mockResolvedValue([liveRoute]),
+      isGatewayEnabled: vi.fn().mockResolvedValue(true),
+      liveAllowed: false,
+    }) as never);
 
     await expect(gateway.listPermittedCommercialRoutes({ userId: "u1", environment: "live", now }))
       .resolves.toEqual([]);
@@ -114,6 +152,18 @@ describe("commercial gateway", () => {
       getGuidance: vi.fn().mockResolvedValue({
         profile: { ...profile, hasRevolvingCredit: null },
         readiness: { state: "green" },
+      }),
+    }) as never);
+
+    await expect(gateway.listPermittedCommercialRoutes({ userId: "u1", environment: "sandbox", now }))
+      .resolves.toEqual([]);
+  });
+
+  it("blocks non-green readiness", async () => {
+    const gateway = createCommercialGateway(makeDeps({
+      getGuidance: vi.fn().mockResolvedValue({
+        profile,
+        readiness: { state: "amber" },
       }),
     }) as never);
 
@@ -161,6 +211,21 @@ describe("commercial gateway", () => {
     expect(deps.appendReferral).not.toHaveBeenCalled();
   });
 
+  it("rejects stale disclosures before referral provenance is inserted", async () => {
+    const deps = makeDeps();
+    const gateway = createCommercialGateway(deps as never);
+
+    await expect(gateway.createCommercialReferral({
+      userId: "u1",
+      routeId: "route-1",
+      disclosureId: "old-disc",
+      consent: true,
+      originatingMissionId: null,
+      now,
+    })).rejects.toMatchObject({ code: "disclosure_stale" });
+    expect(deps.appendReferral).not.toHaveBeenCalled();
+  });
+
   it("rejects invalid destinations before referral provenance is inserted", async () => {
     const invalidSandbox = makeDeps({
       getRoute: vi.fn().mockResolvedValue({ ...route, destinationUrl: "https://example.com" }),
@@ -185,6 +250,7 @@ describe("commercial gateway", () => {
     };
     const invalidLive = makeDeps({
       getRoute: vi.fn().mockResolvedValue(liveRoute),
+      isGatewayEnabled: vi.fn().mockResolvedValue(true),
       liveAllowed: true,
     });
     const liveGateway = createCommercialGateway(invalidLive as never);

@@ -1,7 +1,10 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-export type RuntimeFlagKey = "email_reminders_enabled" | "commercial_gateway_enabled";
+export type RuntimeFlagKey =
+  | "email_reminders_enabled"
+  | "commercial_gateway_enabled"
+  | "commercial_sandbox_enabled";
 
 export async function isFeatureEnabled(
   admin: SupabaseClient,

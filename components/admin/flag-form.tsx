@@ -2,7 +2,10 @@
 
 import { useState } from "react";
 
-type FlagKey = "email_reminders_enabled" | "commercial_gateway_enabled";
+type FlagKey =
+  | "email_reminders_enabled"
+  | "commercial_gateway_enabled"
+  | "commercial_sandbox_enabled";
 
 export function FlagForm({ flagKey, enabled }: { flagKey: FlagKey; enabled: boolean }) {
   const [status, setStatus] = useState("");
