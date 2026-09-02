@@ -2,7 +2,10 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { CommercialEnvironment } from "@/lib/commercial/types";
 
-export type AdminEditableFeatureFlag = "email_reminders_enabled" | "commercial_gateway_enabled";
+export type AdminEditableFeatureFlag =
+  | "email_reminders_enabled"
+  | "commercial_gateway_enabled"
+  | "commercial_sandbox_enabled";
 
 export interface AdminCommercialRouteInput {
   routeId?: string | null;
@@ -33,7 +36,11 @@ export interface AdminExperimentInput {
 }
 
 function assertEditableFlag(flagKey: string): asserts flagKey is AdminEditableFeatureFlag {
-  if (flagKey !== "email_reminders_enabled" && flagKey !== "commercial_gateway_enabled") {
+  if (
+    flagKey !== "email_reminders_enabled"
+    && flagKey !== "commercial_gateway_enabled"
+    && flagKey !== "commercial_sandbox_enabled"
+  ) {
     throw new Error("Feature flag is not admin-editable");
   }
 }
@@ -119,7 +126,11 @@ export async function listCommercialDisclosures(admin: SupabaseClient) {
 }
 
 export async function listFeatureFlags(admin: SupabaseClient) {
-  const { data, error } = await admin.from("feature_flags").select("flag_key,enabled,updated_at").in("flag_key", ["email_reminders_enabled", "commercial_gateway_enabled"]);
+  const { data, error } = await admin.from("feature_flags").select("flag_key,enabled,updated_at").in("flag_key", [
+    "email_reminders_enabled",
+    "commercial_gateway_enabled",
+    "commercial_sandbox_enabled",
+  ]);
   if (error) throw error;
   return data ?? [];
 }
