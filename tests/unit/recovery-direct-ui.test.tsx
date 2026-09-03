@@ -1,6 +1,10 @@
-import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { cleanup, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it } from "vitest";
 import RecoveryPage from "@/app/recovery/page";
+
+afterEach(() => {
+  cleanup();
+});
 
 describe("direct decline recovery customer entry", () => {
   it("uses the premium customer shell and neutral recovery copy", () => {
