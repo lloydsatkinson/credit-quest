@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   getPartnerCredentialByKey: vi.fn(),
   findPartnerIntakeByNonce: vi.fn(),
   findPartnerIntakeByIdempotency: vi.fn(),
+  findEligibleSandboxReturnContract: vi.fn(),
   insertPartnerIntakeSession: vi.fn(),
 }));
 
@@ -18,6 +19,7 @@ vi.mock("@/lib/server/partner-intake-repository", () => ({
   getPartnerCredentialByKey: mocks.getPartnerCredentialByKey,
   findPartnerIntakeByNonce: mocks.findPartnerIntakeByNonce,
   findPartnerIntakeByIdempotency: mocks.findPartnerIntakeByIdempotency,
+  findEligibleSandboxReturnContract: mocks.findEligibleSandboxReturnContract,
   insertPartnerIntakeSession: mocks.insertPartnerIntakeSession,
 }));
 
@@ -111,6 +113,7 @@ describe("sandbox partner decline intake", () => {
     mocks.getPartnerCredentialByKey.mockResolvedValue(credential);
     mocks.findPartnerIntakeByNonce.mockResolvedValue(null);
     mocks.findPartnerIntakeByIdempotency.mockResolvedValue(null);
+    mocks.findEligibleSandboxReturnContract.mockResolvedValue(null);
     mocks.insertPartnerIntakeSession.mockResolvedValue({
       id: "33333333-3333-4333-8333-333333333333",
     });
@@ -163,6 +166,7 @@ describe("sandbox partner decline intake", () => {
     expect(inserted).toMatchObject({
       partnerId: credential.partnerId,
       credentialId: credential.credentialId,
+      returnContractId: null,
       environment: "sandbox",
       originReference: validPayload.originReference,
       productCategory: "credit_card",
