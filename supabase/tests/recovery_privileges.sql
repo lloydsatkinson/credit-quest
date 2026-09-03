@@ -70,6 +70,25 @@ begin
      or has_function_privilege('authenticated', 'public.redeem_partner_handoff_atomic(uuid,uuid,boolean,text,text,text,timestamptz)', 'EXECUTE') then
     raise exception 'Atomic recovery RPCs must not be executable by clients';
   end if;
+
+  if has_function_privilege('anon', 'public.get_partner_secret_from_vault(text)', 'EXECUTE')
+     or has_function_privilege('authenticated', 'public.get_partner_secret_from_vault(text)', 'EXECUTE') then
+    raise exception 'Partner Vault secret RPC must not be executable by clients';
+  end if;
+
+  if not has_function_privilege('service_role', 'public.get_partner_secret_from_vault(text)', 'EXECUTE') then
+    raise exception 'Partner Vault secret RPC must remain executable by service_role';
+  end if;
+
+  if exists (
+    select 1
+    from information_schema.role_table_grants
+    where table_schema = 'vault'
+      and table_name = 'decrypted_secrets'
+      and grantee in ('anon', 'authenticated')
+  ) then
+    raise exception 'Vault decrypted secrets must not be directly readable by clients';
+  end if;
 end $$;
 
 rollback;
