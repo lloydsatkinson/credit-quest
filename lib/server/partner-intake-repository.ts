@@ -94,6 +94,26 @@ interface PartnerHandoffRow {
     }>;
 }
 
+export interface AtomicPartnerHandoffInput {
+  sessionId: string;
+  userId: string;
+  declineReasonKnown: boolean;
+  declineReasonCode: string | null;
+  declineReasonSource: "partner" | "customer" | "unknown";
+  contextConfirmation: "confirmed" | "corrected" | "unknown" | "optional_use_declined";
+  now: Date;
+}
+
+export interface AtomicPartnerHandoffResult {
+  id: string;
+  origin: "partner";
+  productCategory: PartnerHandoffSession["productCategory"];
+  declineReasonKnown: boolean;
+  declineReasonCode: string | null;
+  declineReasonSource: "partner" | "customer" | "unknown";
+  contextConfirmation: AtomicPartnerHandoffInput["contextConfirmation"];
+}
+
 export async function getPartnerIntakeFeatureEnabled(admin: SupabaseClient) {
   const { data, error } = await admin
     .from("feature_flags")
@@ -310,4 +330,36 @@ export async function consumePartnerIntakeSession(
     .maybeSingle();
   if (error) throw error;
   return Boolean(data);
+}
+
+export async function redeemPartnerHandoffAtomically(
+  admin: SupabaseClient,
+  input: AtomicPartnerHandoffInput,
+): Promise<AtomicPartnerHandoffResult> {
+  const { data, error } = await admin.rpc("redeem_partner_handoff_atomic", {
+    p_session_id: input.sessionId,
+    p_user_id: input.userId,
+    p_decline_reason_known: input.declineReasonKnown,
+    p_decline_reason_code: input.declineReasonCode,
+    p_decline_reason_source: input.declineReasonSource,
+    p_context_confirmation: input.contextConfirmation,
+    p_now: input.now.toISOString(),
+  });
+  if (error) throw error;
+
+  const row = Array.isArray(data) ? data[0] : data;
+  if (!row || typeof row !== "object") {
+    throw new Error("handoff_unavailable");
+  }
+  const record = row as Record<string, unknown>;
+
+  return {
+    id: String(record.id),
+    origin: "partner",
+    productCategory: record.product_category as AtomicPartnerHandoffResult["productCategory"],
+    declineReasonKnown: record.decline_reason_known === true,
+    declineReasonCode: record.decline_reason_code ? String(record.decline_reason_code) : null,
+    declineReasonSource: record.decline_reason_source as AtomicPartnerHandoffResult["declineReasonSource"],
+    contextConfirmation: record.context_confirmation as AtomicPartnerHandoffResult["contextConfirmation"],
+  };
 }
