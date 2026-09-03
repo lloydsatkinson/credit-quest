@@ -12,6 +12,7 @@ import { InAppReminders } from "@/components/journey/in-app-reminders";
 import { JourneyStatusCard } from "@/components/journey/journey-status-card";
 import { PassportCard } from "@/components/passport/passport-card";
 import { ReadinessCard } from "@/components/readiness/readiness-card";
+import { RecoveryStatus } from "@/components/recovery/recovery-status";
 import { selectAcademyArticle } from "@/lib/academy/selector";
 import type { AcademySelection } from "@/lib/academy/types";
 import { MISSION_CATALOGUE } from "@/lib/data/missions";
@@ -24,6 +25,7 @@ import { calculateQuestScore } from "@/lib/domain/quest-score";
 import { assessApplicationReadiness } from "@/lib/domain/readiness";
 import { assessSafety } from "@/lib/domain/safety";
 import type { JourneyStage, MissionInstance } from "@/lib/domain/types";
+import type { RecoveryPlanProjection } from "@/lib/recovery/plan";
 import { listUserAccounts } from "@/lib/server/account-repository";
 import {
   getActionDefinition,
@@ -41,6 +43,8 @@ import {
 import { reassessJourneyForUser } from "@/lib/server/journey-orchestrator";
 import { syncMissionInstances } from "@/lib/server/mission-repository";
 import { getUserProfile } from "@/lib/server/profile-repository";
+import { projectRecoveryForUser } from "@/lib/server/recovery-orchestrator";
+import { getLatestRecoveryJourney } from "@/lib/server/recovery-repository";
 import {
   getCommunicationPreference,
   listUserInAppReminders,
@@ -140,6 +144,25 @@ export default async function DashboardPage() {
     journeyOutcomes = [];
   }
 
+  let recoveryPlan: RecoveryPlanProjection | null = null;
+  let recoveryOrigin: "direct" | "partner" | null = null;
+  try {
+    const recoveryJourney = await getLatestRecoveryJourney(supabase, user.id);
+    if (recoveryJourney) {
+      recoveryOrigin = recoveryJourney.origin;
+      recoveryPlan = await projectRecoveryForUser({
+        recoveryJourneyId: recoveryJourney.id,
+        userId: user.id,
+        now,
+      });
+    }
+  } catch {
+    // Recovery is additive. A missing migration or downstream persistence read
+    // must not block the established Quest experience.
+    recoveryPlan = null;
+    recoveryOrigin = null;
+  }
+
   let inAppReminders: Awaited<ReturnType<typeof listUserInAppReminders>> = [];
   try {
     inAppReminders = await listUserInAppReminders(supabase, user.id, now);
@@ -231,6 +254,10 @@ export default async function DashboardPage() {
             <p className="mt-2 text-sm leading-6 text-slate-400">Credit Quest needs a minimal account record before it can target direct-debit or utilisation actions to the right card.</p>
             <Link href="/accounts" className="mt-4 inline-flex rounded-2xl bg-lime-300 px-4 py-3 text-sm font-black text-slate-950 shadow-[0_0_24px_rgba(200,255,56,0.12)]">Add an account</Link>
           </section>
+        ) : null}
+
+        {recoveryPlan && recoveryOrigin ? (
+          <RecoveryStatus plan={recoveryPlan} origin={recoveryOrigin} />
         ) : null}
 
         <JourneyStatusCard state={journeyState} latestOutcome={journeyOutcomes[0] ?? null} />
