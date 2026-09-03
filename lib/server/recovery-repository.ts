@@ -1,6 +1,7 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { DeclineContext } from "@/lib/recovery/types";
+import type { RecoveryPlanProjection, RecoveryStage } from "@/lib/recovery/plan";
+import type { DeclineContext, RecoveryReadinessState } from "@/lib/recovery/types";
 import type { PartnerHandoffSession } from "@/lib/server/partner-intake-repository";
 
 export type RecentApplicationContext = "none" | "one" | "multiple" | "unknown";
@@ -31,6 +32,15 @@ export interface PartnerRecoveryJourneyRecord {
   contextConfirmation: PartnerContextReviewResult["contextConfirmation"];
 }
 
+export interface RecoveryJourneyStatusRecord {
+  id: string;
+  origin: "direct" | "partner";
+  stage: RecoveryStage;
+  readinessState: RecoveryReadinessState | null;
+  nextReassessmentAt: string | null;
+  lastReassessedAt: string | null;
+}
+
 function mapDirectJourney(row: Record<string, unknown>): DirectRecoveryJourneyRecord {
   return {
     id: String(row.id),
@@ -54,6 +64,19 @@ function mapPartnerJourney(row: Record<string, unknown>): PartnerRecoveryJourney
   };
 }
 
+function mapRecoveryStatus(row: Record<string, unknown>): RecoveryJourneyStatusRecord {
+  return {
+    id: String(row.id),
+    origin: row.origin as RecoveryJourneyStatusRecord["origin"],
+    stage: row.stage as RecoveryStage,
+    readinessState: row.readiness_snapshot
+      ? row.readiness_snapshot as RecoveryReadinessState
+      : null,
+    nextReassessmentAt: row.next_reassessment_at ? String(row.next_reassessment_at) : null,
+    lastReassessedAt: row.last_reassessed_at ? String(row.last_reassessed_at) : null,
+  };
+}
+
 export async function createDirectRecoveryJourney(
   admin: SupabaseClient,
   userId: string,
@@ -66,9 +89,9 @@ export async function createDirectRecoveryJourney(
   }
 
   // The broad recent-application answer is intentionally not written into an
-  // unrelated trusted/core field. Task 7 will consume the current profile and
-  // recovery context when projecting the recovery plan. Keeping it as an
-  // explicit argument prevents it being mistaken for lender-supplied evidence.
+  // unrelated trusted/core field. Task 7 consumes current profile and recovery
+  // context when projecting the recovery plan. Keeping it as an explicit
+  // argument prevents it being mistaken for lender-supplied evidence.
   void recentApplicationContext;
 
   const nowIso = now.toISOString();
@@ -131,4 +154,48 @@ export async function createPartnerRecoveryJourney(
 
   if (error) throw error;
   return mapPartnerJourney(data as Record<string, unknown>);
+}
+
+export async function getLatestRecoveryJourney(
+  supabase: SupabaseClient,
+  userId: string,
+): Promise<RecoveryJourneyStatusRecord | null> {
+  const { data, error } = await supabase
+    .from("decline_recovery_journeys")
+    .select("id,origin,stage,readiness_snapshot,next_reassessment_at,last_reassessed_at")
+    .eq("user_id", userId)
+    .is("completed_at", null)
+    .order("started_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw error;
+  return data ? mapRecoveryStatus(data as Record<string, unknown>) : null;
+}
+
+export async function persistRecoveryProjection(
+  admin: SupabaseClient,
+  input: {
+    recoveryJourneyId: string;
+    userId: string;
+    projection: RecoveryPlanProjection;
+    now: Date;
+  },
+): Promise<void> {
+  const nowIso = input.now.toISOString();
+  const { data, error } = await admin
+    .from("decline_recovery_journeys")
+    .update({
+      stage: input.projection.stage,
+      readiness_snapshot: input.projection.readinessState,
+      next_reassessment_at: input.projection.nextReassessmentAt,
+      last_reassessed_at: nowIso,
+      updated_at: nowIso,
+    })
+    .eq("id", input.recoveryJourneyId)
+    .eq("user_id", input.userId)
+    .select("id")
+    .maybeSingle();
+
+  if (error) throw error;
+  if (!data) throw new Error("Recovery journey not found for projection");
 }
