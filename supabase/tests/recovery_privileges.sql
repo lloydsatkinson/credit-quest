@@ -70,6 +70,12 @@ begin
      or has_function_privilege('authenticated', 'public.redeem_partner_handoff_atomic(uuid,uuid,boolean,text,text,text,timestamptz)', 'EXECUTE') then
     raise exception 'Atomic recovery RPCs must not be executable by clients';
   end if;
+
+  if has_function_privilege('anon', 'public.get_partner_credential_vault_secret(text)', 'EXECUTE')
+     or has_function_privilege('authenticated', 'public.get_partner_credential_vault_secret(text)', 'EXECUTE')
+     or not has_function_privilege('service_role', 'public.get_partner_credential_vault_secret(text)', 'EXECUTE') then
+    raise exception 'Vault partner secret RPC must be service-role-only';
+  end if;
 end $$;
 
 rollback;
