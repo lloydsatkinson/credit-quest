@@ -41,6 +41,59 @@ interface PartnerCredentialRow {
     }>;
 }
 
+export interface PartnerHandoffSession {
+  id: string;
+  partnerId: string;
+  environment: "sandbox" | "live";
+  originReference: string;
+  productCategory: "credit_card" | "loan" | "overdraft" | "mortgage" | "other";
+  declinedAt: string;
+  declineReasonCode: string | null;
+  declineReasonSource: "partner" | "unknown";
+  attributionKey: string | null;
+  additionalSupportMayBeNeeded: boolean | null;
+  disclosureVersion: string | null;
+  consentVersion: string | null;
+  tokenExpiresAt: string;
+  consumedAt: string | null;
+  boundUserId: string | null;
+  partnerDisplayName: string;
+  partnerEnabled: boolean;
+  partnerSandboxEnabled: boolean;
+  partnerLiveEnabled: boolean;
+}
+
+interface PartnerHandoffRow {
+  id: string;
+  partner_id: string;
+  environment: "sandbox" | "live";
+  origin_reference: string;
+  product_category: PartnerHandoffSession["productCategory"];
+  declined_at: string;
+  decline_reason_code: string | null;
+  decline_reason_source: "partner" | "unknown";
+  attribution_key: string | null;
+  additional_support_may_be_needed: boolean | null;
+  disclosure_version: string | null;
+  consent_version: string | null;
+  token_expires_at: string;
+  consumed_at: string | null;
+  bound_user_id: string | null;
+  decline_partners:
+    | {
+      display_name: string;
+      enabled: boolean;
+      sandbox_enabled: boolean;
+      live_enabled: boolean;
+    }
+    | Array<{
+      display_name: string;
+      enabled: boolean;
+      sandbox_enabled: boolean;
+      live_enabled: boolean;
+    }>;
+}
+
 export async function getPartnerIntakeFeatureEnabled(admin: SupabaseClient) {
   const { data, error } = await admin
     .from("feature_flags")
@@ -175,4 +228,86 @@ export async function insertPartnerIntakeSession(
     .single();
   if (error) throw error;
   return { id: String(data.id) };
+}
+
+export async function getPartnerHandoffByTokenHash(
+  admin: SupabaseClient,
+  tokenHash: string,
+): Promise<PartnerHandoffSession | null> {
+  const { data, error } = await admin
+    .from("decline_intake_sessions")
+    .select([
+      "id",
+      "partner_id",
+      "environment",
+      "origin_reference",
+      "product_category",
+      "declined_at",
+      "decline_reason_code",
+      "decline_reason_source",
+      "attribution_key",
+      "additional_support_may_be_needed",
+      "disclosure_version",
+      "consent_version",
+      "token_expires_at",
+      "consumed_at",
+      "bound_user_id",
+      "decline_partners!inner(display_name,enabled,sandbox_enabled,live_enabled)",
+    ].join(","))
+    .eq("token_hash", tokenHash)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) return null;
+
+  const row = data as unknown as PartnerHandoffRow;
+  const partner = Array.isArray(row.decline_partners)
+    ? row.decline_partners[0]
+    : row.decline_partners;
+  if (!partner) return null;
+
+  return {
+    id: String(row.id),
+    partnerId: String(row.partner_id),
+    environment: row.environment,
+    originReference: String(row.origin_reference),
+    productCategory: row.product_category,
+    declinedAt: String(row.declined_at),
+    declineReasonCode: row.decline_reason_code ? String(row.decline_reason_code) : null,
+    declineReasonSource: row.decline_reason_source,
+    attributionKey: row.attribution_key ? String(row.attribution_key) : null,
+    additionalSupportMayBeNeeded: row.additional_support_may_be_needed,
+    disclosureVersion: row.disclosure_version ? String(row.disclosure_version) : null,
+    consentVersion: row.consent_version ? String(row.consent_version) : null,
+    tokenExpiresAt: String(row.token_expires_at),
+    consumedAt: row.consumed_at ? String(row.consumed_at) : null,
+    boundUserId: row.bound_user_id ? String(row.bound_user_id) : null,
+    partnerDisplayName: String(partner.display_name),
+    partnerEnabled: partner.enabled === true,
+    partnerSandboxEnabled: partner.sandbox_enabled === true,
+    partnerLiveEnabled: partner.live_enabled === true,
+  };
+}
+
+export async function consumePartnerIntakeSession(
+  admin: SupabaseClient,
+  sessionId: string,
+  userId: string,
+  now = new Date(),
+) {
+  const nowIso = now.toISOString();
+  const { data, error } = await admin
+    .from("decline_intake_sessions")
+    .update({
+      bound_user_id: userId,
+      consumed_at: nowIso,
+    })
+    .eq("id", sessionId)
+    .eq("environment", "sandbox")
+    .is("consumed_at", null)
+    .is("bound_user_id", null)
+    .gt("token_expires_at", nowIso)
+    .select("id")
+    .maybeSingle();
+  if (error) throw error;
+  return Boolean(data);
 }
