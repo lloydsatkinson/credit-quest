@@ -167,6 +167,30 @@ export async function getPartnerCredentialByKey(
   };
 }
 
+export async function findEligibleSandboxReturnContract(
+  admin: SupabaseClient,
+  partnerId: string,
+  productCategory: PartnerHandoffSession["productCategory"],
+  now = new Date(),
+): Promise<{ id: string } | null> {
+  const { data, error } = await admin
+    .from("return_contracts")
+    .select("id")
+    .eq("partner_id", partnerId)
+    .eq("product_category", productCategory)
+    .eq("environment", "sandbox")
+    .eq("enabled", true)
+    .eq("callback_policy", "none")
+    .is("callback_url", null)
+    .gt("expires_at", now.toISOString())
+    .limit(2);
+  if (error) throw error;
+
+  const rows = Array.isArray(data) ? data : [];
+  if (rows.length !== 1) return null;
+  return { id: String(rows[0].id) };
+}
+
 export async function findPartnerIntakeByNonce(
   admin: SupabaseClient,
   partnerId: string,
