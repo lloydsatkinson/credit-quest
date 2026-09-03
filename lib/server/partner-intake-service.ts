@@ -16,6 +16,7 @@ import {
   getPartnerCredentialByKey,
   getPartnerHandoffByTokenHash,
   getPartnerIntakeFeatureEnabled,
+  getVaultPartnerSecret,
   insertPartnerIntakeSession,
   redeemPartnerHandoffAtomically,
   type PartnerHandoffSession,
@@ -26,6 +27,8 @@ import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 const MAX_BODY_BYTES = 8 * 1024;
 const TOKEN_TTL_MS = 15 * 60 * 1000;
 const HANDOFF_TOKEN_PATTERN = /^[A-Za-z0-9_-]{40,120}$/;
+const VAULT_SECRET_PREFIX = "vault:";
+const SAFE_VAULT_SECRET_NAME = /^[A-Za-z0-9._:-]{3,160}$/;
 
 export type PartnerIntakeFailure =
   | "invalid_payload"
@@ -94,6 +97,29 @@ function credentialIsUsable(
   if (Date.parse(credential.validFrom) > now.getTime()) return false;
   if (credential.expiresAt && Date.parse(credential.expiresAt) <= now.getTime()) return false;
   return true;
+}
+
+async function resolveCredentialSecret(
+  admin: SupabaseClient,
+  secretReference: string,
+) {
+  if (!secretReference.startsWith(VAULT_SECRET_PREFIX)) {
+    return resolvePartnerSecret(secretReference);
+  }
+
+  const secretName = secretReference.slice(VAULT_SECRET_PREFIX.length);
+  if (!SAFE_VAULT_SECRET_NAME.test(secretName)) {
+    throw new PartnerAuthError();
+  }
+
+  try {
+    const secret = await getVaultPartnerSecret(admin, secretName);
+    if (!secret || secret.length < 32) throw new PartnerAuthError();
+    return secret;
+  } catch (error) {
+    if (error instanceof PartnerAuthError) throw error;
+    throw new PartnerAuthError();
+  }
 }
 
 function handoffSessionIsUsable(session: PartnerHandoffSession | null, now: Date) {
@@ -274,7 +300,7 @@ export async function processPartnerDeclineIntake(input: {
 
   try {
     assertFreshPartnerTimestamp(auth.timestamp, now);
-    const secret = resolvePartnerSecret(credential.secretReference);
+    const secret = await resolveCredentialSecret(admin, credential.secretReference);
     verifyPartnerRequestSignature(input.bodyText, auth, secret);
   } catch (error) {
     if (error instanceof PartnerAuthError) {
