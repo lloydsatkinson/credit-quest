@@ -90,6 +90,8 @@ export default async function DashboardPage() {
   const instances = await syncMissionInstances(supabase, effectiveProfile, accounts, now);
   const ranked = rankMissionInstances(effectiveProfile, instances, accounts, now);
   const next = ranked[0] ?? null;
+  const electoralRollMission = ranked.find((item) => item.mission.slug === "register-electoral-roll");
+  const identityActionHref = electoralRollMission ? `/actions/${electoralRollMission.instance.id}` : undefined;
   const pendingAttempts = await listPendingActionAttempts(supabase, user.id, now);
   const pendingAttempt = pendingAttempts[0] ?? null;
   const score = calculateQuestScore(effectiveProfile);
@@ -302,7 +304,7 @@ export default async function DashboardPage() {
           </QuestFeedCard>
 
           <QuestFeedCard eyebrow="Your Credit Passport" index={3} total={FEED_CARD_TOTAL} tone="light">
-            <PassportCard passport={passport} diagnosis={diagnosis} />
+            <PassportCard passport={passport} diagnosis={diagnosis} identityActionHref={identityActionHref} />
           </QuestFeedCard>
 
           <QuestFeedCard eyebrow="Can I apply yet?" index={4} total={FEED_CARD_TOTAL} tone="soft">
