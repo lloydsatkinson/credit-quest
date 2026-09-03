@@ -2,6 +2,7 @@ import Link from "next/link";
 
 const links = [
   ["Overview", "/admin"],
+  ["Recovery", "/admin/recovery"],
   ["Partners", "/admin/partners"],
   ["Routes", "/admin/routes"],
   ["Disclosures", "/admin/disclosures"],

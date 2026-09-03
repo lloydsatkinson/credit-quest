@@ -45,7 +45,9 @@ jobs:
             -v ON_ERROR_STOP=1 \
             -f supabase/tests/rls.sql \
             -f supabase/tests/retention_rls.sql \
-            -f supabase/tests/commercial_rls.sql
+            -f supabase/tests/commercial_rls.sql \
+            -f supabase/tests/recovery_rls.sql \
+            -f supabase/tests/recovery_atomic.sql
       - name: Stop local Supabase
         if: always()
         env:
