@@ -6,9 +6,9 @@ import {
   PartnerAuthError,
   assertFreshPartnerTimestamp,
   readPartnerAuthHeaders,
-  resolvePartnerSecret,
   verifyPartnerRequestSignature,
 } from "@/lib/server/partner-auth";
+import { resolvePartnerSecretReference } from "@/lib/server/partner-secret-resolver";
 import {
   findPartnerIntakeByIdempotency,
   findPartnerIntakeByNonce,
@@ -273,7 +273,7 @@ export async function processPartnerDeclineIntake(input: {
 
   try {
     assertFreshPartnerTimestamp(auth.timestamp, now);
-    const secret = resolvePartnerSecret(credential.secretReference);
+    const secret = await resolvePartnerSecretReference(admin, credential.secretReference);
     verifyPartnerRequestSignature(input.bodyText, auth, secret);
   } catch (error) {
     if (error instanceof PartnerAuthError) {
