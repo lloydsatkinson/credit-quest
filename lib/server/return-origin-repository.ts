@@ -222,8 +222,13 @@ export async function appendReturnAttempt(
 }
 
 // V2.0d has no separate suppression store yet. Safety, readiness, evidence and
-// dated cooldown gates remain authoritative; this hook fails open only because
-// no additional suppression condition exists to evaluate in this release.
-export async function isReturnSuppressionClear(): Promise<boolean> {
+// dated cooldown gates remain authoritative; this hook exists as the explicit
+// extension point for a later independently modelled suppression source.
+export async function isReturnSuppressionClear(
+  _admin: SupabaseClient,
+  _userId: string,
+  _recoveryJourneyId: string,
+  _now: Date,
+): Promise<boolean> {
   return true;
 }
