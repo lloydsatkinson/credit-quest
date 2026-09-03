@@ -218,19 +218,28 @@ Commit message: `feat: add recovery handoff redemption`.
 - Consumes existing `getCreditGuidanceForUser`, Journey, safety/readiness/Passport/mission outputs.
 - Produces recovery stage, next safe action, evidence gaps and reassessment date only when real dated evidence supports one.
 
-- [ ] **Step 1: Write failing orchestration tests**
+- [x] **Step 1: Write failing orchestration tests**
 
 Cover Safe Mode -> crisis/recovery, red -> stability, amber -> rebuilding, known dated cooldown -> reassessment date, missing source date -> no fabricated 30/90/180 exact date, green -> ready-to-check.
 
-- [ ] **Step 2: Verify RED**
+- [x] **Step 2: Verify RED**
 
-- [ ] **Step 3: Implement downstream orchestration**
+RED head: `0f01ac4c29a6c74a36b7e25d77e9dd295cef5dbd`. Existing 400 assertions remained green; only the new orchestration suite failed because the implementation modules did not yet exist.
+
+- [x] **Step 3: Implement downstream orchestration**
 
 Do not import partner economics or mutate core guidance. Persist the projection only after valid core guidance has been calculated.
 
-- [ ] **Step 4: Verify GREEN and commit**
+- [x] **Step 4: Verify GREEN and commit**
 
-Commit message: `feat: orchestrate decline recovery plans`.
+GREEN code head: `b6debacc8d3766fd7b6ac6fb71fe64d7981cb5a6`.
+- 407/407 unit + integration across 97 files.
+- 7/7 recovery orchestration contract tests.
+- migrations 001-013 + all RLS suites.
+- 17/17 Playwright.
+- dependency audit 0 vulnerabilities, lint, production build and Vercel green.
+
+Task 7 projects Safe Mode -> crisis recovery, red -> stability, amber -> rebuilding and green -> `ready_to_check`; derives evidence gaps from the existing Credit Passport; never fabricates a reassessment date; and renders recovery status outside the fixed seven-card Quest Feed.
 
 ### Task 8: Sandbox Return-to-Origin gateway
 
