@@ -28,6 +28,20 @@ const passport: CreditPassport = {
   ],
 };
 
+const electoralRollPassport: CreditPassport = {
+  ...passport,
+  pillars: passport.pillars.map((pillar) => pillar.id === "identity"
+    ? {
+        ...pillar,
+        status: "amber" as const,
+        strength: "There is an address-verification signal you may be able to improve.",
+        helping: [],
+        hurting: ["You told us you are not on the electoral roll at your current address."],
+        nextActions: ["If you are eligible, check the official electoral-registration route for your current address."],
+      }
+    : pillar),
+};
+
 describe("Passport and Readiness presentation", () => {
   it("renders all five Passport pillars with readable status words, including unknown affordability", () => {
     render(<PassportCard passport={passport} />);
@@ -37,11 +51,37 @@ describe("Passport and Readiness presentation", () => {
     expect(screen.getByRole("link", { name: /see my full passport/i }).getAttribute("href")).toBe("/passport");
   });
 
+  it("surfaces the existing electoral-roll mission directly from an amber Passport overview", () => {
+    render(
+      <PassportCard
+        passport={electoralRollPassport}
+        identityActionHref="/actions/mission-electoral-roll"
+      />,
+    );
+
+    expect(screen.getByRole("link", { name: /improve identity & traceability/i }).getAttribute("href"))
+      .toBe("/actions/mission-electoral-roll");
+    expect(screen.getByRole("link", { name: /see my full passport/i }).getAttribute("href")).toBe("/passport");
+  });
+
   it("explains Passport evidence without pretending to be a bureau or lender score", () => {
     render(<PassportDetail passport={passport} />);
     expect(screen.getByRole("heading", { name: "Your Credit Passport" })).not.toBeNull();
     expect(screen.getByText(/not a credit-reference-agency score/i)).not.toBeNull();
     expect(screen.getByText(/not enough for a responsible affordability assessment/i)).not.toBeNull();
+  });
+
+  it("turns an amber electoral-roll next action into the tracked mission journey", () => {
+    render(
+      <PassportDetail
+        passport={electoralRollPassport}
+        actionHrefs={{ identity: "/actions/mission-electoral-roll" }}
+      />,
+    );
+
+    expect(screen.getByRole("link", { name: /take action on identity & traceability/i }).getAttribute("href"))
+      .toBe("/actions/mission-electoral-roll");
+    expect(screen.queryByRole("link", { name: /gov\.uk/i })).toBeNull();
   });
 
   it("renders green readiness with an explicit no-approval-prediction disclaimer", () => {
