@@ -1,23 +1,29 @@
 import { redirect } from "next/navigation";
 import { AccountsClient } from "@/components/accounts/accounts-client";
 import { CustomerShell } from "@/components/customer/customer-shell";
+import { SupportNeedsProfile } from "@/components/recovery/support-needs-profile";
 import type { ProviderDefinition, UserAccount } from "@/lib/domain/types";
+import type { SupportNeedCode } from "@/lib/recovery/types";
 import { listUserAccounts } from "@/lib/server/account-repository";
 import { listAccountProviders } from "@/lib/server/action-repository";
+import { listSupportNeeds } from "@/lib/server/support-needs-repository";
 import { getSupabasePublicEnv } from "@/lib/supabase/env";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 export default async function AccountsPage() {
   let accounts: UserAccount[] = [];
   let providers: ProviderDefinition[] = [];
+  let supportNeeds: SupportNeedCode[] = [];
+  const supabaseEnv = getSupabasePublicEnv();
 
-  if (getSupabasePublicEnv()) {
+  if (supabaseEnv) {
     const supabase = await createServerSupabaseClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) redirect("/login?next=%2Faccounts");
-    [accounts, providers] = await Promise.all([
+    [accounts, providers, supportNeeds] = await Promise.all([
       listUserAccounts(supabase, user.id),
       listAccountProviders(supabase),
+      listSupportNeeds(supabase, user.id),
     ]);
   }
 
@@ -69,6 +75,10 @@ export default async function AccountsPage() {
 
         <div className="mt-6">
           <AccountsClient initialAccounts={accounts} providers={providers} />
+        </div>
+
+        <div className="mt-8 border-t border-white/8 pt-8">
+          <SupportNeedsProfile initialNeeds={supportNeeds} demo={!supabaseEnv} />
         </div>
       </main>
     </CustomerShell>
