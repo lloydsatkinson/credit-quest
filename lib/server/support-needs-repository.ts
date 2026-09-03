@@ -42,30 +42,16 @@ export async function replaceSupportNeeds(
   needs: readonly SupportNeedCode[],
   now = new Date(),
 ): Promise<SupportNeedCode[]> {
-  const nowIso = now.toISOString();
+  const { data, error } = await admin.rpc("replace_support_needs_atomic", {
+    p_user_id: userId,
+    p_need_codes: [...needs],
+    p_effective_at: now.toISOString(),
+  });
 
-  const { error: deleteError } = await admin
-    .from("support_needs")
-    .delete()
-    .eq("user_id", userId);
-  if (deleteError) throw deleteError;
+  if (error) throw error;
+  if (!Array.isArray(data) || !data.every(isSupportNeedCode)) {
+    throw new Error("Support Needs replacement returned an invalid result");
+  }
 
-  if (needs.length === 0) return [];
-
-  const { error: insertError } = await admin
-    .from("support_needs")
-    .insert(
-      needs.map((needCode) => ({
-        user_id: userId,
-        need_code: needCode,
-        source: "customer",
-        confirmation_state: "confirmed",
-        effective_at: nowIso,
-        created_at: nowIso,
-        updated_at: nowIso,
-      })),
-    );
-  if (insertError) throw insertError;
-
-  return [...needs];
+  return data;
 }
