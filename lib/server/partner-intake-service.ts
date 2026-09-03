@@ -10,16 +10,24 @@ import {
   verifyPartnerRequestSignature,
 } from "@/lib/server/partner-auth";
 import {
+  consumePartnerIntakeSession,
   findPartnerIntakeByIdempotency,
   findPartnerIntakeByNonce,
   getPartnerCredentialByKey,
+  getPartnerHandoffByTokenHash,
   getPartnerIntakeFeatureEnabled,
   insertPartnerIntakeSession,
+  type PartnerHandoffSession,
 } from "@/lib/server/partner-intake-repository";
+import {
+  createPartnerRecoveryJourney,
+  type PartnerContextReviewResult,
+} from "@/lib/server/recovery-repository";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 
 const MAX_BODY_BYTES = 8 * 1024;
 const TOKEN_TTL_MS = 15 * 60 * 1000;
+const HANDOFF_TOKEN_PATTERN = /^[A-Za-z0-9_-]{40,120}$/;
 
 export type PartnerIntakeFailure =
   | "invalid_payload"
@@ -38,8 +46,42 @@ export class PartnerIntakeError extends Error {
   }
 }
 
+export type PartnerHandoffFailure = "invalid_review" | "handoff_unavailable";
+
+export class PartnerHandoffError extends Error {
+  constructor(
+    public readonly failure: PartnerHandoffFailure,
+    public readonly status: number,
+  ) {
+    super(failure);
+    this.name = "PartnerHandoffError";
+  }
+}
+
 export interface PartnerIntakeRateLimitHook {
   (admin: SupabaseClient, partnerId: string, now: Date): Promise<boolean>;
+}
+
+export type PartnerHandoffContextAction =
+  | "confirm"
+  | "correct_reason"
+  | "reason_unknown"
+  | "decline_optional_reason_use";
+
+export interface PartnerHandoffReview {
+  contextAction: PartnerHandoffContextAction;
+  correctedReasonCode: string | null;
+}
+
+export interface PartnerHandoffPreview {
+  partnerDisplayName: string;
+  productCategory: PartnerHandoffSession["productCategory"];
+  declinedAt: string;
+  reason: {
+    known: boolean;
+    code: string | null;
+    source: "partner" | "unknown";
+  };
 }
 
 const allowPartnerIntake: PartnerIntakeRateLimitHook = async () => true;
@@ -54,6 +96,148 @@ function credentialIsUsable(
   if (Date.parse(credential.validFrom) > now.getTime()) return false;
   if (credential.expiresAt && Date.parse(credential.expiresAt) <= now.getTime()) return false;
   return true;
+}
+
+function handoffSessionIsUsable(session: PartnerHandoffSession | null, now: Date) {
+  if (!session) return false;
+  if (session.environment !== "sandbox") return false;
+  if (!session.partnerEnabled || !session.partnerSandboxEnabled) return false;
+  if (session.consumedAt || session.boundUserId) return false;
+  if (Date.parse(session.tokenExpiresAt) <= now.getTime()) return false;
+  return true;
+}
+
+function tokenHash(token: string) {
+  return createHash("sha256").update(token).digest("hex");
+}
+
+async function loadUsablePartnerHandoff(
+  admin: SupabaseClient,
+  token: string,
+  now: Date,
+) {
+  if (!HANDOFF_TOKEN_PATTERN.test(token)) return null;
+  if (!(await getPartnerIntakeFeatureEnabled(admin))) return null;
+  const session = await getPartnerHandoffByTokenHash(admin, tokenHash(token));
+  return handoffSessionIsUsable(session, now) ? session : null;
+}
+
+function reviewResult(
+  session: PartnerHandoffSession,
+  review: PartnerHandoffReview,
+): PartnerContextReviewResult {
+  if (review.contextAction === "correct_reason") {
+    const corrected = review.correctedReasonCode?.trim() ?? "";
+    if (!corrected || corrected.length > 160) {
+      throw new PartnerHandoffError("invalid_review", 400);
+    }
+    return {
+      declineReasonKnown: true,
+      declineReasonCode: corrected,
+      declineReasonSource: "customer",
+      contextConfirmation: "corrected",
+    };
+  }
+
+  if (review.contextAction === "reason_unknown") {
+    return {
+      declineReasonKnown: false,
+      declineReasonCode: null,
+      declineReasonSource: "unknown",
+      contextConfirmation: "unknown",
+    };
+  }
+
+  if (review.contextAction === "decline_optional_reason_use") {
+    return {
+      declineReasonKnown: false,
+      declineReasonCode: null,
+      declineReasonSource: "unknown",
+      contextConfirmation: "optional_use_declined",
+    };
+  }
+
+  if (review.contextAction !== "confirm") {
+    throw new PartnerHandoffError("invalid_review", 400);
+  }
+
+  const partnerReasonKnown = session.declineReasonSource === "partner" && Boolean(session.declineReasonCode);
+  return partnerReasonKnown
+    ? {
+      declineReasonKnown: true,
+      declineReasonCode: session.declineReasonCode,
+      declineReasonSource: "partner",
+      contextConfirmation: "confirmed",
+    }
+    : {
+      declineReasonKnown: false,
+      declineReasonCode: null,
+      declineReasonSource: "unknown",
+      contextConfirmation: "confirmed",
+    };
+}
+
+export async function previewPartnerHandoff(
+  token: string,
+  now = new Date(),
+): Promise<PartnerHandoffPreview | null> {
+  const admin = createAdminSupabaseClient();
+  const session = await loadUsablePartnerHandoff(admin, token, now);
+  if (!session) return null;
+
+  const known = session.declineReasonSource === "partner" && Boolean(session.declineReasonCode);
+  return {
+    partnerDisplayName: session.partnerDisplayName,
+    productCategory: session.productCategory,
+    declinedAt: session.declinedAt,
+    reason: {
+      known,
+      code: known ? session.declineReasonCode : null,
+      source: known ? "partner" : "unknown",
+    },
+  };
+}
+
+export async function redeemPartnerHandoff(input: {
+  token: string;
+  userId: string;
+  review: PartnerHandoffReview;
+  now?: Date;
+}) {
+  const now = input.now ?? new Date();
+  const admin = createAdminSupabaseClient();
+  const session = await loadUsablePartnerHandoff(admin, input.token, now);
+  if (!session) throw new PartnerHandoffError("handoff_unavailable", 410);
+
+  const reviewedContext = reviewResult(session, input.review);
+  let recovery;
+  try {
+    recovery = await createPartnerRecoveryJourney(
+      admin,
+      input.userId,
+      session,
+      reviewedContext,
+      now,
+    );
+  } catch (error) {
+    const code = typeof error === "object" && error && "code" in error
+      ? String((error as { code?: unknown }).code ?? "")
+      : "";
+    if (code === "23505") {
+      throw new PartnerHandoffError("handoff_unavailable", 410);
+    }
+    throw error;
+  }
+
+  const consumed = await consumePartnerIntakeSession(
+    admin,
+    session.id,
+    input.userId,
+    now,
+  );
+  if (!consumed) throw new PartnerHandoffError("handoff_unavailable", 410);
+
+  return recovery;
 }
 
 export async function processPartnerDeclineIntake(input: {
@@ -121,7 +305,7 @@ export async function processPartnerDeclineIntake(input: {
   }
 
   const token = randomBytes(32).toString("base64url");
-  const tokenHash = createHash("sha256").update(token).digest("hex");
+  const hashedToken = tokenHash(token);
   const tokenExpiresAt = new Date(now.getTime() + TOKEN_TTL_MS).toISOString();
   const reasonKnown = parsed.data.declineReasonProvided && Boolean(parsed.data.declineReasonCode);
 
@@ -143,7 +327,7 @@ export async function processPartnerDeclineIntake(input: {
       idempotencyKey: auth.idempotencyKey,
       nonce: auth.nonce,
       requestTimestamp: auth.timestamp,
-      tokenHash,
+      tokenHash: hashedToken,
       tokenExpiresAt,
     });
   } catch (error) {
