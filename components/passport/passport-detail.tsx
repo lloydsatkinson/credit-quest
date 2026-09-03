@@ -1,3 +1,4 @@
+import Link from "next/link";
 import type { CreditPassport, PassportPillar, PassportStatus } from "@/lib/domain/types";
 
 const statusClasses: Record<PassportStatus, string> = {
@@ -28,7 +29,7 @@ function EvidenceList({ title, items }: { title: string; items: string[] }) {
   );
 }
 
-function PillarDetail({ pillar }: { pillar: PassportPillar }) {
+function PillarDetail({ pillar, actionHref }: { pillar: PassportPillar; actionHref?: string }) {
   return (
     <article
       data-testid={`passport-pillar-${pillar.id}`}
@@ -49,11 +50,26 @@ function PillarDetail({ pillar }: { pillar: PassportPillar }) {
         <EvidenceList title="What we do not know" items={pillar.unknowns} />
         <EvidenceList title="Next actions" items={pillar.nextActions} />
       </div>
+      {actionHref ? (
+        <Link
+          href={actionHref}
+          className="mt-4 flex w-full items-center justify-between rounded-2xl bg-lime-300 px-4 py-3 text-sm font-black text-slate-950 shadow-[0_0_30px_rgba(200,255,56,0.10)] transition hover:bg-lime-200"
+        >
+          <span>Take action on {pillar.title}</span>
+          <span aria-hidden="true">→</span>
+        </Link>
+      ) : null}
     </article>
   );
 }
 
-export function PassportDetail({ passport }: { passport: CreditPassport }) {
+export function PassportDetail({
+  passport,
+  actionHrefs = {},
+}: {
+  passport: CreditPassport;
+  actionHrefs?: Partial<Record<PassportPillar["id"], string>>;
+}) {
   return (
     <section className="text-white">
       <p className="cq-kicker">Your position, explained</p>
@@ -62,7 +78,9 @@ export function PassportDetail({ passport }: { passport: CreditPassport }) {
         This is a Credit Quest guidance framework, not a credit-reference-agency score and not a lender underwriting result.
       </p>
       <div className="mt-8 space-y-4">
-        {passport.pillars.map((pillar) => <PillarDetail key={pillar.id} pillar={pillar} />)}
+        {passport.pillars.map((pillar) => (
+          <PillarDetail key={pillar.id} pillar={pillar} actionHref={actionHrefs[pillar.id]} />
+        ))}
       </div>
     </section>
   );

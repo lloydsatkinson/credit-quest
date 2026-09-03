@@ -3,7 +3,9 @@ import { redirect } from "next/navigation";
 import { CustomerShell } from "@/components/customer/customer-shell";
 import { DemoCreditGuidance } from "@/components/guidance/demo-credit-guidance";
 import { PassportDetail } from "@/components/passport/passport-detail";
+import { rankMissionInstances } from "@/lib/domain/mission-engine";
 import { getCreditGuidanceForUser } from "@/lib/server/credit-guidance-service";
+import { listMissionInstances } from "@/lib/server/mission-repository";
 import { getSupabasePublicEnv } from "@/lib/supabase/env";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
@@ -42,9 +44,21 @@ export default async function PassportPage() {
   const guidance = await getCreditGuidanceForUser(supabase, user.id);
   if (!guidance) redirect("/onboarding");
 
+  const now = new Date();
+  const instances = await listMissionInstances(supabase, user.id);
+  const availableMissions = rankMissionInstances(guidance.profile, instances, [], now);
+  const electoralRollMission = availableMissions.find(
+    (item) => item.mission.slug === "register-electoral-roll",
+  );
+
   return (
     <PassportShell>
-      <PassportDetail passport={guidance.passport} />
+      <PassportDetail
+        passport={guidance.passport}
+        actionHrefs={electoralRollMission
+          ? { identity: `/actions/${electoralRollMission.instance.id}` }
+          : undefined}
+      />
     </PassportShell>
   );
 }
