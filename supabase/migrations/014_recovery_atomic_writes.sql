@@ -166,15 +166,15 @@ begin
 
   -- Consume first while the session row is locked. If the journey insert below
   -- fails for any reason, PostgreSQL rolls this update back automatically.
-  update public.decline_intake_sessions
+  update public.decline_intake_sessions as s
   set
     consumed_at = p_now,
     bound_user_id = p_user_id
-  where id = p_session_id
-    and environment = 'sandbox'
-    and consumed_at is null
-    and bound_user_id is null
-    and token_expires_at > p_now;
+  where s.id = p_session_id
+    and s.environment = 'sandbox'
+    and s.consumed_at is null
+    and s.bound_user_id is null
+    and s.token_expires_at > p_now;
 
   if not found then
     raise exception 'handoff_unavailable';
