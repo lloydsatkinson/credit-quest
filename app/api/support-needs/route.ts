@@ -77,6 +77,6 @@ export async function PATCH(request: Request) {
   }
 
   const admin = createAdminSupabaseClient();
-  const saved = await replaceSupportNeeds(admin, user.id, needs, new Date());
-  return NextResponse.json(responseFor(saved, true));
+  await replaceSupportNeeds(admin, user.id, needs, new Date());
+  return NextResponse.json(responseFor(needs, true));
 }
