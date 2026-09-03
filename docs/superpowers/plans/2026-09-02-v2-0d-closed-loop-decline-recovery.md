@@ -41,23 +41,21 @@
 - Consumes: `AgeMode`, `ReadinessState` from `lib/domain/types.ts`; `SafetyMode` from `lib/domain/safety.ts`.
 - Produces: `RecoveryReadinessState`, `DeclineContext`, `SupportNeedCode`, `SupportAdaptations`, `ReturnGateContext`, `ReturnGateResult`, `toRecoveryReadinessState()`, `buildDeclineContext()`, `deriveSupportAdaptations()`, `evaluateReturnToOriginGate()`.
 
-- [ ] **Step 1: Write the failing domain contract test**
+- [x] **Step 1: Write the failing domain contract test**
 
 Create `tests/unit/recovery-domain.test.ts` covering: unknown decline reason remains unknown; partner context is preserved without generating diagnosis/profile mutations; support needs produce presentation/support adaptations but no Safe Mode decision; existing green readiness maps to `ready_to_check`; Return-to-Origin fails closed for under-18, Safe Mode, incomplete evidence, non-ready readiness, incomplete cooldown, stale disclosure, expired/disabled contract, missing customer choice, environment mismatch and live hard-lock; a fully permitted sandbox case passes.
 
-- [ ] **Step 2: Verify RED in CI**
+- [x] **Step 2: Verify RED in CI**
 
-Open a draft PR against `main`. Expected: `npm test` fails because the new `lib/recovery/*` contracts do not exist yet; earlier audit/lint steps may pass.
-
-- [ ] **Step 3: Implement the minimal pure domain layer**
+- [x] **Step 3: Implement the minimal pure domain layer**
 
 Keep all functions deterministic and free of Supabase/server imports. `toRecoveryReadinessState()` maps `red -> not_ready`, `amber -> getting_closer`, `green -> ready_to_check`, `unknown -> unknown`. `deriveSupportAdaptations()` returns functional UX adjustments only. `evaluateReturnToOriginGate()` checks every independent gate and returns a stable machine reason when blocked.
 
-- [ ] **Step 4: Verify GREEN**
+- [x] **Step 4: Verify GREEN**
 
-Run CI again. Expected: new domain tests pass and no existing tests regress.
+GREEN head: `2880a9afdc2210b1cf9b0c85f3af8f40092f21c9`.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 Commit message: `feat: add decline recovery domain gates`.
 
@@ -72,25 +70,13 @@ Commit message: `feat: add decline recovery domain gates`.
 **Interfaces:**
 - Produces private/server-owned `decline_partners`, `decline_partner_credentials`, `return_contracts`; owner-readable `decline_recovery_journeys`, `support_needs`, `return_attempts`; server-bound `decline_intake_sessions`; append-only/audited provenance; default-off `partner_decline_intake_enabled` and `return_to_origin_enabled` feature flags.
 
-- [ ] **Step 1: Write migration contract tests first**
+- [x] **Step 1: Write migration contract tests first**
+- [x] **Step 2: Verify RED**
+- [x] **Step 3: Add migration and SQL RLS probes**
+- [x] **Step 4: Wire `supabase/tests/recovery_rls.sql` into CI**
+- [x] **Step 5: Verify GREEN and commit**
 
-Assert the migration creates the named tables, enables RLS, seeds both runtime flags OFF, enforces sandbox/live environment values, unique partner/idempotency constraints, hashed-token storage rather than raw tokens, and no client-writable partner/config tables.
-
-- [ ] **Step 2: Verify RED**
-
-Expected: unit migration contract fails because migration 013 does not exist.
-
-- [ ] **Step 3: Add migration and SQL RLS probes**
-
-Use UUID primary keys, owner IDs derived server-side, `created_at/updated_at` timestamps, `token_hash`, `token_expires_at`, `consumed_at`, partner/contract kill switches, narrow JSONB provenance with server-only writes, and foreign keys with indexes. Do not store partner economics in recovery strategy records.
-
-- [ ] **Step 4: Wire `supabase/tests/recovery_rls.sql` into CI**
-
-Expected SQL probes: anon cannot read/write private partner credentials/config; authenticated customer cannot read another owner's recovery/support/return records; service role can create intake/config; direct client writes to provenance/config fail; runtime flags remain service-role controlled.
-
-- [ ] **Step 5: Verify GREEN and commit**
-
-Commit message: `feat: add recovery persistence and rls`.
+GREEN head: `cf6ced12c888b1f35119e58ce3e4df4e43e72b9f`.
 
 ### Task 3: Direct “I’ve just been declined” journey
 
@@ -102,23 +88,12 @@ Commit message: `feat: add recovery persistence and rls`.
 - Test: `tests/unit/recovery-direct-route.test.ts`
 - Test: `tests/unit/recovery-direct-ui.test.tsx`
 
-**Interfaces:**
-- Browser submits only minimal direct-entry fields: approximate decline date, product category, whether a reason was actually provided, optional provider display name, recent-application context and optional support need codes.
-- Server derives user ID from authenticated session and creates an owner-scoped recovery journey.
+- [x] **Step 1: Write failing route/UI tests**
+- [x] **Step 2: Verify RED**
+- [x] **Step 3: Implement direct entry**
+- [x] **Step 4: Verify GREEN and commit**
 
-- [ ] **Step 1: Write failing route/UI tests**
-
-Cover unauthenticated rejection, no invented reason, strict enum validation, no arbitrary partner/return URL/environment fields, and premium customer-shell presentation.
-
-- [ ] **Step 2: Verify RED**
-
-- [ ] **Step 3: Implement direct entry**
-
-Use Zod, authenticated server session, repository writes through the service-owned path, and neutral copy: “I’ve just been declined” / “Credit Quest can help you understand what to work on next.” Do not claim a lender reason that was not supplied.
-
-- [ ] **Step 4: Verify GREEN and commit**
-
-Commit message: `feat: add direct decline recovery entry`.
+GREEN head: `ab56013aa46492b5dd7a383aee732a0dfc1f00e1`.
 
 ### Task 4: Functional Support Needs Profile
 
@@ -130,23 +105,12 @@ Commit message: `feat: add direct decline recovery entry`.
 - Test: `tests/unit/support-needs-route.test.ts`
 - Test: `tests/unit/support-needs-ui.test.tsx`
 
-**Interfaces:**
-- Persist allowlisted functional need codes and provenance/confirmation/review dates; do not accept detailed health diagnoses or unrestricted medical free text.
-- Output adaptations consumed by customer presentation only; no import path from support UI/repository into `lib/domain/safety.ts`, `diagnosis.ts`, `readiness.ts`, `mission-engine.ts`.
+- [x] **Step 1: Write failing support tests**
+- [x] **Step 2: Verify RED**
+- [x] **Step 3: Implement route/repository/UI**
+- [x] **Step 4: Verify GREEN and commit**
 
-- [ ] **Step 1: Write failing support tests**
-
-Cover allowed needs, rejection of detailed-health/free-text payloads, owner scoping, support need without automatic Safe Mode, and customer ability to update/clear needs.
-
-- [ ] **Step 2: Verify RED**
-
-- [ ] **Step 3: Implement route/repository/UI**
-
-Use a non-stigmatising question: “Would anything make Credit Quest easier for you to use right now?” Map needs to plain-English, larger-text, reduced-motion, fewer-steps, slower-pacing, reminder-support, human-support and digital-help adaptations.
-
-- [ ] **Step 4: Verify GREEN and commit**
-
-Commit message: `feat: add functional support needs profile`.
+GREEN head: `75d09180c4b6b9dbe4c81875df467f424a450aa3`.
 
 ### Task 5: Secure sandbox Partner Decline Intake
 
@@ -158,24 +122,12 @@ Commit message: `feat: add functional support needs profile`.
 - Create: `lib/server/partner-intake-service.ts`
 - Test: `tests/unit/partner-decline-intake.test.ts`
 
-**Interfaces:**
-- Header contract: partner credential identifier, timestamp, nonce, idempotency key, request signature.
-- Body excludes raw PII, health detail, underwriting notes, arbitrary destination URLs and client-supplied trusted `partner_id`/environment.
-- Service returns an opaque one-use handoff token URL; raw token is returned once and only its hash is persisted.
+- [x] **Step 1: Write failing API/security tests**
+- [x] **Step 2: Verify RED**
+- [x] **Step 3: Implement sandbox-only service**
+- [x] **Step 4: Verify GREEN and commit**
 
-- [ ] **Step 1: Write failing API/security tests**
-
-Cover valid sandbox signed request, invalid signature, expired timestamp, nonce replay, duplicate idempotency, disabled partner, payload overreach, environment manipulation, and token characteristics.
-
-- [ ] **Step 2: Verify RED**
-
-- [ ] **Step 3: Implement sandbox-only service**
-
-Use HMAC-SHA256 over a canonical request representation with timing-safe comparison, timestamp tolerance, nonce persistence, rate-limit hook, `crypto.randomBytes` token generation and SHA-256 token hashing. Require `partner_decline_intake_enabled=true`; live environment requests remain rejected.
-
-- [ ] **Step 4: Verify GREEN and commit**
-
-Commit message: `feat: add sandbox partner decline intake`.
+GREEN head: `f5ad23f30cc199446f05d781e4b2bf4a4cda5352`.
 
 ### Task 6: One-time handoff redemption and customer transparency
 
@@ -187,23 +139,12 @@ Commit message: `feat: add sandbox partner decline intake`.
 - Test: `tests/unit/partner-handoff-redemption.test.ts`
 - Test: `tests/e2e/recovery.spec.ts`
 
-**Interfaces:**
-- Token is server-redeemed, short-lived, single-use and invalid after account binding.
-- Customer sees source, product category, decline date and optional structured reason with provenance; can confirm/correct/unknown/decline optional use.
+- [x] **Step 1: Write failing redemption tests**
+- [x] **Step 2: Verify RED**
+- [x] **Step 3: Implement redemption/transparency flow**
+- [x] **Step 4: Verify GREEN and commit**
 
-- [ ] **Step 1: Write failing redemption tests**
-
-Cover expired token, reused token, disabled partner after issue, wrong environment, no raw sensitive data in URL, account binding and truthful context correction.
-
-- [ ] **Step 2: Verify RED**
-
-- [ ] **Step 3: Implement redemption/transparency flow**
-
-Never decode sensitive context from the URL. Resolve token hash server-side and bind the resulting journey to the authenticated customer.
-
-- [ ] **Step 4: Verify GREEN and commit**
-
-Commit message: `feat: add recovery handoff redemption`.
+GREEN head: `3614fb17fc9b2ae37e9353a82f3b652dc81edef7`.
 
 ### Task 7: Recovery-plan orchestration
 
@@ -219,17 +160,11 @@ Commit message: `feat: add recovery handoff redemption`.
 - Produces recovery stage, next safe action, evidence gaps and reassessment date only when real dated evidence supports one.
 
 - [x] **Step 1: Write failing orchestration tests**
-
-Cover Safe Mode -> crisis/recovery, red -> stability, amber -> rebuilding, known dated cooldown -> reassessment date, missing source date -> no fabricated 30/90/180 exact date, green -> ready-to-check.
-
 - [x] **Step 2: Verify RED**
 
 RED head: `0f01ac4c29a6c74a36b7e25d77e9dd295cef5dbd`. Existing 400 assertions remained green; only the new orchestration suite failed because the implementation modules did not yet exist.
 
 - [x] **Step 3: Implement downstream orchestration**
-
-Do not import partner economics or mutate core guidance. Persist the projection only after valid core guidance has been calculated.
-
 - [x] **Step 4: Verify GREEN and commit**
 
 GREEN code head: `b6debacc8d3766fd7b6ac6fb71fe64d7981cb5a6`.
@@ -281,18 +216,9 @@ Commit message: `feat: add sandbox return to origin gateway`.
 - Admin reporting is aggregate/cohort-first and contains no detailed support/vulnerability data.
 
 - [ ] **Step 1: Write failing analytics tests**
-
-Cover canonical event names, best-effort behavior, aggregate counts, unavailable-source semantics and absence of support detail/partner economics from strategy paths.
-
 - [ ] **Step 2: Verify RED**
-
 - [ ] **Step 3: Implement aggregate reporting**
-
-Report handoffs, activations, first actions, reassessments, ready-to-check, voluntary returns, time-to-action and suppression reasons. Revenue remains downstream/reporting-only.
-
 - [ ] **Step 4: Verify GREEN and commit**
-
-Commit message: `feat: add recovery analytics reporting`.
 
 ### Task 10: Architecture, security, privacy and release hardening
 
@@ -307,21 +233,9 @@ Commit message: `feat: add recovery analytics reporting`.
 - Compliance document records that detailed health/special-category processing remains out of scope until Article 6/Article 9/DPA 2018/DPIA controls are approved.
 
 - [ ] **Step 1: Write boundary and E2E tests**
-
-Cover standard decline -> recovery -> sandbox ready-to-check -> voluntary return; unknown reason; conflicting partner context; corrected context; repeated applications/cooldown; Safe Mode suppression; support need without Safe Mode; under-18; expired contract; disabled partner; customer declining return; second decline without invented cause.
-
 - [ ] **Step 2: Run full release verification**
-
-Run: `npm audit --omit=dev --audit-level=high`, `npm run lint`, `npm test`, local Supabase migrations + all RLS SQL including `recovery_rls.sql`, `npm run test:e2e`, `npm run build`.
-
 - [ ] **Step 3: Verify dark production boundaries**
-
-Before any merge/deploy: no production pilot assignment; `partner_decline_intake_enabled=false`; `return_to_origin_enabled=false`; `commercial_sandbox_enabled=false`; `commercial_gateway_enabled=false`; `email_reminders_enabled=false`; live referral/return environment locks false; no enabled live partner route or return contract.
-
 - [ ] **Step 4: Final review and release decision**
-
-Do not activate sandbox or live capabilities as part of merge. Internal sandbox pilot activation is a separate explicit production control step after the compatible application and migration are verified.
-
 - [ ] **Step 5: Commit**
 
 Commit message: `test: harden decline recovery release`.
