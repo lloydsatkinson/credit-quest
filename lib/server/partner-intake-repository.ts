@@ -167,6 +167,21 @@ export async function getPartnerCredentialByKey(
   };
 }
 
+const SAFE_VAULT_SECRET_NAME = /^[A-Za-z0-9._:-]{3,160}$/;
+
+export async function getVaultPartnerSecret(
+  admin: SupabaseClient,
+  secretName: string,
+): Promise<string | null> {
+  if (!SAFE_VAULT_SECRET_NAME.test(secretName)) return null;
+
+  const { data, error } = await admin.rpc("get_partner_credential_vault_secret", {
+    p_secret_name: secretName,
+  });
+  if (error) throw error;
+  return typeof data === "string" ? data : null;
+}
+
 export async function findEligibleSandboxReturnContract(
   admin: SupabaseClient,
   partnerId: string,
