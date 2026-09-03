@@ -10,6 +10,7 @@ import {
   verifyPartnerRequestSignature,
 } from "@/lib/server/partner-auth";
 import {
+  findEligibleSandboxReturnContract,
   findPartnerIntakeByIdempotency,
   findPartnerIntakeByNonce,
   getPartnerCredentialByKey,
@@ -297,6 +298,13 @@ export async function processPartnerDeclineIntake(input: {
     throw new PartnerIntakeError("replay_detected", 409);
   }
 
+  const returnContract = await findEligibleSandboxReturnContract(
+    admin,
+    credential.partnerId,
+    parsed.data.productCategory,
+    now,
+  );
+
   const token = randomBytes(32).toString("base64url");
   const hashedToken = tokenHash(token);
   const tokenExpiresAt = new Date(now.getTime() + TOKEN_TTL_MS).toISOString();
@@ -306,7 +314,7 @@ export async function processPartnerDeclineIntake(input: {
     await insertPartnerIntakeSession(admin, {
       partnerId: credential.partnerId,
       credentialId: credential.credentialId,
-      returnContractId: null,
+      returnContractId: returnContract?.id ?? null,
       environment: "sandbox",
       originReference: parsed.data.originReference,
       productCategory: parsed.data.productCategory,
