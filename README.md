@@ -124,6 +124,7 @@ V2.0d adds a dark, sandbox-first recovery loop for customers who have just been 
 - Customers can start recovery directly or redeem a short-lived one-time sandbox partner handoff. **Partner decline context is not Credit Quest diagnosis**; customers can confirm, correct, mark unknown or decline optional use of partner-supplied reason context.
 - Partner intake is a separate inbound trust boundary with HMAC authentication, replay/idempotency controls, short token expiry and hash-only token persistence. Raw handoff tokens are never stored.
 - Support Needs remain functional adaptations only. **Support Needs do not automatically trigger Safe Mode**, readiness changes, diagnosis changes or mission-ranking changes, and detailed health/medical capture is out of scope for this release.
+- Support Needs replacement and one-time partner handoff redemption use service-role-only atomic PostgreSQL RPCs. A failed replacement rolls back without erasing prior support preferences, and handoff consumption plus recovery-journey creation commit together or roll back together.
 - Recovery orchestration reuses current Credit Quest guidance rather than creating a lender-specific or partner-specific creditworthiness model. Missing evidence remains missing and reassessment dates are never fabricated.
 - Return-to-Origin is customer-controlled and server-owned. The browser cannot submit partner identity, environment or destination; the gateway re-runs adult, Safe Mode, evidence, readiness, cooldown, suppression, disclosure, partner and contract checks before any sandbox return.
 - **Live Return-to-Origin remains disabled.** The implementation hard-locks live return off and does not invoke a partner callback adapter. Live regulated return/referral requires a separate operating-model and release decision.
@@ -218,10 +219,11 @@ Migrations:
 - `supabase/migrations/011_commercial_admin.sql` — V2.2C private commercial/admin control plane, sandbox-only seed, append-only referral/revenue update protection, audited admin RPCs and service-role-only access.
 - `supabase/migrations/012_commercial_sandbox_isolation.sql` — V2.2 sandbox isolation controls that keep sandbox commercial execution separate from live regulated paths.
 - `supabase/migrations/013_decline_recovery_foundation.sql` — V2.0d decline-partner, one-time intake, recovery-journey, functional-support and Return-to-Origin persistence with dark defaults and RLS.
+- `supabase/migrations/014_recovery_atomic_writes.sql` — V2.0d service-role-only atomic Support Needs replacement and one-time partner handoff redemption, with rollback-safe multi-row writes and replay-safe session consumption.
 
 The Action Layer rollout used staged expand/deploy/cutover migrations. Academy is additive: content can be versioned and published through the database workflow without requiring an application redeployment for ordinary editorial changes. V2.2/V2.0d migrations are additive but remain dark/release-gated until compatible application code has passed the applicable release checks.
 
-RLS and owner-integrity verification guidance is in `supabase/tests/rls.sql`. V2.2B retention-specific policy, RPC and duplicate-job probes are in `supabase/tests/retention_rls.sql`; V2.2C commercial/admin probes are in `supabase/tests/commercial_rls.sql`; V2.0d recovery probes are in `supabase/tests/recovery_rls.sql`. CI executes all applicable probes against the same disposable database.
+RLS and owner-integrity verification guidance is in `supabase/tests/rls.sql`. V2.2B retention-specific policy, RPC and duplicate-job probes are in `supabase/tests/retention_rls.sql`; V2.2C commercial/admin probes are in `supabase/tests/commercial_rls.sql`; V2.0d recovery probes are in `supabase/tests/recovery_rls.sql`, with transactional rollback/replay coverage in `supabase/tests/recovery_atomic.sql`. CI executes all applicable probes against the same disposable database.
 
 ## Verification
 
