@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
   insertPartnerIntakeSession: vi.fn(),
   getPartnerHandoffByTokenHash: vi.fn(),
   consumePartnerIntakeSession: vi.fn(),
+  redeemPartnerHandoffAtomically: vi.fn(),
   createPartnerRecoveryJourney: vi.fn(),
 }));
 
@@ -30,6 +31,7 @@ vi.mock("@/lib/server/partner-intake-repository", () => ({
   insertPartnerIntakeSession: mocks.insertPartnerIntakeSession,
   getPartnerHandoffByTokenHash: mocks.getPartnerHandoffByTokenHash,
   consumePartnerIntakeSession: mocks.consumePartnerIntakeSession,
+  redeemPartnerHandoffAtomically: mocks.redeemPartnerHandoffAtomically,
 }));
 vi.mock("@/lib/server/recovery-repository", () => ({
   createPartnerRecoveryJourney: mocks.createPartnerRecoveryJourney,
@@ -68,6 +70,16 @@ const session = {
   partnerLiveEnabled: false,
 };
 
+const recovery = {
+  id: "44444444-4444-4444-8444-444444444444",
+  origin: "partner" as const,
+  productCategory: "credit_card" as const,
+  declineReasonKnown: true,
+  declineReasonCode: "partner_reason_affordability",
+  declineReasonSource: "partner" as const,
+  contextConfirmation: "confirmed" as const,
+};
+
 describe("one-time partner handoff redemption", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -78,16 +90,7 @@ describe("one-time partner handoff redemption", () => {
     });
     mocks.getPartnerIntakeFeatureEnabled.mockResolvedValue(true);
     mocks.getPartnerHandoffByTokenHash.mockResolvedValue(session);
-    mocks.createPartnerRecoveryJourney.mockResolvedValue({
-      id: "44444444-4444-4444-8444-444444444444",
-      origin: "partner",
-      productCategory: "credit_card",
-      declineReasonKnown: true,
-      declineReasonCode: "partner_reason_affordability",
-      declineReasonSource: "partner",
-      contextConfirmation: "confirmed",
-    });
-    mocks.consumePartnerIntakeSession.mockResolvedValue(true);
+    mocks.redeemPartnerHandoffAtomically.mockResolvedValue(recovery);
   });
 
   afterEach(() => cleanup());
@@ -124,6 +127,7 @@ describe("one-time partner handoff redemption", () => {
     }));
 
     expect(response.status).toBe(401);
+    expect(mocks.redeemPartnerHandoffAtomically).not.toHaveBeenCalled();
     expect(mocks.createPartnerRecoveryJourney).not.toHaveBeenCalled();
     expect(mocks.consumePartnerIntakeSession).not.toHaveBeenCalled();
   });
@@ -170,6 +174,7 @@ describe("one-time partner handoff redemption", () => {
       })).rejects.toMatchObject({ status: 410 });
     }
 
+    expect(mocks.redeemPartnerHandoffAtomically).not.toHaveBeenCalled();
     expect(mocks.createPartnerRecoveryJourney).not.toHaveBeenCalled();
     expect(mocks.consumePartnerIntakeSession).not.toHaveBeenCalled();
   });
@@ -184,10 +189,10 @@ describe("one-time partner handoff redemption", () => {
       now: NOW,
     })).rejects.toMatchObject({ status: 410 });
 
-    expect(mocks.createPartnerRecoveryJourney).not.toHaveBeenCalled();
+    expect(mocks.redeemPartnerHandoffAtomically).not.toHaveBeenCalled();
   });
 
-  it("binds a confirmed partner context only to the authenticated customer and consumes the token after journey creation", async () => {
+  it("binds confirmed partner context through one atomic repository operation", async () => {
     const response = await POST(new Request("https://credit-quest-app.vercel.app/api/recovery/handoff/redeem", {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -196,30 +201,26 @@ describe("one-time partner handoff redemption", () => {
     const body = await response.json();
 
     expect(response.status).toBe(201);
-    expect(mocks.createPartnerRecoveryJourney).toHaveBeenCalledWith(
+    expect(mocks.redeemPartnerHandoffAtomically).toHaveBeenCalledWith(
       expect.anything(),
-      USER_ID,
-      session,
       expect.objectContaining({
+        sessionId: session.id,
+        userId: USER_ID,
         declineReasonKnown: true,
         declineReasonCode: "partner_reason_affordability",
         declineReasonSource: "partner",
         contextConfirmation: "confirmed",
+        now: expect.any(Date),
       }),
-      expect.any(Date),
     );
-    expect(mocks.consumePartnerIntakeSession).toHaveBeenCalledWith(
-      expect.anything(),
-      session.id,
-      USER_ID,
-      expect.any(Date),
-    );
+    expect(mocks.createPartnerRecoveryJourney).not.toHaveBeenCalled();
+    expect(mocks.consumePartnerIntakeSession).not.toHaveBeenCalled();
     expect(body.recovery.id).toBe("44444444-4444-4444-8444-444444444444");
     expect(body.token).toBeUndefined();
   });
 
   it("lets the customer correct the reason without converting partner context into Credit Quest diagnosis", async () => {
-    mocks.createPartnerRecoveryJourney.mockResolvedValueOnce({
+    mocks.redeemPartnerHandoffAtomically.mockResolvedValueOnce({
       id: "55555555-5555-4555-8555-555555555555",
       origin: "partner",
       productCategory: "credit_card",
@@ -236,47 +237,54 @@ describe("one-time partner handoff redemption", () => {
       now: NOW,
     });
 
-    expect(mocks.createPartnerRecoveryJourney).toHaveBeenCalledWith(
+    expect(mocks.redeemPartnerHandoffAtomically).toHaveBeenCalledWith(
       expect.anything(),
-      USER_ID,
-      session,
       expect.objectContaining({
+        sessionId: session.id,
+        userId: USER_ID,
         declineReasonKnown: true,
         declineReasonCode: "customer_corrected_reason",
         declineReasonSource: "customer",
         contextConfirmation: "corrected",
+        now: NOW,
       }),
-      NOW,
     );
   });
 
   it("lets the customer mark the reason unknown or decline optional use", async () => {
     for (const contextAction of ["reason_unknown", "decline_optional_reason_use"] as const) {
+      mocks.redeemPartnerHandoffAtomically.mockResolvedValueOnce({
+        id: "journey",
+        origin: "partner",
+        productCategory: "credit_card",
+        declineReasonKnown: false,
+        declineReasonCode: null,
+        declineReasonSource: "unknown",
+        contextConfirmation: contextAction === "reason_unknown" ? "unknown" : "optional_use_declined",
+      });
+
       await redeemPartnerHandoff({
         token: TOKEN,
         userId: USER_ID,
         review: { contextAction, correctedReasonCode: null },
         now: NOW,
       });
-      expect(mocks.createPartnerRecoveryJourney).toHaveBeenLastCalledWith(
+      expect(mocks.redeemPartnerHandoffAtomically).toHaveBeenLastCalledWith(
         expect.anything(),
-        USER_ID,
-        session,
         expect.objectContaining({
+          sessionId: session.id,
+          userId: USER_ID,
           declineReasonKnown: false,
           declineReasonCode: null,
           declineReasonSource: "unknown",
           contextConfirmation: contextAction === "reason_unknown" ? "unknown" : "optional_use_declined",
+          now: NOW,
         }),
-        NOW,
       );
-      vi.clearAllMocks();
-      mocks.createAdminSupabaseClient.mockReturnValue({ kind: "admin" });
-      mocks.getPartnerIntakeFeatureEnabled.mockResolvedValue(true);
-      mocks.getPartnerHandoffByTokenHash.mockResolvedValue(session);
-      mocks.createPartnerRecoveryJourney.mockResolvedValue({ id: "journey" });
-      mocks.consumePartnerIntakeSession.mockResolvedValue(true);
     }
+
+    expect(mocks.createPartnerRecoveryJourney).not.toHaveBeenCalled();
+    expect(mocks.consumePartnerIntakeSession).not.toHaveBeenCalled();
   });
 
   it("renders partner provenance and gives the customer explicit confirm/correct/unknown/decline choices", () => {
