@@ -31,11 +31,15 @@ function statusLabel(status: PassportStatus): string {
 export function PassportCard({
   passport,
   diagnosis,
+  identityActionHref,
 }: {
   passport: CreditPassport;
   diagnosis?: BarrierDiagnosis;
+  identityActionHref?: string;
 }) {
   const knownSignals = passport.pillars.filter((pillar) => pillar.status !== "unknown").length;
+  const identity = passport.pillars.find((pillar) => pillar.id === "identity");
+  const canImproveIdentity = Boolean(identityActionHref && identity?.status === "amber");
 
   return (
     <div className="flex flex-1 flex-col">
@@ -95,9 +99,19 @@ export function PassportCard({
         </div>
       ) : null}
 
+      {canImproveIdentity ? (
+        <Link
+          href={identityActionHref!}
+          className="mt-6 flex w-full items-center justify-between rounded-2xl bg-lime-300 px-4 py-3 text-sm font-black text-slate-950 shadow-[0_0_30px_rgba(200,255,56,0.10)] transition hover:bg-lime-200"
+        >
+          <span>Improve Identity &amp; Traceability</span>
+          <span aria-hidden="true">→</span>
+        </Link>
+      ) : null}
+
       <Link
         href="/passport"
-        className="mt-auto pt-6 text-center text-sm font-black text-cyan-300 underline decoration-cyan-300/30 underline-offset-4 hover:text-white"
+        className={`${canImproveIdentity ? "mt-3" : "mt-auto pt-6"} text-center text-sm font-black text-cyan-300 underline decoration-cyan-300/30 underline-offset-4 hover:text-white`}
       >
         See my full Passport
       </Link>
