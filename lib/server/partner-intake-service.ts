@@ -10,19 +10,16 @@ import {
   verifyPartnerRequestSignature,
 } from "@/lib/server/partner-auth";
 import {
-  consumePartnerIntakeSession,
   findPartnerIntakeByIdempotency,
   findPartnerIntakeByNonce,
   getPartnerCredentialByKey,
   getPartnerHandoffByTokenHash,
   getPartnerIntakeFeatureEnabled,
   insertPartnerIntakeSession,
+  redeemPartnerHandoffAtomically,
   type PartnerHandoffSession,
 } from "@/lib/server/partner-intake-repository";
-import {
-  createPartnerRecoveryJourney,
-  type PartnerContextReviewResult,
-} from "@/lib/server/recovery-repository";
+import type { PartnerContextReviewResult } from "@/lib/server/recovery-repository";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 
 const MAX_BODY_BYTES = 8 * 1024;
@@ -177,6 +174,14 @@ function reviewResult(
     };
 }
 
+function isAtomicHandoffUnavailable(error: unknown) {
+  if (!error || typeof error !== "object") return false;
+  const record = error as { code?: unknown; message?: unknown };
+  const code = String(record.code ?? "");
+  const message = String(record.message ?? "");
+  return code === "23505" || code === "P0001" || message.includes("handoff_unavailable");
+}
+
 export async function previewPartnerHandoff(
   token: string,
   now = new Date(),
@@ -210,34 +215,22 @@ export async function redeemPartnerHandoff(input: {
   if (!session) throw new PartnerHandoffError("handoff_unavailable", 410);
 
   const reviewedContext = reviewResult(session, input.review);
-  let recovery;
   try {
-    recovery = await createPartnerRecoveryJourney(
-      admin,
-      input.userId,
-      session,
-      reviewedContext,
+    return await redeemPartnerHandoffAtomically(admin, {
+      sessionId: session.id,
+      userId: input.userId,
+      declineReasonKnown: reviewedContext.declineReasonKnown,
+      declineReasonCode: reviewedContext.declineReasonCode,
+      declineReasonSource: reviewedContext.declineReasonSource,
+      contextConfirmation: reviewedContext.contextConfirmation,
       now,
-    );
+    });
   } catch (error) {
-    const code = typeof error === "object" && error && "code" in error
-      ? String((error as { code?: unknown }).code ?? "")
-      : "";
-    if (code === "23505") {
+    if (isAtomicHandoffUnavailable(error)) {
       throw new PartnerHandoffError("handoff_unavailable", 410);
     }
     throw error;
   }
-
-  const consumed = await consumePartnerIntakeSession(
-    admin,
-    session.id,
-    input.userId,
-    now,
-  );
-  if (!consumed) throw new PartnerHandoffError("handoff_unavailable", 410);
-
-  return recovery;
 }
 
 export async function processPartnerDeclineIntake(input: {
