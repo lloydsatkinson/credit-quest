@@ -26,9 +26,9 @@ begin
 
   if exists (
     select 1
-    from unnest(v_need_codes) as need_code
-    where need_code is null
-       or need_code not in (
+    from unnest(v_need_codes) as n(need_code)
+    where n.need_code is null
+       or n.need_code not in (
          'simpler_explanations','larger_text','fewer_steps','more_time',
          'reduced_motion','reminder_support','human_support','digital_support'
        )
@@ -37,7 +37,7 @@ begin
   end if;
 
   if (select count(*) from unnest(v_need_codes)) <>
-     (select count(distinct need_code) from unnest(v_need_codes) as need_code) then
+     (select count(distinct n.need_code) from unnest(v_need_codes) as n(need_code)) then
     raise exception 'invalid_support_needs_request';
   end if;
 
@@ -57,13 +57,13 @@ begin
   )
   select
     p_user_id,
-    need_code,
+    n.need_code,
     'customer',
     'confirmed',
     p_effective_at,
     p_effective_at,
     p_effective_at
-  from unnest(v_need_codes) as need_code;
+  from unnest(v_need_codes) as n(need_code);
 
   return v_need_codes;
 end;
@@ -101,7 +101,12 @@ declare
   v_session record;
   v_journey_id uuid;
 begin
-  if p_session_id is null or p_user_id is null or p_now is null then
+  if p_session_id is null
+     or p_user_id is null
+     or p_now is null
+     or p_decline_reason_known is null
+     or p_decline_reason_source is null
+     or p_context_confirmation is null then
     raise exception 'handoff_unavailable';
   end if;
 
@@ -134,12 +139,12 @@ begin
   from public.decline_intake_sessions s
   join public.decline_partners p on p.id = s.partner_id
   where s.id = p_session_id
+    and s.environment = 'sandbox'
+    and p.enabled = true
+    and p.sandbox_enabled = true
   for update of s, p;
 
   if not found
-     or v_session.environment <> 'sandbox'
-     or v_session.partner_enabled is not true
-     or v_session.partner_sandbox_enabled is not true
      or v_session.consumed_at is not null
      or v_session.bound_user_id is not null
      or v_session.token_expires_at <= p_now then
