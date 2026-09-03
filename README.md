@@ -117,6 +117,31 @@ LIVE_CREDIT_REFERRALS_ALLOWED=false
 
 No V2.2 production migration, live referral activation or email activation is implied by passing the build. Merge/deployment and production DDL remain separate release-gated actions.
 
+## V2.0d — Closed-loop Decline Recovery
+
+V2.0d adds a dark, sandbox-first recovery loop for customers who have just been declined, while keeping Credit Quest's existing independent safety, evidence, Passport, readiness and mission engines authoritative.
+
+- Customers can start recovery directly or redeem a short-lived one-time sandbox partner handoff. **Partner decline context is not Credit Quest diagnosis**; customers can confirm, correct, mark unknown or decline optional use of partner-supplied reason context.
+- Partner intake is a separate inbound trust boundary with HMAC authentication, replay/idempotency controls, short token expiry and hash-only token persistence. Raw handoff tokens are never stored.
+- Support Needs remain functional adaptations only. **Support Needs do not automatically trigger Safe Mode**, readiness changes, diagnosis changes or mission-ranking changes, and detailed health/medical capture is out of scope for this release.
+- Recovery orchestration reuses current Credit Quest guidance rather than creating a lender-specific or partner-specific creditworthiness model. Missing evidence remains missing and reassessment dates are never fabricated.
+- Return-to-Origin is customer-controlled and server-owned. The browser cannot submit partner identity, environment or destination; the gateway re-runs adult, Safe Mode, evidence, readiness, cooldown, suppression, disclosure, partner and contract checks before any sandbox return.
+- **Live Return-to-Origin remains disabled.** The implementation hard-locks live return off and does not invoke a partner callback adapter. Live regulated return/referral requires a separate operating-model and release decision.
+- **Aggregate recovery analytics** report funnel/cohort measures such as handoffs, activations, first actions, reassessments, ready-to-check, voluntary returns, time-to-first-action and suppression reasons. Customer identifiers, Support Needs/vulnerability detail and partner economics are excluded from partner-demo reporting, and analytics never feed customer strategy.
+- Recovery status, support controls and Return-to-Origin UI remain outside the fixed Quest Feed; the Quest Feed remains **exactly seven cards**.
+- The V2.0d database/runtime defaults remain dark:
+
+```text
+partner_decline_intake_enabled=false
+return_to_origin_enabled=false
+commercial_sandbox_enabled=false
+commercial_gateway_enabled=false
+email_reminders_enabled=false
+LIVE_CREDIT_REFERRALS_ALLOWED=false
+```
+
+Passing V2.0d CI does not merge the feature, apply production DDL, enrol a production sandbox pilot, enable partner intake, enable Return-to-Origin, send callbacks, enable email or activate a live regulated referral path. Detailed health/special-category processing remains release-gated by `docs/compliance/v2-0d-data-protection-gate.md`.
+
 ## Product boundaries
 
 - Available from age 16.
@@ -191,10 +216,12 @@ Migrations:
 - `supabase/migrations/009_journey_foundation.sql` — V2.2A Journey lifecycle projection, append-only outcome history, owner-readable RLS and deterministic reassessment indexing.
 - `supabase/migrations/010_retention_runtime_flags.sql` — V2.2B reminder jobs, owner-readable communication preferences, private default-off runtime flags and service-role-only atomic email claiming.
 - `supabase/migrations/011_commercial_admin.sql` — V2.2C private commercial/admin control plane, sandbox-only seed, append-only referral/revenue update protection, audited admin RPCs and service-role-only access.
+- `supabase/migrations/012_commercial_sandbox_isolation.sql` — V2.2 sandbox isolation controls that keep sandbox commercial execution separate from live regulated paths.
+- `supabase/migrations/013_decline_recovery_foundation.sql` — V2.0d decline-partner, one-time intake, recovery-journey, functional-support and Return-to-Origin persistence with dark defaults and RLS.
 
-The Action Layer rollout used staged expand/deploy/cutover migrations. Academy is additive: content can be versioned and published through the database workflow without requiring an application redeployment for ordinary editorial changes. V2.2 migrations are also additive but remain dark/release-gated until compatible application code has passed the V2.2 release checks.
+The Action Layer rollout used staged expand/deploy/cutover migrations. Academy is additive: content can be versioned and published through the database workflow without requiring an application redeployment for ordinary editorial changes. V2.2/V2.0d migrations are additive but remain dark/release-gated until compatible application code has passed the applicable release checks.
 
-RLS and owner-integrity verification guidance is in `supabase/tests/rls.sql`. V2.2B retention-specific policy, RPC and duplicate-job probes are in `supabase/tests/retention_rls.sql`; V2.2C commercial/admin probes are in `supabase/tests/commercial_rls.sql`. CI executes the applicable probes against the same disposable database.
+RLS and owner-integrity verification guidance is in `supabase/tests/rls.sql`. V2.2B retention-specific policy, RPC and duplicate-job probes are in `supabase/tests/retention_rls.sql`; V2.2C commercial/admin probes are in `supabase/tests/commercial_rls.sql`; V2.0d recovery probes are in `supabase/tests/recovery_rls.sql`. CI executes all applicable probes against the same disposable database.
 
 ## Verification
 
@@ -209,7 +236,7 @@ npm run build
 
 The repository CI workflow runs the same audit/lint/unit/E2E/build gates for `main` and pull requests. It also starts a disposable local Supabase database inside GitHub Actions, applies every migration, runs the RLS/security SQL probes, and destroys that local database. This verifies migrations/RLS without creating a Supabase preview branch or touching production.
 
-Production includes the approved V2.1 Academy migrations `007` and `008`. V2.2 migrations `009`, `010` and `011` are verified in disposable CI on the feature branch and are **not** applied to production until compatible V2.2 application code is verified and the release gate is explicitly approved. The dark-first order is compatible application code first, then additive migrations `009` → `010` → `011`, while `email_reminders_enabled=false`, `commercial_gateway_enabled=false` and `LIVE_CREDIT_REFERRALS_ALLOWED=false` remain in force.
+Production includes the approved V2.1 Academy migrations `007` and `008`. V2.2/V2.0d migrations are verified in disposable CI on feature branches and are **not** applied to production merely because a build passes. Application deployment, additive production DDL, pilot membership and any runtime activation are separate release-gated actions; all dark flags and independent live locks remain in force until explicitly approved.
 
 After applying migrations in a target Supabase project, run the project's security/performance advisors as an additional check; local database verification is not a substitute for a post-deployment advisor check.
 
@@ -243,9 +270,11 @@ Journey observation + outcome history + scheduled reassessment (downstream only)
 deterministic reminder scheduling + static service copy (downstream only)
   ↓
 Commercial Gateway presentation/referral gate (downstream only, dark by default)
+  ↓
+Decline Recovery orchestration + sandbox Return-to-Origin (downstream only, dark by default)
 ```
 
-Commercial offer, partner, experiment and revenue data never flows back into safety, diagnosis, Passport, readiness, mission ranking, Academy selection, Journey-derived customer strategy or reminder timing. Journey/reminders/commercial layers observe governed outputs; they do not feed commercial data back upstream.
+Commercial offer, partner, experiment, recovery analytics and revenue data never flows back into safety, diagnosis, Passport, readiness, mission ranking, Academy selection, Journey-derived customer strategy or reminder timing. Journey/reminders/commercial/recovery layers observe governed outputs; they do not feed partner attribution, support preferences, analytics or commercial data back upstream.
 
 ## Provider and affiliate data
 
@@ -255,7 +284,7 @@ Affiliate/product records committed for demonstration remain fictional unless ex
 
 ## Future extension points
 
-The V2 architecture is designed for later additions including Decline Recovery, Open Banking, CRA data, lender eligibility APIs, Product Fit, premium scenario analysis, richer mission coverage and an AI coach. External data should be normalised into the structured profile/account model before deterministic decision engines consume it. AI may explain or simplify approved guidance, but it must not invent lender criteria or decide creditworthiness.
+The V2 architecture is designed for later additions including richer Decline Recovery integrations, Open Banking, CRA data, lender eligibility APIs, Product Fit, premium scenario analysis, richer mission coverage and an AI coach. External data should be normalised into the structured profile/account model before deterministic decision engines consume it. AI may explain or simplify approved guidance, but it must not invent lender criteria or decide creditworthiness.
 
 ## Design and implementation docs
 
@@ -274,3 +303,5 @@ The V2 architecture is designed for later additions including Decline Recovery, 
 - `docs/superpowers/plans/2026-08-29-credit-quest-v2-2b-retention-email.md`
 - `docs/superpowers/plans/2026-08-29-credit-quest-v2-2c-commercial-admin.md`
 - `docs/superpowers/plans/2026-08-29-credit-quest-v2-2d-analytics-release.md`
+- `docs/superpowers/plans/2026-09-02-v2-0d-closed-loop-decline-recovery.md`
+- `docs/compliance/v2-0d-data-protection-gate.md`
