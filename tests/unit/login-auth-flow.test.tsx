@@ -30,7 +30,7 @@ describe("Login magic-link flow", () => {
     window.history.replaceState(null, "", "/login");
   });
 
-  it("sends magic links through the server auth callback", async () => {
+  it("sends ordinary magic links through the server auth callback to onboarding", async () => {
     render(<LoginPage />);
 
     fireEvent.change(screen.getByLabelText("Email address"), {
@@ -43,6 +43,22 @@ describe("Login magic-link flow", () => {
     const call = signInWithOtp.mock.calls[0][0];
     expect(call.email).toBe("test@example.com");
     expect(call.options.emailRedirectTo).toContain("/auth/callback?next=%2Fonboarding");
+  });
+
+  it("preserves a same-origin secure handoff return path in the magic link", async () => {
+    const handoff = "/recovery/handoff/abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMN0123456789_-";
+    window.history.replaceState(null, "", `/login?next=${encodeURIComponent(handoff)}`);
+
+    render(<LoginPage />);
+    fireEvent.change(screen.getByLabelText("Email address"), {
+      target: { value: "pilot@example.com" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Email me a sign-in link" }));
+
+    await waitFor(() => expect(signInWithOtp).toHaveBeenCalledTimes(1));
+
+    const call = signInWithOtp.mock.calls[0][0];
+    expect(new URL(call.options.emailRedirectTo).searchParams.get("next")).toBe(handoff);
   });
 
   it("provides a server auth callback route", () => {

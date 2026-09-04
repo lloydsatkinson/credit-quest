@@ -5,6 +5,22 @@ import { FormEvent, useState } from "react";
 import { CustomerShell } from "@/components/customer/customer-shell";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 
+function safeAuthReturnPath() {
+  const fallback = "/onboarding";
+  const requestedNext = new URLSearchParams(window.location.search).get("next");
+  if (!requestedNext || !requestedNext.startsWith("/") || requestedNext.startsWith("//")) {
+    return fallback;
+  }
+
+  try {
+    const candidate = new URL(requestedNext, window.location.origin);
+    if (candidate.origin !== window.location.origin) return fallback;
+    return `${candidate.pathname}${candidate.search}${candidate.hash}`;
+  } catch {
+    return fallback;
+  }
+}
+
 export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [message, setMessage] = useState("");
@@ -14,7 +30,7 @@ export default function LoginPage() {
     try {
       const supabase = createBrowserSupabaseClient();
       const callback = new URL("/auth/callback", window.location.origin);
-      callback.searchParams.set("next", "/onboarding");
+      callback.searchParams.set("next", safeAuthReturnPath());
       const { error } = await supabase.auth.signInWithOtp({
         email,
         options: { emailRedirectTo: callback.toString() },
