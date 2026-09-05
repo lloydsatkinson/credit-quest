@@ -180,6 +180,8 @@ type RecoveryExperienceProjection = {
 
 The exact implementation type may be refined during planning, but these semantics are required.
 
+`returnState.actionHref`, when present, is an internal Credit Quest route that invokes the existing server-owned Return-to-Origin gateway. It is never an arbitrary partner destination supplied to or by the browser.
+
 ## 5. Recovery experience states
 
 The recovery UI must never fall through to an unexplained generic dead end.
@@ -226,7 +228,11 @@ The experience must provide a reason, evidence gap or next review condition rath
 
 ### 5.5 `ready_to_check`
 
-Use only when current independent Credit Quest readiness and all applicable return gates permit the semantic state.
+Use when the authoritative independent Credit Quest Application Readiness state says the customer is ready to check eligibility again and no upstream safety/readiness condition blocks that state.
+
+`ready_to_check` does **not** require an original partner, an active return contract or an enabled Return-to-Origin route. Those are separate downstream conditions represented by `returnState`.
+
+A direct Credit Quest customer can therefore be `ready_to_check` while `returnState.status` is `unavailable`. A partner-origin customer can be `ready_to_check` while Return-to-Origin remains `blocked` because a partner, contract, environment, disclosure or regulatory gate is unavailable.
 
 Customer-facing intent:
 
@@ -265,7 +271,7 @@ For active recovery customers, the seven cards should tell one recovery story:
 4. **Can I apply yet?** — authoritative readiness;
 5. **Learn in 20 seconds** — contextual Academy content;
 6. **Your recovery progress** — timeline, completed work, next review;
-7. **What happens next** — waiting / reassessment / return-to-origin explanation.
+7. **What happens next** — waiting / reassessment / Return-to-Origin explanation.
 
 The implementation may reuse current card components where possible. The goal is recomposition, not duplicate UI systems.
 
@@ -350,15 +356,15 @@ Initial implementation may only map evidence already available from profile, acc
 
 The existing Return-to-Origin gateway remains authoritative.
 
-The projection only translates gateway state into customer-facing status.
+The projection only translates gateway state into customer-facing status. Return availability is downstream of independent Credit Quest readiness; it must never be used to decide whether the customer is ready to check.
 
-### 9.1 Blocked
+### 9.1 Unavailable or blocked
 
 Example:
 
 > Returning to your original lender is not available yet. Complete the current recovery plan and wait for the required evidence/reassessment first.
 
-Where safe and appropriate, show the actual blocking class such as evidence incomplete, cooldown active or partner route unavailable without exposing sensitive/internal logic unnecessarily.
+Where safe and appropriate, show the actual blocking class such as evidence incomplete, cooldown active, no return contract, partner route unavailable or regulatory/live route disabled without exposing sensitive/internal logic unnecessarily.
 
 ### 9.2 Available
 
@@ -374,7 +380,7 @@ Required clarification:
 
 > This is not a guarantee of acceptance. The lender will perform its own eligibility, affordability and lending checks.
 
-The customer must explicitly choose to continue.
+The customer must explicitly choose to continue. The CTA invokes an internal Credit Quest endpoint; only the server-owned gateway can resolve the approved destination.
 
 ## 10. Main-function continuity
 
@@ -406,6 +412,7 @@ Recovery is additive and must not make the established Credit Quest experience l
 Required behaviour:
 
 - if optional recovery projection enrichment fails, do not corrupt core profile/mission/readiness state;
+- if the system knows an active recovery journey exists but cannot build the full recovery projection, show a minimal safe recovery fallback explaining that current recovery detail is temporarily unavailable while preserving access to non-consequential core views; do not silently present an unexplained generic recovery dead end;
 - if Return-to-Origin configuration cannot be read, fail closed and show unavailable rather than a guessed destination;
 - if evidence source is unavailable, show unknown/unavailable rather than fabricated data;
 - if no immediate next mission exists for an active recovery customer, resolve to waiting, reassessment, not-ready or ready-to-check — never an unexplained generic dead end;
@@ -452,14 +459,15 @@ At minimum:
 - active recovery + in-review/pending dated action -> `waiting_for_evidence`;
 - due dated reassessment -> `reassessment_due`;
 - no action + readiness blocked -> `not_ready` with reason/evidence gap;
-- all independent readiness/return gates pass -> `ready_to_check`;
+- independent Application Readiness ready -> `ready_to_check` even when no return contract exists;
+- partner return gates independently control `returnState.available` and cannot alter independent readiness;
 - partner decline reason cannot override diagnosis;
 - unknown evidence remains unknown;
 - partner economics unavailable to projection;
 - Safe Mode cannot be bypassed;
 - under-18 regulated return cannot be enabled;
 - mission count or Passport colour alone cannot produce `ready_to_check`;
-- missing return configuration fails closed.
+- missing return configuration fails closed without changing readiness.
 
 ### 13.2 Dashboard/component tests
 
@@ -470,6 +478,8 @@ At minimum:
 - waiting state contains no misleading “up to date” dead-end copy;
 - pending electoral-roll scenario renders waiting/review messaging correctly;
 - ready-to-check language includes non-guarantee wording;
+- ready-to-check without a partner does not invent a Return-to-Origin CTA;
+- Return-to-Origin CTA targets an internal Credit Quest route only;
 - recovery completion returns the user to normal lifecycle presentation.
 
 ### 13.3 E2E personas
@@ -482,7 +492,8 @@ At minimum:
 - Safe Mode customer -> recovery support without return route;
 - active recovery with missing evidence -> not ready;
 - reassessment becomes due -> reassess -> new state;
-- ready-to-check -> customer chooses Return-to-Origin;
+- direct recovery reaches ready-to-check with no partner return route;
+- partner recovery reaches ready-to-check -> customer chooses Return-to-Origin;
 - customer declines Return-to-Origin and remains in Credit Quest;
 - recovery ends -> standard Build/Optimise/Maintain experience continues.
 
@@ -533,7 +544,8 @@ This tranche is complete only when:
 - no active recovery path ends with an unexplained “You’re up to date for now” state;
 - evidence confidence can distinguish verified, confirmed, pending and unknown;
 - no unavailable evidence is fabricated;
-- Return-to-Origin remains customer-controlled and independently gated;
+- independent `ready_to_check` remains distinct from Return-to-Origin availability;
+- Return-to-Origin remains customer-controlled, server-owned and independently gated;
 - ready-to-check language never promises approval;
 - ending recovery returns the customer to the normal Credit Quest lifecycle with history preserved;
 - canonical unit/component/E2E/security tests pass before merge recommendation.
