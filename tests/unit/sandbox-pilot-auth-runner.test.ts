@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 const PILOT_USER_ID = "ca79d264-e2f1-4467-b655-eb7a66a289fa";
 const PILOT_EMAIL = "cq-internal-pilot-3dbb2ff3@example.com";
 const SITE_ORIGIN = "https://credit-quest-app.vercel.app";
+const SUPABASE_URL = "https://kcgghgziyfcamrxkudwe.supabase.co";
 const HANDOFF_TOKEN = "A".repeat(43);
 
 type RunnerModule = {
@@ -14,6 +15,8 @@ type RunnerModule = {
 };
 
 async function loadRunner(): Promise<RunnerModule> {
+  // The operator runner intentionally remains a plain Node .mjs script.
+  // @ts-expect-error Vitest can load the local ESM module; its declaration is added with the implementation hardening.
   return import("../../scripts/generate-sandbox-pilot-auth-link.mjs") as Promise<RunnerModule>;
 }
 
@@ -45,7 +48,7 @@ function fakeSupabase(overrides?: {
 }
 
 const env = {
-  NEXT_PUBLIC_SUPABASE_URL: "https://kcgghgziyfcamrxkudwe.supabase.co",
+  NEXT_PUBLIC_SUPABASE_URL: SUPABASE_URL,
   SUPABASE_SERVICE_ROLE_KEY: "service-role-test-key",
 };
 
@@ -61,7 +64,7 @@ describe("sandbox pilot auth operator runner", () => {
     });
 
     expect(target.createClient).toHaveBeenCalledWith(
-      env.NEXT_PUBLIC_SUPABASE_URL,
+      SUPABASE_URL,
       env.SUPABASE_SERVICE_ROLE_KEY,
       { auth: { persistSession: false, autoRefreshToken: false } },
     );
@@ -94,6 +97,22 @@ describe("sandbox pilot auth operator runner", () => {
       env,
       handoffToken: "not-a-token",
     })).rejects.toThrow(/handoff/i);
+
+    expect(target.createClient).not.toHaveBeenCalled();
+  });
+
+  it("rejects any Supabase project other than the fixed Credit Quest project before client creation", async () => {
+    const { generatePilotAuthLink } = await loadRunner();
+    const target = fakeSupabase();
+
+    await expect(generatePilotAuthLink({
+      createClient: target.createClient,
+      env: {
+        ...env,
+        NEXT_PUBLIC_SUPABASE_URL: "https://attacker-project.supabase.co",
+      },
+      handoffToken: HANDOFF_TOKEN,
+    })).rejects.toThrow(/project|supabase/i);
 
     expect(target.createClient).not.toHaveBeenCalled();
   });
