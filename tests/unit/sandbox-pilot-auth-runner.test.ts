@@ -16,7 +16,7 @@ type RunnerModule = {
 
 async function loadRunner(): Promise<RunnerModule> {
   // The operator runner intentionally remains a plain Node .mjs script.
-  // @ts-expect-error Vitest can load the local ESM module; its declaration is added with the implementation hardening.
+  // @ts-expect-error Vitest can load this local ESM script; TypeScript has no declaration for it by design.
   return import("../../scripts/generate-sandbox-pilot-auth-link.mjs") as Promise<RunnerModule>;
 }
 
