@@ -4,6 +4,7 @@ import { pathToFileURL } from "node:url";
 const PILOT_USER_ID = "ca79d264-e2f1-4467-b655-eb7a66a289fa";
 const PILOT_EMAIL = "cq-internal-pilot-3dbb2ff3@example.com";
 const SITE_ORIGIN = "https://credit-quest-app.vercel.app";
+const SUPABASE_URL = "https://kcgghgziyfcamrxkudwe.supabase.co";
 const HANDOFF_TOKEN = /^[A-Za-z0-9_-]{43}$/;
 
 export async function generatePilotAuthLink({
@@ -16,6 +17,9 @@ export async function generatePilotAuthLink({
 
   if (!supabaseUrl || !serviceRoleKey) {
     throw new Error("Supabase service environment is required");
+  }
+  if (supabaseUrl !== SUPABASE_URL) {
+    throw new Error("Credit Quest Supabase project is required");
   }
   if (!HANDOFF_TOKEN.test(handoffToken ?? "")) {
     throw new Error("Valid sandbox handoff token is required");
