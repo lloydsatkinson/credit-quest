@@ -2,6 +2,10 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 export const SANDBOX_PILOT_METADATA_KEY = "credit_quest_sandbox_pilot";
+export const INTERNAL_TEST_METADATA_KEY = "credit_quest_internal_test";
+
+const SANDBOX_PILOT_ORIGIN = "https://credit-quest-app.vercel.app";
+const SANDBOX_HANDOFF_PATH = /^\/recovery\/handoff\/[A-Za-z0-9_-]{43}$/;
 
 export async function isSandboxPilot(admin: SupabaseClient, userId: string): Promise<boolean> {
   try {
@@ -49,4 +53,47 @@ export async function setSandboxPilot(
     }
     throw auditError;
   }
+}
+
+export async function generateSandboxPilotAuthLink(
+  admin: SupabaseClient,
+  targetUserId: string,
+  siteOrigin: string,
+  nextPath: string,
+): Promise<string> {
+  const { data: userData, error: userError } = await admin.auth.admin.getUserById(targetUserId);
+  if (userError) throw userError;
+
+  const user = userData.user;
+  if (!user?.email) throw new Error("Pilot user email not found");
+  if (user.app_metadata?.[SANDBOX_PILOT_METADATA_KEY] !== true) {
+    throw new Error("Sandbox pilot identity is not enabled");
+  }
+  if (user.app_metadata?.[INTERNAL_TEST_METADATA_KEY] !== true) {
+    throw new Error("Internal test identity is required");
+  }
+  if (!user.email.toLowerCase().endsWith("@example.com")) {
+    throw new Error("Synthetic pilot email is required");
+  }
+  if (siteOrigin !== SANDBOX_PILOT_ORIGIN) {
+    throw new Error("Sandbox pilot origin is not allowed");
+  }
+  if (!SANDBOX_HANDOFF_PATH.test(nextPath)) {
+    throw new Error("Sandbox pilot handoff path is not allowed");
+  }
+
+  const { data, error } = await admin.auth.admin.generateLink({
+    type: "magiclink",
+    email: user.email,
+  });
+  if (error) throw error;
+
+  const tokenHash = data.properties?.hashed_token;
+  if (!tokenHash) throw new Error("Pilot auth token was not generated");
+
+  const url = new URL("/auth/confirm", siteOrigin);
+  url.searchParams.set("token_hash", tokenHash);
+  url.searchParams.set("type", "magiclink");
+  url.searchParams.set("next", nextPath);
+  return url.toString();
 }
