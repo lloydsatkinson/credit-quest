@@ -1,5 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "ignoreCommand": "git log -1 --pretty=%B | grep -q '\\[skip vercel\\]'",
   "crons": [
     {
       "path": "/api/cron/journey-reminders",
