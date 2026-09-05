@@ -31,9 +31,12 @@ function fakeSupabase(overrides?: {
       credit_quest_sandbox_pilot: true,
     },
   };
+  const tokenHash = overrides?.tokenHash === undefined
+    ? "operator-token-hash"
+    : overrides.tokenHash;
   const getUserById = vi.fn().mockResolvedValue({ data: { user }, error: null });
   const generateLink = vi.fn().mockResolvedValue({
-    data: { properties: { hashed_token: overrides?.tokenHash ?? "operator-token-hash" } },
+    data: { properties: { hashed_token: tokenHash } },
     error: null,
   });
   const client = { auth: { admin: { getUserById, generateLink } } };
