@@ -50,3 +50,29 @@ export async function setSandboxPilot(
     throw auditError;
   }
 }
+
+export async function generateSandboxPilotAuthLink(
+  admin: SupabaseClient,
+  targetUserId: string,
+  siteOrigin: string,
+  nextPath: string,
+): Promise<string> {
+  const { data: userData, error: userError } = await admin.auth.admin.getUserById(targetUserId);
+  if (userError) throw userError;
+  if (!userData.user?.email) throw new Error("Pilot user email not found");
+
+  const { data, error } = await admin.auth.admin.generateLink({
+    type: "magiclink",
+    email: userData.user.email,
+  });
+  if (error) throw error;
+
+  const tokenHash = data.properties?.hashed_token;
+  if (!tokenHash) throw new Error("Pilot auth token was not generated");
+
+  const url = new URL("/auth/confirm", siteOrigin);
+  url.searchParams.set("token_hash", tokenHash);
+  url.searchParams.set("type", "magiclink");
+  url.searchParams.set("next", nextPath);
+  return url.toString();
+}
