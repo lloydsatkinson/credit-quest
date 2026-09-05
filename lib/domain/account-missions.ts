@@ -54,6 +54,17 @@ export function utilisationTargetCopy(account: UserAccount, thresholdPct = 30): 
   return `Based on the balance and limit you entered, reducing this balance by about £${(amount / 100).toFixed(2)} would bring this card to around ${thresholdPct}% utilisation. This is a planning target, not a guaranteed credit-score outcome.`;
 }
 
+function reactivateIfEligible(instance: MissionInstance | undefined): MissionInstance | undefined {
+  if (!instance || instance.state !== "no_longer_eligible") return instance;
+  return {
+    ...instance,
+    state: "not_started",
+    startedAt: null,
+    completedAt: null,
+    nextReviewAt: null,
+  };
+}
+
 export function buildMissionInstances(
   profile: CreditProfile,
   accounts: UserAccount[],
@@ -70,7 +81,7 @@ export function buildMissionInstances(
     if (mission.scope === "profile") {
       if (!mission.isEligible(profile, now)) continue;
       const key = `${mission.slug}:profile`;
-      result.push(byKey.get(key) ?? {
+      result.push(reactivateIfEligible(byKey.get(key)) ?? {
         id: `local:${key}`,
         userId: profile.userId,
         missionSlug: mission.slug,
@@ -93,7 +104,7 @@ export function buildMissionInstances(
 
       if (!eligible) continue;
       const key = `${mission.slug}:${account.id}`;
-      result.push(byKey.get(key) ?? {
+      result.push(reactivateIfEligible(byKey.get(key)) ?? {
         id: `local:${key}`,
         userId: profile.userId,
         missionSlug: mission.slug,
