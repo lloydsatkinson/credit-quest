@@ -30,6 +30,23 @@ export type ReturnOriginGatewayErrorCode = ReturnGateReason
   | "invalid_destination"
   | "configuration_unavailable";
 
+export type ReturnOriginAvailability =
+  | {
+      status: "unavailable";
+      reason: "recovery_unavailable" | "contract_unavailable";
+      partnerDisplayName: null;
+    }
+  | {
+      status: "blocked";
+      reason: ReturnOriginGatewayErrorCode;
+      partnerDisplayName: string | null;
+    }
+  | {
+      status: "available";
+      reason: null;
+      partnerDisplayName: string;
+    };
+
 export class ReturnOriginGatewayError extends Error {
   constructor(public readonly code: ReturnOriginGatewayErrorCode) {
     super(code);
@@ -53,6 +70,20 @@ export interface ReturnOriginGatewayDependencies {
   appendReturnAttempt(input: AppendReturnAttemptInput): Promise<{ id: string }>;
   liveAllowed: boolean;
 }
+
+interface ReturnEvaluationSuccess {
+  permitted: true;
+  journey: ReturnRecoveryJourney;
+  contract: ReturnContractConfig;
+}
+
+interface ReturnEvaluationFailure {
+  permitted: false;
+  code: ReturnOriginGatewayErrorCode;
+  partnerDisplayName: string | null;
+}
+
+type ReturnEvaluation = ReturnEvaluationSuccess | ReturnEvaluationFailure;
 
 function cooldownComplete(journey: ReturnRecoveryJourney, now: Date): boolean {
   if (!journey.nextReassessmentAt) return true;
@@ -106,8 +137,127 @@ export function buildMinimalReturnCallbackPayload(input: {
   };
 }
 
+async function evaluateReturnContext(
+  deps: ReturnOriginGatewayDependencies,
+  input: {
+    userId: string;
+    recoveryJourneyId: string;
+    now: Date;
+  },
+): Promise<ReturnEvaluation> {
+  let partnerDisplayName: string | null = null;
+
+  try {
+    const [gatewayEnabled, guidance, journey] = await Promise.all([
+      deps.isGatewayEnabled(),
+      deps.getGuidance(input.userId, input.now),
+      deps.getRecoveryJourney(input.userId, input.recoveryJourneyId),
+    ]);
+
+    if (!gatewayEnabled) {
+      return { permitted: false, code: "gateway_disabled", partnerDisplayName: null };
+    }
+
+    if (!guidance || !journey || journey.origin !== "partner" || !journey.returnContractId) {
+      return { permitted: false, code: "recovery_unavailable", partnerDisplayName: null };
+    }
+
+    const contract = await deps.getReturnContract(journey.returnContractId);
+    if (!contract) {
+      return { permitted: false, code: "contract_unavailable", partnerDisplayName: null };
+    }
+    partnerDisplayName = contract.partnerDisplayName;
+
+    assertContractMatchesJourney(journey, contract);
+
+    if (contract.environment === "sandbox" && !(await deps.isSandboxPilot(input.userId))) {
+      return { permitted: false, code: "pilot_required", partnerDisplayName };
+    }
+
+    const [disclosure, suppressionClear] = await Promise.all([
+      deps.getDisclosure(contract.disclosureKey),
+      deps.isSuppressionClear(input.userId, input.recoveryJourneyId, input.now),
+    ]);
+
+    const disclosureCurrent = Boolean(
+      disclosure
+      && disclosure.disclosureKey === contract.disclosureKey
+      && disclosure.version === contract.disclosureVersion,
+    );
+
+    const gate = evaluateReturnToOriginGate({
+      enabled: gatewayEnabled,
+      liveAllowed: deps.liveAllowed,
+      environment: contract.environment,
+      ageMode: getAgeMode(guidance.profile.dateOfBirth, input.now),
+      safetyMode: assessSafety(guidance.profile).mode,
+      evidenceComplete: hasRequiredCommercialEvidence(guidance.profile),
+      readinessState: toRecoveryReadinessState(guidance.readiness.state),
+      cooldownComplete: cooldownComplete(journey, input.now),
+      suppressionClear,
+      disclosureCurrent,
+      // Availability evaluates whether the customer could be offered the choice.
+      // The actual createReturn path still requires an explicit continue/decline.
+      customerChoseReturn: true,
+      partnerEnabled: contract.partnerEnabled,
+      partnerEnvironmentEnabled: partnerEnvironmentEnabled(contract),
+      contractEnabled: contract.enabled,
+      contractEnvironment: contract.environment,
+      contractExpiresAt: contract.expiresAt,
+      now: input.now,
+    });
+
+    if (!gate.permitted) {
+      return { permitted: false, code: gate.reason, partnerDisplayName };
+    }
+
+    assertValidDestination(contract);
+
+    return {
+      permitted: true,
+      journey,
+      contract,
+    };
+  } catch (error) {
+    if (error instanceof ReturnOriginGatewayError) {
+      return { permitted: false, code: error.code, partnerDisplayName };
+    }
+    return { permitted: false, code: "configuration_unavailable", partnerDisplayName };
+  }
+}
+
 export function createReturnOriginGateway(deps: ReturnOriginGatewayDependencies) {
   return {
+    async getAvailability(input: {
+      userId: string;
+      recoveryJourneyId: string;
+      now: Date;
+    }): Promise<ReturnOriginAvailability> {
+      const evaluation = await evaluateReturnContext(deps, input);
+
+      if (evaluation.permitted) {
+        return {
+          status: "available",
+          reason: null,
+          partnerDisplayName: evaluation.contract.partnerDisplayName,
+        };
+      }
+
+      if (evaluation.code === "recovery_unavailable" || evaluation.code === "contract_unavailable") {
+        return {
+          status: "unavailable",
+          reason: evaluation.code,
+          partnerDisplayName: null,
+        };
+      }
+
+      return {
+        status: "blocked",
+        reason: evaluation.code,
+        partnerDisplayName: evaluation.partnerDisplayName,
+      };
+    },
+
     async createReturn(input: {
       userId: string;
       recoveryJourneyId: string;
@@ -115,61 +265,12 @@ export function createReturnOriginGateway(deps: ReturnOriginGatewayDependencies)
       now: Date;
     }) {
       try {
-        const [gatewayEnabled, guidance, journey] = await Promise.all([
-          deps.isGatewayEnabled(),
-          deps.getGuidance(input.userId, input.now),
-          deps.getRecoveryJourney(input.userId, input.recoveryJourneyId),
-        ]);
-
-        if (!gatewayEnabled) throw new ReturnOriginGatewayError("gateway_disabled");
-        if (!guidance || !journey || journey.origin !== "partner" || !journey.returnContractId) {
-          throw new ReturnOriginGatewayError("recovery_unavailable");
+        const evaluation = await evaluateReturnContext(deps, input);
+        if (!evaluation.permitted) {
+          throw new ReturnOriginGatewayError(evaluation.code);
         }
 
-        const contract = await deps.getReturnContract(journey.returnContractId);
-        if (!contract) throw new ReturnOriginGatewayError("contract_unavailable");
-        assertContractMatchesJourney(journey, contract);
-
-        if (contract.environment === "sandbox" && !(await deps.isSandboxPilot(input.userId))) {
-          throw new ReturnOriginGatewayError("pilot_required");
-        }
-
-        const [disclosure, suppressionClear] = await Promise.all([
-          deps.getDisclosure(contract.disclosureKey),
-          deps.isSuppressionClear(input.userId, input.recoveryJourneyId, input.now),
-        ]);
-
-        const disclosureCurrent = Boolean(
-          disclosure
-          && disclosure.disclosureKey === contract.disclosureKey
-          && disclosure.version === contract.disclosureVersion,
-        );
-
-        const gate = evaluateReturnToOriginGate({
-          enabled: gatewayEnabled,
-          liveAllowed: deps.liveAllowed,
-          environment: contract.environment,
-          ageMode: getAgeMode(guidance.profile.dateOfBirth, input.now),
-          safetyMode: assessSafety(guidance.profile).mode,
-          evidenceComplete: hasRequiredCommercialEvidence(guidance.profile),
-          readinessState: toRecoveryReadinessState(guidance.readiness.state),
-          cooldownComplete: cooldownComplete(journey, input.now),
-          suppressionClear,
-          disclosureCurrent,
-          // An explicit continue/decline response means the customer-choice step
-          // is complete. Redirect behaviour is decided below from the actual choice.
-          customerChoseReturn: true,
-          partnerEnabled: contract.partnerEnabled,
-          partnerEnvironmentEnabled: partnerEnvironmentEnabled(contract),
-          contractEnabled: contract.enabled,
-          contractEnvironment: contract.environment,
-          contractExpiresAt: contract.expiresAt,
-          now: input.now,
-        });
-        if (!gate.permitted) throw new ReturnOriginGatewayError(gate.reason);
-
-        assertValidDestination(contract);
-
+        const { journey, contract } = evaluation;
         const attempt = await deps.appendReturnAttempt({
           userId: input.userId,
           recoveryJourneyId: journey.id,
@@ -217,6 +318,18 @@ function createProductionReturnOriginGateway() {
     appendReturnAttempt: (input) => appendReturnAttempt(admin, input),
     // V2.0d deliberately hard-locks live Return-to-Origin off.
     liveAllowed: false,
+  });
+}
+
+export async function getReturnOriginAvailability(input: {
+  userId: string;
+  recoveryJourneyId: string;
+  now?: Date;
+}) {
+  return createProductionReturnOriginGateway().getAvailability({
+    userId: input.userId,
+    recoveryJourneyId: input.recoveryJourneyId,
+    now: input.now ?? new Date(),
   });
 }
 
