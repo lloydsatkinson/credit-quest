@@ -21,7 +21,7 @@ const readiness: ApplicationReadiness = {
 
 const plan: RecoveryPlanProjection = {
   stage: "rebuilding",
-  readinessState: "rebuilding",
+  readinessState: "getting_closer",
   nextSafeAction: {
     kind: "mission",
     title: "Register on the electoral roll",
