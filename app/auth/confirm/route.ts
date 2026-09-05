@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
+const SITE_ORIGIN = "https://credit-quest-app.vercel.app";
+const PILOT_USER_ID = "ca79d264-e2f1-4467-b655-eb7a66a289fa";
+const PILOT_EMAIL = "cq-internal-pilot-3dbb2ff3@example.com";
 const HANDOFF_PATH = /^\/recovery\/handoff\/[A-Za-z0-9_-]{43}$/;
 
 function noStore(response: NextResponse) {
@@ -9,12 +12,23 @@ function noStore(response: NextResponse) {
   return response;
 }
 
-function authFailure(origin: string) {
+function authFailure() {
   return noStore(
     NextResponse.redirect(
-      new URL("/login?auth_error=callback_failed", origin),
+      new URL("/login?auth_error=callback_failed", SITE_ORIGIN),
     ),
   );
+}
+
+function isExactSyntheticPilot(user: {
+  id?: string;
+  email?: string | null;
+  app_metadata?: Record<string, unknown>;
+} | null | undefined) {
+  return user?.id === PILOT_USER_ID
+    && user.email?.toLowerCase() === PILOT_EMAIL
+    && user.app_metadata?.credit_quest_internal_test === true
+    && user.app_metadata?.credit_quest_sandbox_pilot === true;
 }
 
 export async function GET(request: Request) {
@@ -23,8 +37,10 @@ export async function GET(request: Request) {
   const type = url.searchParams.get("type");
   const next = url.searchParams.get("next");
 
+  if (url.origin !== SITE_ORIGIN) return authFailure();
+
   if (!tokenHash || type !== "magiclink" || !next || !HANDOFF_PATH.test(next)) {
-    return authFailure(url.origin);
+    return authFailure();
   }
 
   try {
@@ -34,10 +50,16 @@ export async function GET(request: Request) {
       type: "magiclink",
     });
 
-    if (error) return authFailure(url.origin);
+    if (error) return authFailure();
 
-    return noStore(NextResponse.redirect(new URL(next, url.origin)));
+    const { data: userData, error: userError } = await supabase.auth.getUser();
+    if (userError || !isExactSyntheticPilot(userData.user)) {
+      await supabase.auth.signOut();
+      return authFailure();
+    }
+
+    return noStore(NextResponse.redirect(new URL(next, SITE_ORIGIN)));
   } catch {
-    return authFailure(url.origin);
+    return authFailure();
   }
 }
