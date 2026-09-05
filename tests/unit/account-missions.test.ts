@@ -6,7 +6,7 @@ import {
   calculateAccountUtilisation,
   deriveAccountProfileSignals,
 } from "@/lib/domain/account-missions";
-import type { CreditProfile, UserAccount } from "@/lib/domain/types";
+import type { CreditProfile, MissionInstance, UserAccount } from "@/lib/domain/types";
 
 const profile: CreditProfile = {
   userId: "u1",
@@ -81,6 +81,34 @@ describe("account-aware missions", () => {
       { kind: "account", accountId: "a1" },
       { kind: "account", accountId: "a2" },
     ]));
+  });
+
+  it("reactivates an electoral-roll mission when the customer becomes eligible again", () => {
+    const historical: MissionInstance = {
+      id: "mi-electoral-roll",
+      userId: "u1",
+      missionSlug: "register-electoral-roll",
+      subject: { kind: "profile" },
+      state: "no_longer_eligible",
+      startedAt: "2026-08-20T12:00:00.000Z",
+      completedAt: null,
+      nextReviewAt: null,
+    };
+
+    const instances = buildMissionInstances(
+      { ...profile, electoralRoll: false },
+      [],
+      [historical],
+      new Date("2026-09-05T08:00:00Z"),
+    );
+
+    expect(instances).toContainEqual({
+      ...historical,
+      state: "not_started",
+      startedAt: null,
+      completedAt: null,
+      nextReviewAt: null,
+    });
   });
 });
 
