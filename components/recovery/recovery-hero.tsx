@@ -1,4 +1,8 @@
+"use client";
+
 import Link from "next/link";
+import { useEffect } from "react";
+import { trackEvent } from "@/lib/events";
 import type {
   RecoveryExperienceProjection,
   RecoveryTimelineItem,
@@ -34,6 +38,23 @@ export function RecoveryHero({
 }) {
   const actionMetadata = metadata(projection);
   const canTakeAction = projection.state === "action_required" && Boolean(projection.nextAction.actionHref);
+
+  useEffect(() => {
+    const presentationMetadata = {
+      recoveryJourneyId: projection.recoveryJourneyId,
+      state: projection.state,
+      stage: projection.stage,
+    };
+
+    void trackEvent("recovery_hero_shown", presentationMetadata);
+    void trackEvent("recovery_state_shown", presentationMetadata);
+
+    if (projection.state === "waiting_for_evidence") {
+      void trackEvent("recovery_waiting_for_evidence", presentationMetadata);
+    } else if (projection.state === "reassessment_due") {
+      void trackEvent("recovery_reassessment_due", presentationMetadata);
+    }
+  }, [projection.recoveryJourneyId, projection.stage, projection.state]);
 
   return (
     <section
