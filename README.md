@@ -126,10 +126,15 @@ V2.0d adds a dark, sandbox-first recovery loop for customers who have just been 
 - Support Needs remain functional adaptations only. **Support Needs do not automatically trigger Safe Mode**, readiness changes, diagnosis changes or mission-ranking changes, and detailed health/medical capture is out of scope for this release.
 - Support Needs replacement and one-time partner handoff redemption use service-role-only atomic PostgreSQL RPCs. A failed replacement rolls back without erasing prior support preferences, and handoff consumption plus recovery-journey creation commit together or roll back together.
 - Recovery orchestration reuses current Credit Quest guidance rather than creating a lender-specific or partner-specific creditworthiness model. Missing evidence remains missing and reassessment dates are never fabricated.
-- Return-to-Origin is customer-controlled and server-owned. The browser cannot submit partner identity, environment or destination; the gateway re-runs adult, Safe Mode, evidence, readiness, cooldown, suppression, disclosure, partner and contract checks before any sandbox return.
+- The Recovery Experience projection turns those existing governed outputs into one of five explicit customer states: `action_required`, `waiting_for_evidence`, `reassessment_due`, `not_ready` or `ready_to_check`. It does not create a second readiness or mission engine.
+- Active recovery customers see a Recovery Hero plus a recovery-aware **seven-card Quest Feed** built from the same Mission, Passport, Readiness and Academy outputs. Customers without an active recovery journey keep the established normal seven-card Quest Feed unchanged.
+- Open recovery actions and resumable actions are intentionally separate reads. A submitted action with a genuine future review date can therefore show **waiting for evidence** without incorrectly being presented as something the customer should repeat or resume now.
+- Recovery evidence carries explicit provenance/confidence such as `confirmed`, `pending`, `verified` or `unknown`. Manual/customer-entered data is never upgraded to externally verified evidence; future CRA/Open Banking evidence can plug into the same contract later.
+- Return-to-Origin is customer-controlled and server-owned. The browser cannot submit partner identity, environment, readiness or destination; the gateway re-runs adult, Safe Mode, evidence, readiness, cooldown, suppression, disclosure, partner and contract checks before any sandbox return.
+- `ready_to_check` remains an independent Credit Quest state. A direct recovery customer can become ready even when no original-lender route exists; a partner return can be shown only when the customer is independently `ready_to_check` **and** the server-side Return-to-Origin availability check returns `available`.
 - **Live Return-to-Origin remains disabled.** The implementation hard-locks live return off and does not invoke a partner callback adapter. Live regulated return/referral requires a separate operating-model and release decision.
 - **Aggregate recovery analytics** report funnel/cohort measures such as handoffs, activations, first actions, reassessments, ready-to-check, voluntary returns, time-to-first-action and suppression reasons. Customer identifiers, Support Needs/vulnerability detail and partner economics are excluded from partner-demo reporting, and analytics never feed customer strategy.
-- Recovery status, support controls and Return-to-Origin UI remain outside the fixed Quest Feed; the Quest Feed remains **exactly seven cards**.
+- Recovery presentation analytics are best-effort and use only controlled journey/state/stage metadata. They do not send raw financial values, Support Needs/vulnerability detail, approval probability or partner economics.
 - The V2.0d database/runtime defaults remain dark:
 
 ```text
@@ -273,7 +278,7 @@ deterministic reminder scheduling + static service copy (downstream only)
   ↓
 Commercial Gateway presentation/referral gate (downstream only, dark by default)
   ↓
-Decline Recovery orchestration + sandbox Return-to-Origin (downstream only, dark by default)
+Decline Recovery orchestration + Recovery Experience projection + sandbox Return-to-Origin (downstream only, dark by default)
 ```
 
 Commercial offer, partner, experiment, recovery analytics and revenue data never flows back into safety, diagnosis, Passport, readiness, mission ranking, Academy selection, Journey-derived customer strategy or reminder timing. Journey/reminders/commercial/recovery layers observe governed outputs; they do not feed partner attribution, support preferences, analytics or commercial data back upstream.
@@ -306,4 +311,6 @@ The V2 architecture is designed for later additions including richer Decline Rec
 - `docs/superpowers/plans/2026-08-29-credit-quest-v2-2c-commercial-admin.md`
 - `docs/superpowers/plans/2026-08-29-credit-quest-v2-2d-analytics-release.md`
 - `docs/superpowers/plans/2026-09-02-v2-0d-closed-loop-decline-recovery.md`
+- `docs/superpowers/specs/2026-09-05-credit-quest-recovery-experience-design.md`
+- `docs/superpowers/plans/2026-09-05-credit-quest-recovery-experience.md`
 - `docs/compliance/v2-0d-data-protection-gate.md`
