@@ -17,6 +17,7 @@ import { RecoveryFallback } from "@/components/recovery/recovery-fallback";
 import { RecoveryHero } from "@/components/recovery/recovery-hero";
 import { RecoveryNextCard } from "@/components/recovery/recovery-next-card";
 import { RecoveryProgressCard } from "@/components/recovery/recovery-progress-card";
+import { ReturnToOriginCard } from "@/components/recovery/return-to-origin-card";
 import { selectAcademyArticle } from "@/lib/academy/selector";
 import type { AcademySelection } from "@/lib/academy/types";
 import { MISSION_CATALOGUE } from "@/lib/data/missions";
@@ -404,7 +405,16 @@ export default async function DashboardPage() {
             </QuestFeedCard>
 
             <QuestFeedCard eyebrow="What happens next" index={7} total={FEED_CARD_TOTAL} tone="soft">
-              <RecoveryNextCard projection={recoveryExperience} />
+              {recoveryExperience.state === "ready_to_check"
+                && recoveryExperience.returnState.status === "available"
+                && recoveryExperience.returnState.partnerLabel ? (
+                  <ReturnToOriginCard
+                    recoveryJourneyId={recoveryExperience.recoveryJourneyId}
+                    partnerDisplayName={recoveryExperience.returnState.partnerLabel}
+                  />
+                ) : (
+                  <RecoveryNextCard projection={recoveryExperience} />
+                )}
             </QuestFeedCard>
           </QuestFeed>
         ) : (
