@@ -6,6 +6,8 @@ import type {
   ProviderDefinition,
 } from "@/lib/domain/types";
 
+const OPEN_ACTION_ATTEMPT_STATUSES: ActionAttemptStatus[] = ["started", "returned", "submitted"];
+
 function mapProviderRow(row: Record<string, unknown>): ProviderDefinition {
   return {
     id: String(row.id),
@@ -52,7 +54,7 @@ function mapAttemptRow(row: Record<string, unknown>): ActionAttempt {
 }
 
 export function isAttemptReadyToResume(attempt: ActionAttempt, now = new Date()): boolean {
-  if (!["started", "returned", "submitted"].includes(attempt.status)) return false;
+  if (!OPEN_ACTION_ATTEMPT_STATUSES.includes(attempt.status)) return false;
   if (!attempt.nextReviewAt) return true;
   return new Date(attempt.nextReviewAt) <= now;
 }
@@ -155,6 +157,20 @@ export async function getActionAttempt(
   return data ? mapAttemptRow(data as Record<string, unknown>) : null;
 }
 
+export async function listOpenActionAttempts(
+  supabase: SupabaseClient,
+  userId: string,
+): Promise<ActionAttempt[]> {
+  const { data, error } = await supabase
+    .from("action_attempts")
+    .select("*")
+    .eq("user_id", userId)
+    .in("status", OPEN_ACTION_ATTEMPT_STATUSES)
+    .order("started_at", { ascending: false });
+  if (error) throw error;
+  return (data ?? []).map((row) => mapAttemptRow(row as Record<string, unknown>));
+}
+
 export async function listPendingActionAttempts(
   supabase: SupabaseClient,
   userId: string,
@@ -164,7 +180,7 @@ export async function listPendingActionAttempts(
     .from("action_attempts")
     .select("*")
     .eq("user_id", userId)
-    .in("status", ["started", "returned", "submitted"])
+    .in("status", OPEN_ACTION_ATTEMPT_STATUSES)
     .order("started_at", { ascending: false });
   if (error) throw error;
   return (data ?? [])

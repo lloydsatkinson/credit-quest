@@ -32,6 +32,26 @@ describe("event payload validation", () => {
     }
   });
 
+  it("accepts controlled recovery presentation events", () => {
+    const names = [
+      "recovery_hero_shown",
+      "recovery_state_shown",
+      "recovery_waiting_for_evidence",
+      "recovery_reassessment_due",
+    ];
+
+    for (const name of names) {
+      expect(eventPayloadSchema.safeParse({
+        name,
+        metadata: {
+          recoveryJourneyId: "j1",
+          state: "waiting_for_evidence",
+          stage: "recovering",
+        },
+      }).success).toBe(true);
+    }
+  });
+
   it("rejects unsupported events and client-supplied user ids", () => {
     expect(eventPayloadSchema.safeParse({ name: "credit_approved" }).success).toBe(false);
     expect(eventPayloadSchema.safeParse({ name: "offer_clicked", userId: "someone-else" }).success).toBe(false);
