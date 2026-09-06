@@ -10,7 +10,7 @@ function copyFor(projection: RecoveryExperienceProjection): { title: string; bod
     case "waiting_for_evidence":
       return {
         title: "We’re waiting for evidence.",
-        body: "Your action has not reached its genuine review point yet. There is nothing useful to repeat or reapply for right now.",
+        body: "Your submitted action has not reached the date when it can be reassessed. There is nothing useful to repeat or reapply for right now.",
       };
     case "reassessment_due":
       return {
