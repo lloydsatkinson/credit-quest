@@ -12,7 +12,11 @@ import { InAppReminders } from "@/components/journey/in-app-reminders";
 import { JourneyStatusCard } from "@/components/journey/journey-status-card";
 import { PassportCard } from "@/components/passport/passport-card";
 import { ReadinessCard } from "@/components/readiness/readiness-card";
-import { RecoveryStatus } from "@/components/recovery/recovery-status";
+import { RecoveryEvidence } from "@/components/recovery/recovery-evidence";
+import { RecoveryFallback } from "@/components/recovery/recovery-fallback";
+import { RecoveryHero } from "@/components/recovery/recovery-hero";
+import { RecoveryNextCard } from "@/components/recovery/recovery-next-card";
+import { RecoveryProgressCard } from "@/components/recovery/recovery-progress-card";
 import { selectAcademyArticle } from "@/lib/academy/selector";
 import type { AcademySelection } from "@/lib/academy/types";
 import { MISSION_CATALOGUE } from "@/lib/data/missions";
@@ -25,11 +29,17 @@ import { calculateQuestScore } from "@/lib/domain/quest-score";
 import { assessApplicationReadiness } from "@/lib/domain/readiness";
 import { assessSafety } from "@/lib/domain/safety";
 import type { JourneyStage, MissionInstance } from "@/lib/domain/types";
-import type { RecoveryPlanProjection } from "@/lib/recovery/plan";
+import { buildRecoveryEvidence } from "@/lib/recovery/evidence";
+import {
+  buildRecoveryExperienceProjection,
+  type RecoveryExperienceProjection,
+  type RecoveryReturnState,
+} from "@/lib/recovery/experience";
 import { listUserAccounts } from "@/lib/server/account-repository";
 import {
   getActionDefinition,
   getProviderById,
+  listOpenActionAttempts,
   listPendingActionAttempts,
 } from "@/lib/server/action-repository";
 import {
@@ -45,6 +55,7 @@ import { syncMissionInstances } from "@/lib/server/mission-repository";
 import { getUserProfile } from "@/lib/server/profile-repository";
 import { projectRecoveryForUser } from "@/lib/server/recovery-orchestrator";
 import { getLatestRecoveryJourney } from "@/lib/server/recovery-repository";
+import { getReturnOriginAvailability } from "@/lib/server/return-origin-gateway";
 import {
   getCommunicationPreference,
   listUserInAppReminders,
@@ -146,23 +157,90 @@ export default async function DashboardPage() {
     journeyOutcomes = [];
   }
 
-  let recoveryPlan: RecoveryPlanProjection | null = null;
-  let recoveryOrigin: "direct" | "partner" | null = null;
+  let recoveryJourney: Awaited<ReturnType<typeof getLatestRecoveryJourney>> = null;
   try {
-    const recoveryJourney = await getLatestRecoveryJourney(supabase, user.id);
-    if (recoveryJourney) {
-      recoveryOrigin = recoveryJourney.origin;
-      recoveryPlan = await projectRecoveryForUser({
-        recoveryJourneyId: recoveryJourney.id,
-        userId: user.id,
-        now,
-      });
-    }
+    recoveryJourney = await getLatestRecoveryJourney(supabase, user.id);
   } catch {
-    // Recovery is additive. A missing migration or downstream persistence read
-    // must not block the established Quest experience.
-    recoveryPlan = null;
-    recoveryOrigin = null;
+    recoveryJourney = null;
+  }
+
+  let recoveryExperience: RecoveryExperienceProjection | null = null;
+  let recoveryLoadFailed = false;
+
+  if (recoveryJourney) {
+    try {
+      const [plan, openAttempts] = await Promise.all([
+        projectRecoveryForUser({
+          recoveryJourneyId: recoveryJourney.id,
+          userId: user.id,
+          now,
+        }),
+        listOpenActionAttempts(supabase, user.id),
+      ]);
+
+      const evidence = buildRecoveryEvidence({
+        profile: effectiveProfile,
+        accounts,
+        missionInstances: instances,
+        actionAttempts: openAttempts,
+        passport,
+      });
+
+      let returnState: RecoveryReturnState = {
+        status: "unavailable",
+        reason: "direct_recovery",
+        partnerLabel: null,
+      };
+
+      if (recoveryJourney.origin === "partner") {
+        const availability = await getReturnOriginAvailability({
+          userId: user.id,
+          recoveryJourneyId: recoveryJourney.id,
+          now,
+        });
+
+        returnState = availability.status === "available"
+          ? {
+              status: "available",
+              reason: null,
+              partnerLabel: availability.partnerDisplayName,
+            }
+          : {
+              status: availability.status,
+              reason: availability.reason,
+              partnerLabel: availability.partnerDisplayName,
+            };
+      }
+
+      const openAttempt = openAttempts.find((attempt) => {
+        if (!attempt.nextReviewAt) return false;
+        const reviewAt = new Date(attempt.nextReviewAt).getTime();
+        return Number.isFinite(reviewAt) && reviewAt > now.getTime();
+      }) ?? openAttempts[0] ?? null;
+
+      recoveryExperience = buildRecoveryExperienceProjection({
+        recoveryJourneyId: recoveryJourney.id,
+        origin: recoveryJourney.origin,
+        plan,
+        readiness,
+        nextMission: next,
+        openAttempt: openAttempt
+          ? {
+              missionInstanceId: openAttempt.missionInstanceId,
+              status: openAttempt.status,
+              nextReviewAt: openAttempt.nextReviewAt,
+              verifiedAt: openAttempt.verifiedAt,
+            }
+          : null,
+        journeyState,
+        now,
+        evidence,
+        returnState,
+      });
+    } catch {
+      recoveryExperience = null;
+      recoveryLoadFailed = true;
+    }
   }
 
   let inAppReminders: Awaited<ReturnType<typeof listUserInAppReminders>> = [];
@@ -258,76 +336,133 @@ export default async function DashboardPage() {
           </section>
         ) : null}
 
-        {recoveryPlan && recoveryOrigin ? (
-          <RecoveryStatus plan={recoveryPlan} origin={recoveryOrigin} />
+        {recoveryExperience ? (
+          <div className="mb-4">
+            <RecoveryHero projection={recoveryExperience} />
+          </div>
+        ) : recoveryJourney && recoveryLoadFailed ? (
+          <RecoveryFallback />
         ) : null}
 
         <JourneyStatusCard state={journeyState} latestOutcome={journeyOutcomes[0] ?? null} />
         <InAppReminders reminders={inAppReminders} />
         <EmailReminderPreference initialEnabled={emailReminderEnabled} demo={false} />
 
-        <QuestFeed>
-          <QuestFeedCard eyebrow="Your next move" index={1} total={FEED_CARD_TOTAL} tone="ink">
-            {next ? (
-              <NextMissionCard
-                rankedMission={next}
-                progress={{
-                  state: next.instance.state,
-                  startedAt: next.instance.startedAt,
-                  completedAt: next.instance.completedAt,
-                  nextReviewAt: next.instance.nextReviewAt,
-                }}
-                actionHref={`/actions/${next.instance.id}`}
-                reviewTiming={next.mission.reviewPeriodDays ? `around ${next.mission.reviewPeriodDays} days` : undefined}
-                embedded
-              />
-            ) : (
-              <div className="flex flex-1 flex-col justify-center">
-                <h2 className="text-4xl font-black tracking-tight">You’re up to date for now.</h2>
-                <p className="mt-4 text-base leading-7 text-slate-300">There is no eligible next-best mission at the moment. We’ll reassess when your information or review dates change.</p>
-              </div>
-            )}
-          </QuestFeedCard>
-
-          <QuestFeedCard eyebrow="Why this matters" index={2} total={FEED_CARD_TOTAL} tone="violet">
-            <div className="flex flex-1 flex-col justify-center">
-              <p className="text-sm font-black uppercase tracking-[0.18em] text-fuchsia-300">Why it is ranked first</p>
-              <h2 className="mt-4 text-3xl font-black tracking-tight sm:text-4xl">
-                {next ? next.mission.rationale : "Your plan changes when your information changes."}
-              </h2>
-              {next?.reasons[0] ? (
-                <p className="mt-6 max-w-xl text-base font-semibold leading-7 text-slate-300">{next.reasons[0]}</p>
+        {recoveryExperience ? (
+          <QuestFeed>
+            <QuestFeedCard eyebrow="Do this now" index={1} total={FEED_CARD_TOTAL} tone="ink">
+              {recoveryExperience.state === "action_required" && next ? (
+                <NextMissionCard
+                  rankedMission={next}
+                  progress={{
+                    state: next.instance.state,
+                    startedAt: next.instance.startedAt,
+                    completedAt: next.instance.completedAt,
+                    nextReviewAt: next.instance.nextReviewAt,
+                  }}
+                  actionHref={`/actions/${next.instance.id}`}
+                  reviewTiming={next.mission.reviewPeriodDays ? `around ${next.mission.reviewPeriodDays} days` : undefined}
+                  embedded
+                />
               ) : (
-                <p className="mt-6 max-w-xl text-base leading-7 text-slate-300">Credit Quest only surfaces an action when the deterministic mission rules say it is relevant.</p>
+                <RecoveryNextCard projection={recoveryExperience} />
               )}
-            </div>
-          </QuestFeedCard>
+            </QuestFeedCard>
 
-          <QuestFeedCard eyebrow="Your Credit Passport" index={3} total={FEED_CARD_TOTAL} tone="light">
-            <PassportCard passport={passport} diagnosis={diagnosis} identityActionHref={identityActionHref} />
-          </QuestFeedCard>
+            <QuestFeedCard eyebrow="Why this matters" index={2} total={FEED_CARD_TOTAL} tone="violet">
+              <div className="flex flex-1 flex-col justify-center">
+                <p className="text-sm font-black uppercase tracking-[0.18em] text-fuchsia-300">What Credit Quest currently knows</p>
+                <h2 className="mt-4 text-3xl font-black tracking-tight sm:text-4xl">{recoveryExperience.summary}</h2>
+                <div className="mt-6">
+                  <RecoveryEvidence evidence={recoveryExperience.evidence} />
+                </div>
+              </div>
+            </QuestFeedCard>
 
-          <QuestFeedCard eyebrow="Can I apply yet?" index={4} total={FEED_CARD_TOTAL} tone="soft">
-            <ReadinessCard readiness={readiness} />
-          </QuestFeedCard>
+            <QuestFeedCard eyebrow="Your Credit Passport" index={3} total={FEED_CARD_TOTAL} tone="light">
+              <PassportCard passport={passport} diagnosis={diagnosis} identityActionHref={identityActionHref} />
+            </QuestFeedCard>
 
-          <QuestFeedCard eyebrow="Learn in 20 seconds" index={5} total={FEED_CARD_TOTAL} tone="light">
-            <AcademyCard selection={academySelection} />
-          </QuestFeedCard>
+            <QuestFeedCard eyebrow="Can I apply yet?" index={4} total={FEED_CARD_TOTAL} tone="soft">
+              <ReadinessCard readiness={readiness} />
+            </QuestFeedCard>
 
-          <QuestFeedCard eyebrow="Your progress" index={6} total={FEED_CARD_TOTAL} tone="light">
-            <ProgressStrip score={score.score} stage={stage} completed={completed} nextReview={nextReview} />
-          </QuestFeedCard>
+            <QuestFeedCard eyebrow="Learn in 20 seconds" index={5} total={FEED_CARD_TOTAL} tone="light">
+              <AcademyCard selection={academySelection} />
+            </QuestFeedCard>
 
-          <QuestFeedCard eyebrow="Know what the score means" index={7} total={FEED_CARD_TOTAL} tone="soft">
-            <div className="flex flex-1 flex-col justify-center">
-              <span className="w-fit rounded-full border border-lime-300/20 bg-lime-300/10 px-3 py-1.5 text-xs font-black uppercase tracking-wider text-lime-300">Setup → Stabilise → Build → Optimise → Maintain</span>
-              <h2 className="mt-5 text-3xl font-black tracking-tight sm:text-4xl">Progress, not a lender prediction.</h2>
-              <p className="mt-4 max-w-xl text-base leading-7 text-slate-400">Your Credit Quest Score is an internal progress indicator. It is not a bureau credit score and it does not predict whether a lender will approve an application.</p>
-              <p className="mt-5 text-sm font-bold leading-6 text-cyan-300">The goal is simple: make the next sensible move, then reassess rather than applying unnecessarily.</p>
-            </div>
-          </QuestFeedCard>
-        </QuestFeed>
+            <QuestFeedCard eyebrow="Your recovery progress" index={6} total={FEED_CARD_TOTAL} tone="light">
+              <RecoveryProgressCard projection={recoveryExperience} />
+            </QuestFeedCard>
+
+            <QuestFeedCard eyebrow="What happens next" index={7} total={FEED_CARD_TOTAL} tone="soft">
+              <RecoveryNextCard projection={recoveryExperience} />
+            </QuestFeedCard>
+          </QuestFeed>
+        ) : (
+          <QuestFeed>
+            <QuestFeedCard eyebrow="Your next move" index={1} total={FEED_CARD_TOTAL} tone="ink">
+              {next ? (
+                <NextMissionCard
+                  rankedMission={next}
+                  progress={{
+                    state: next.instance.state,
+                    startedAt: next.instance.startedAt,
+                    completedAt: next.instance.completedAt,
+                    nextReviewAt: next.instance.nextReviewAt,
+                  }}
+                  actionHref={`/actions/${next.instance.id}`}
+                  reviewTiming={next.mission.reviewPeriodDays ? `around ${next.mission.reviewPeriodDays} days` : undefined}
+                  embedded
+                />
+              ) : (
+                <div className="flex flex-1 flex-col justify-center">
+                  <h2 className="text-4xl font-black tracking-tight">You’re up to date for now.</h2>
+                  <p className="mt-4 text-base leading-7 text-slate-300">There is no eligible next-best mission at the moment. We’ll reassess when your information or review dates change.</p>
+                </div>
+              )}
+            </QuestFeedCard>
+
+            <QuestFeedCard eyebrow="Why this matters" index={2} total={FEED_CARD_TOTAL} tone="violet">
+              <div className="flex flex-1 flex-col justify-center">
+                <p className="text-sm font-black uppercase tracking-[0.18em] text-fuchsia-300">Why it is ranked first</p>
+                <h2 className="mt-4 text-3xl font-black tracking-tight sm:text-4xl">
+                  {next ? next.mission.rationale : "Your plan changes when your information changes."}
+                </h2>
+                {next?.reasons[0] ? (
+                  <p className="mt-6 max-w-xl text-base font-semibold leading-7 text-slate-300">{next.reasons[0]}</p>
+                ) : (
+                  <p className="mt-6 max-w-xl text-base leading-7 text-slate-300">Credit Quest only surfaces an action when the deterministic mission rules say it is relevant.</p>
+                )}
+              </div>
+            </QuestFeedCard>
+
+            <QuestFeedCard eyebrow="Your Credit Passport" index={3} total={FEED_CARD_TOTAL} tone="light">
+              <PassportCard passport={passport} diagnosis={diagnosis} identityActionHref={identityActionHref} />
+            </QuestFeedCard>
+
+            <QuestFeedCard eyebrow="Can I apply yet?" index={4} total={FEED_CARD_TOTAL} tone="soft">
+              <ReadinessCard readiness={readiness} />
+            </QuestFeedCard>
+
+            <QuestFeedCard eyebrow="Learn in 20 seconds" index={5} total={FEED_CARD_TOTAL} tone="light">
+              <AcademyCard selection={academySelection} />
+            </QuestFeedCard>
+
+            <QuestFeedCard eyebrow="Your progress" index={6} total={FEED_CARD_TOTAL} tone="light">
+              <ProgressStrip score={score.score} stage={stage} completed={completed} nextReview={nextReview} />
+            </QuestFeedCard>
+
+            <QuestFeedCard eyebrow="Know what the score means" index={7} total={FEED_CARD_TOTAL} tone="soft">
+              <div className="flex flex-1 flex-col justify-center">
+                <span className="w-fit rounded-full border border-lime-300/20 bg-lime-300/10 px-3 py-1.5 text-xs font-black uppercase tracking-wider text-lime-300">Setup → Stabilise → Build → Optimise → Maintain</span>
+                <h2 className="mt-5 text-3xl font-black tracking-tight sm:text-4xl">Progress, not a lender prediction.</h2>
+                <p className="mt-4 max-w-xl text-base leading-7 text-slate-400">Your Credit Quest Score is an internal progress indicator. It is not a bureau credit score and it does not predict whether a lender will approve an application.</p>
+                <p className="mt-5 text-sm font-bold leading-6 text-cyan-300">The goal is simple: make the next sensible move, then reassess rather than applying unnecessarily.</p>
+              </div>
+            </QuestFeedCard>
+          </QuestFeed>
+        )}
       </main>
     </CustomerShell>
   );
