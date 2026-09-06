@@ -1,13 +1,21 @@
 import { cleanup, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { RecoveryHero } from "@/components/recovery/recovery-hero";
+import { trackEvent } from "@/lib/events";
 import type {
   RecoveryExperienceProjection,
   RecoveryExperienceState,
   RecoveryTimelineItem,
 } from "@/lib/recovery/experience";
 
-afterEach(() => cleanup());
+vi.mock("@/lib/events", () => ({
+  trackEvent: vi.fn().mockResolvedValue(undefined),
+}));
+
+afterEach(() => {
+  cleanup();
+  vi.clearAllMocks();
+});
 
 const timelineFor = (state: RecoveryExperienceState): RecoveryTimelineItem[] => {
   const current = state === "waiting_for_evidence"
@@ -111,5 +119,31 @@ describe("RecoveryHero", () => {
     expect(screen.getByText(/high impact/i)).not.toBeNull();
     expect(screen.getByText(/about 5 minutes/i)).not.toBeNull();
     expect(screen.getByText(/around 35 days/i)).not.toBeNull();
+  });
+
+  it("emits only controlled presentation events for a waiting state", () => {
+    render(<RecoveryHero projection={projection("waiting_for_evidence")} />);
+
+    const expectedMetadata = {
+      recoveryJourneyId: "recovery-1",
+      state: "waiting_for_evidence",
+      stage: "rebuilding",
+    };
+    expect(trackEvent).toHaveBeenCalledWith("recovery_hero_shown", expectedMetadata);
+    expect(trackEvent).toHaveBeenCalledWith("recovery_state_shown", expectedMetadata);
+    expect(trackEvent).toHaveBeenCalledWith("recovery_waiting_for_evidence", expectedMetadata);
+    expect(trackEvent).not.toHaveBeenCalledWith("recovery_reassessment_due", expect.anything());
+    expect(JSON.stringify(vi.mocked(trackEvent).mock.calls)).not.toMatch(/income|balance|limit|support|vulnerab|health|diagnosis|commission|revenue|approval_probability/i);
+  });
+
+  it("emits the due event only when reassessment is due", () => {
+    render(<RecoveryHero projection={projection("reassessment_due")} />);
+
+    expect(trackEvent).toHaveBeenCalledWith("recovery_reassessment_due", {
+      recoveryJourneyId: "recovery-1",
+      state: "reassessment_due",
+      stage: "rebuilding",
+    });
+    expect(trackEvent).not.toHaveBeenCalledWith("recovery_waiting_for_evidence", expect.anything());
   });
 });
