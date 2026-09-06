@@ -5,21 +5,7 @@ import type {
   MissionInstance,
   UserAccount,
 } from "@/lib/domain/types";
-
-export type RecoveryEvidenceConfidence = "verified" | "confirmed" | "pending" | "unknown";
-export type RecoveryEvidenceSource =
-  | "trusted_external"
-  | "customer"
-  | "account"
-  | "government_action"
-  | "unknown";
-
-export interface RecoveryEvidenceItem {
-  key: "electoral_roll" | "utilisation" | "application_evidence";
-  confidence: RecoveryEvidenceConfidence;
-  source: RecoveryEvidenceSource;
-  statusText: string;
-}
+import type { RecoveryEvidenceItem } from "@/lib/recovery/experience";
 
 interface BuildRecoveryEvidenceInput {
   profile: CreditProfile;
@@ -47,6 +33,7 @@ function electoralRollEvidence(input: BuildRecoveryEvidenceInput): RecoveryEvide
   if (hasPendingElectoralRollAction(input)) {
     return {
       key: "electoral_roll",
+      label: "Electoral roll",
       confidence: "pending",
       source: "government_action",
       statusText: "Electoral-roll action submitted; waiting for review or the update to become visible.",
@@ -56,6 +43,7 @@ function electoralRollEvidence(input: BuildRecoveryEvidenceInput): RecoveryEvide
   if (input.profile.electoralRoll === null) {
     return {
       key: "electoral_roll",
+      label: "Electoral roll",
       confidence: "unknown",
       source: "unknown",
       statusText: "Electoral-roll status is not yet known.",
@@ -64,6 +52,7 @@ function electoralRollEvidence(input: BuildRecoveryEvidenceInput): RecoveryEvide
 
   return {
     key: "electoral_roll",
+    label: "Electoral roll",
     confidence: "confirmed",
     source: "customer",
     statusText: input.profile.electoralRoll
@@ -85,6 +74,7 @@ function utilisationEvidence(input: BuildRecoveryEvidenceInput): RecoveryEvidenc
     const utilisation = Math.round((trackedCard.balanceMinor! / trackedCard.creditLimitMinor!) * 100);
     return {
       key: "utilisation",
+      label: "Credit utilisation",
       confidence: "confirmed",
       source: "account",
       statusText: `Tracked account utilisation is ${utilisation}% based on the account information currently held in Credit Quest.`,
@@ -94,6 +84,7 @@ function utilisationEvidence(input: BuildRecoveryEvidenceInput): RecoveryEvidenc
   if (input.profile.utilisationPct === null) {
     return {
       key: "utilisation",
+      label: "Credit utilisation",
       confidence: "unknown",
       source: "unknown",
       statusText: "Credit utilisation is not yet known.",
@@ -102,6 +93,7 @@ function utilisationEvidence(input: BuildRecoveryEvidenceInput): RecoveryEvidenc
 
   return {
     key: "utilisation",
+    label: "Credit utilisation",
     confidence: "confirmed",
     source: "customer",
     statusText: `You told Credit Quest your current utilisation is ${input.profile.utilisationPct}%.`,
@@ -112,6 +104,7 @@ function applicationEvidence(input: BuildRecoveryEvidenceInput): RecoveryEvidenc
   if (input.profile.hardApplicationsLast6m === null) {
     return {
       key: "application_evidence",
+      label: "Recent applications",
       confidence: "unknown",
       source: "unknown",
       statusText: "Recent application activity is not yet known.",
@@ -120,6 +113,7 @@ function applicationEvidence(input: BuildRecoveryEvidenceInput): RecoveryEvidenc
 
   return {
     key: "application_evidence",
+    label: "Recent applications",
     confidence: "confirmed",
     source: "customer",
     statusText: `You told Credit Quest about ${input.profile.hardApplicationsLast6m} hard application${input.profile.hardApplicationsLast6m === 1 ? "" : "s"} in the last six months.`,
