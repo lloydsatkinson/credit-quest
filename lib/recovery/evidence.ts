@@ -1,3 +1,4 @@
+import { deriveAccountProfileSignals } from "@/lib/domain/account-missions";
 import type {
   ActionAttempt,
   CreditPassport,
@@ -62,22 +63,29 @@ function electoralRollEvidence(input: BuildRecoveryEvidenceInput): RecoveryEvide
 }
 
 function utilisationEvidence(input: BuildRecoveryEvidenceInput): RecoveryEvidenceItem {
-  const trackedCard = input.accounts.find((account) =>
-    account.active
-    && account.accountType === "credit_card"
-    && account.balanceMinor !== null
-    && account.creditLimitMinor !== null
-    && account.creditLimitMinor > 0,
+  const activeCreditCards = input.accounts.filter((account) =>
+    account.active && account.accountType === "credit_card",
   );
 
-  if (trackedCard) {
-    const utilisation = Math.round((trackedCard.balanceMinor! / trackedCard.creditLimitMinor!) * 100);
+  if (activeCreditCards.length > 0) {
+    const utilisation = deriveAccountProfileSignals(input.accounts).utilisationPct;
+
+    if (utilisation === null || utilisation === undefined) {
+      return {
+        key: "utilisation",
+        label: "Credit utilisation",
+        confidence: "unknown",
+        source: "account",
+        statusText: "Tracked credit-card information is incomplete, so aggregate utilisation cannot be calculated yet.",
+      };
+    }
+
     return {
       key: "utilisation",
       label: "Credit utilisation",
       confidence: "confirmed",
       source: "account",
-      statusText: `Tracked account utilisation is ${utilisation}% based on the account information currently held in Credit Quest.`,
+      statusText: `Aggregate tracked credit-card utilisation is ${utilisation}% based on the account information currently held in Credit Quest.`,
     };
   }
 
