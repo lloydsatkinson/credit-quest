@@ -35,6 +35,10 @@ export const eventNames = [
   "referral_consent_declined",
   "sandbox_referral_created",
   "experiment_exposed",
+  "recovery_hero_shown",
+  "recovery_state_shown",
+  "recovery_waiting_for_evidence",
+  "recovery_reassessment_due",
 ] as const;
 
 export const eventPayloadSchema = z.object({
