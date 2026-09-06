@@ -199,17 +199,25 @@ export default async function DashboardPage() {
           now,
         });
 
-        returnState = availability.status === "available"
-          ? {
-              status: "available",
-              reason: null,
-              partnerLabel: availability.partnerDisplayName,
-            }
-          : {
-              status: availability.status,
-              reason: availability.reason,
-              partnerLabel: availability.partnerDisplayName,
-            };
+        if (availability.status === "available") {
+          returnState = {
+            status: "available",
+            reason: null,
+            partnerLabel: availability.partnerDisplayName,
+          };
+        } else if (availability.status === "blocked") {
+          returnState = {
+            status: "blocked",
+            reason: availability.reason,
+            partnerLabel: availability.partnerDisplayName,
+          };
+        } else {
+          returnState = {
+            status: "unavailable",
+            reason: availability.reason,
+            partnerLabel: null,
+          };
+        }
       }
 
       const openAttempt = openAttempts.find((attempt) => {
