@@ -149,6 +149,45 @@ describe("recovery evidence confidence and provenance", () => {
     expect(result.some((item) => item.confidence === "verified")).toBe(false);
   });
 
+  it("uses the same aggregate utilisation semantics as the core account signal", () => {
+    const result = buildRecoveryEvidence({
+      profile,
+      accounts: [
+        card({ id: "card-1", balanceMinor: 20_000, creditLimitMinor: 100_000 }),
+        card({ id: "card-2", lastFour: "5678", balanceMinor: 30_000, creditLimitMinor: 50_000 }),
+      ],
+      missionInstances: [],
+      actionAttempts: [],
+      passport,
+    });
+
+    expect(byKey(result, "utilisation")).toMatchObject({
+      confidence: "confirmed",
+      source: "account",
+    });
+    expect(byKey(result, "utilisation")?.statusText).toContain("33.33%");
+    expect(byKey(result, "utilisation")?.statusText).not.toContain("20%");
+  });
+
+  it("keeps aggregate utilisation unknown when any tracked active card is incomplete", () => {
+    const result = buildRecoveryEvidence({
+      profile,
+      accounts: [
+        card({ id: "card-1", balanceMinor: 20_000, creditLimitMinor: 100_000 }),
+        card({ id: "card-2", lastFour: "5678", balanceMinor: null, creditLimitMinor: 50_000 }),
+      ],
+      missionInstances: [],
+      actionAttempts: [],
+      passport,
+    });
+
+    expect(byKey(result, "utilisation")).toMatchObject({
+      confidence: "unknown",
+      source: "account",
+    });
+    expect(byKey(result, "utilisation")?.statusText).toMatch(/incomplete|cannot|unknown/i);
+  });
+
   it("keeps missing application evidence explicitly unknown", () => {
     const unknownPassport: CreditPassport = {
       pillars: passport.pillars.map((pillar) => pillar.id === "application_readiness"
