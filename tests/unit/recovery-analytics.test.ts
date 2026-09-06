@@ -44,6 +44,10 @@ describe("recovery analytics events", () => {
     expect(RECOVERY_EVENT_NAMES).toEqual([
       "recovery_handoff_created",
       "recovery_activated",
+      "recovery_hero_shown",
+      "recovery_state_shown",
+      "recovery_waiting_for_evidence",
+      "recovery_reassessment_due",
       "recovery_first_action",
       "recovery_reassessed",
       "recovery_ready_to_check",
@@ -60,6 +64,16 @@ describe("recovery analytics events", () => {
       metadata: { recoveryJourneyId: "j1" },
     })).resolves.toBeUndefined();
     expect(failingWriter).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps presentation metadata controlled and free of sensitive or commercial detail", () => {
+    const metadata = {
+      recoveryJourneyId: "j1",
+      state: "waiting_for_evidence",
+      stage: "recovering",
+    };
+    const serialized = JSON.stringify(metadata);
+    expect(serialized).not.toMatch(/support|vulnerab|health|diagnosis|income|balance|limit|commission|revenue|epc|approval_probability/i);
   });
 });
 
