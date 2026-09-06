@@ -1,0 +1,137 @@
+import type {
+  ActionAttempt,
+  CreditPassport,
+  CreditProfile,
+  MissionInstance,
+  UserAccount,
+} from "@/lib/domain/types";
+
+export type RecoveryEvidenceConfidence = "verified" | "confirmed" | "pending" | "unknown";
+export type RecoveryEvidenceSource =
+  | "trusted_external"
+  | "customer"
+  | "account"
+  | "government_action"
+  | "unknown";
+
+export interface RecoveryEvidenceItem {
+  key: "electoral_roll" | "utilisation" | "application_evidence";
+  confidence: RecoveryEvidenceConfidence;
+  source: RecoveryEvidenceSource;
+  statusText: string;
+}
+
+interface BuildRecoveryEvidenceInput {
+  profile: CreditProfile;
+  accounts: UserAccount[];
+  missionInstances: MissionInstance[];
+  actionAttempts: ActionAttempt[];
+  passport: CreditPassport;
+}
+
+function hasPendingElectoralRollAction(input: BuildRecoveryEvidenceInput): boolean {
+  const electoralMissionIds = new Set(
+    input.missionInstances
+      .filter((mission) => mission.missionSlug === "register-electoral-roll")
+      .map((mission) => mission.id),
+  );
+
+  return input.actionAttempts.some((attempt) =>
+    electoralMissionIds.has(attempt.missionInstanceId)
+    && ["started", "returned", "submitted", "self_confirmed"].includes(attempt.status)
+    && attempt.verifiedAt === null,
+  );
+}
+
+function electoralRollEvidence(input: BuildRecoveryEvidenceInput): RecoveryEvidenceItem {
+  if (hasPendingElectoralRollAction(input)) {
+    return {
+      key: "electoral_roll",
+      confidence: "pending",
+      source: "government_action",
+      statusText: "Electoral-roll action submitted; waiting for review or the update to become visible.",
+    };
+  }
+
+  if (input.profile.electoralRoll === null) {
+    return {
+      key: "electoral_roll",
+      confidence: "unknown",
+      source: "unknown",
+      statusText: "Electoral-roll status is not yet known.",
+    };
+  }
+
+  return {
+    key: "electoral_roll",
+    confidence: "confirmed",
+    source: "customer",
+    statusText: input.profile.electoralRoll
+      ? "You told Credit Quest you are on the electoral roll at your current address."
+      : "You told Credit Quest you are not on the electoral roll at your current address.",
+  };
+}
+
+function utilisationEvidence(input: BuildRecoveryEvidenceInput): RecoveryEvidenceItem {
+  const trackedCard = input.accounts.find((account) =>
+    account.active
+    && account.accountType === "credit_card"
+    && account.balanceMinor !== null
+    && account.creditLimitMinor !== null
+    && account.creditLimitMinor > 0,
+  );
+
+  if (trackedCard) {
+    const utilisation = Math.round((trackedCard.balanceMinor! / trackedCard.creditLimitMinor!) * 100);
+    return {
+      key: "utilisation",
+      confidence: "confirmed",
+      source: "account",
+      statusText: `Tracked account utilisation is ${utilisation}% based on the account information currently held in Credit Quest.`,
+    };
+  }
+
+  if (input.profile.utilisationPct === null) {
+    return {
+      key: "utilisation",
+      confidence: "unknown",
+      source: "unknown",
+      statusText: "Credit utilisation is not yet known.",
+    };
+  }
+
+  return {
+    key: "utilisation",
+    confidence: "confirmed",
+    source: "customer",
+    statusText: `You told Credit Quest your current utilisation is ${input.profile.utilisationPct}%.`,
+  };
+}
+
+function applicationEvidence(input: BuildRecoveryEvidenceInput): RecoveryEvidenceItem {
+  if (input.profile.hardApplicationsLast6m === null) {
+    return {
+      key: "application_evidence",
+      confidence: "unknown",
+      source: "unknown",
+      statusText: "Recent application activity is not yet known.",
+    };
+  }
+
+  return {
+    key: "application_evidence",
+    confidence: "confirmed",
+    source: "customer",
+    statusText: `You told Credit Quest about ${input.profile.hardApplicationsLast6m} hard application${input.profile.hardApplicationsLast6m === 1 ? "" : "s"} in the last six months.`,
+  };
+}
+
+export function buildRecoveryEvidence(input: BuildRecoveryEvidenceInput): RecoveryEvidenceItem[] {
+  void input.passport;
+
+  return [
+    electoralRollEvidence(input),
+    utilisationEvidence(input),
+    applicationEvidence(input),
+  ];
+}
