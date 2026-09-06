@@ -1,6 +1,10 @@
 export const RECOVERY_EVENT_NAMES = [
   "recovery_handoff_created",
   "recovery_activated",
+  "recovery_hero_shown",
+  "recovery_state_shown",
+  "recovery_waiting_for_evidence",
+  "recovery_reassessment_due",
   "recovery_first_action",
   "recovery_reassessed",
   "recovery_ready_to_check",
