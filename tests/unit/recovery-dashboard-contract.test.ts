@@ -38,4 +38,12 @@ describe("recovery-aware dashboard contract", () => {
     expect(dashboardSource).toContain("RecoveryNextCard");
     expect(dashboardSource).toContain("RecoveryEvidence");
   });
+
+  it("shows the existing return surface only for an independently ready and server-available partner route", () => {
+    expect(dashboardSource).toContain("ReturnToOriginCard");
+    expect(dashboardSource).toContain('recoveryExperience.state === "ready_to_check"');
+    expect(dashboardSource).toContain('recoveryExperience.returnState.status === "available"');
+    expect(dashboardSource).toContain("recoveryJourneyId={recoveryExperience.recoveryJourneyId}");
+    expect(dashboardSource).toContain("partnerDisplayName={recoveryExperience.returnState.partnerLabel}");
+  });
 });
