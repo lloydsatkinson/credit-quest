@@ -26,4 +26,10 @@ describe("standard Quest waiting review state", () => {
     expect(source).toContain("WaitingReviewCard");
     expect(source).toContain("waitingReview");
   });
+
+  it("does not expose a Passport restart link while the electoral-roll mission is in review", () => {
+    const source = readFileSync("app/dashboard/page.tsx", "utf8");
+
+    expect(source).toContain('electoralRollMission.instance.state !== "in_review"');
+  });
 });

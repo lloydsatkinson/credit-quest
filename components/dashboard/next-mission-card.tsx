@@ -23,6 +23,7 @@ export function NextMissionCard({
 }) {
   const { mission, reasons } = rankedMission;
   const isStarted = progress?.state === "started";
+  const isInReview = progress?.state === "in_review";
 
   return (
     <section className={embedded ? "flex h-full flex-col" : "rounded-3xl border border-cyan-300/15 bg-slate-950 p-6 text-white shadow-2xl shadow-slate-950/40"}>
@@ -49,7 +50,11 @@ export function NextMissionCard({
       {reviewTiming && <p className="mt-4 text-xs font-bold text-slate-500">Review timing: {reviewTiming}</p>}
 
       <div className={embedded ? "mt-auto pt-8" : "mt-6"}>
-        {actionHref ? (
+        {isInReview ? (
+          <div className="rounded-2xl border border-amber-300/15 bg-amber-300/[0.05] px-5 py-4 text-center text-sm font-bold leading-6 text-amber-100">
+            This mission is at its review point. Complete the follow-up above before taking the action again.
+          </div>
+        ) : actionHref ? (
           <Link
             href={actionHref}
             aria-label={isStarted ? "Continue this mission" : "Start this mission"}
