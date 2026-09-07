@@ -103,23 +103,46 @@ export default async function DashboardPage() {
   const instances = await syncMissionInstances(supabase, effectiveProfile, accounts, now);
   const ranked = rankMissionInstances(effectiveProfile, instances, accounts, now);
   const next = ranked[0] ?? null;
+  const openAttempts = await listOpenActionAttempts(supabase, user.id);
 
-  const waitingReviewInstance = instances
-    .filter((instance) => {
-      if (instance.state !== "in_review" || !instance.nextReviewAt) return false;
+  const waitingReviewItems = instances
+    .flatMap((instance) => {
+      if (instance.state !== "in_review" || !instance.nextReviewAt) return [];
       const reviewAt = new Date(instance.nextReviewAt).getTime();
-      return Number.isFinite(reviewAt) && reviewAt > now.getTime();
+      if (!Number.isFinite(reviewAt) || reviewAt <= now.getTime()) return [];
+
+      const mission = MISSION_CATALOGUE.find((item) => item.slug === instance.missionSlug);
+      if (!mission) return [];
+
+      const attempt = openAttempts.find((item) => item.missionInstanceId === instance.id);
+      const lastActivityAt = attempt?.selfConfirmedAt
+        ?? attempt?.returnedAt
+        ?? attempt?.startedAt
+        ?? instance.startedAt
+        ?? instance.nextReviewAt;
+
+      return [{
+        missionSlug: mission.slug,
+        missionTitle: mission.title,
+        missionStage: mission.stage,
+        nextReviewAt: instance.nextReviewAt,
+        lastActivityAt,
+      }];
     })
-    .sort((a, b) => new Date(a.nextReviewAt!).getTime() - new Date(b.nextReviewAt!).getTime())[0] ?? null;
-  const waitingReviewMission = waitingReviewInstance
-    ? MISSION_CATALOGUE.find((mission) => mission.slug === waitingReviewInstance.missionSlug) ?? null
-    : null;
-  const waitingReview = waitingReviewInstance?.nextReviewAt && waitingReviewMission
+    .sort((a, b) => new Date(b.lastActivityAt).getTime() - new Date(a.lastActivityAt).getTime());
+
+  const latestWaitingReview = waitingReviewItems[0] ?? null;
+  const earliestWaitingReviewAt = waitingReviewItems
+    .map((item) => item.nextReviewAt)
+    .sort((a, b) => new Date(a).getTime() - new Date(b).getTime())[0] ?? null;
+  const waitingReview = latestWaitingReview && earliestWaitingReviewAt
     ? {
-        missionSlug: waitingReviewMission.slug,
-        missionTitle: waitingReviewMission.title,
-        nextReviewAt: waitingReviewInstance.nextReviewAt,
+        ...latestWaitingReview,
+        nextReviewAt: earliestWaitingReviewAt,
       }
+    : null;
+  const waitingReviewMission = waitingReview
+    ? MISSION_CATALOGUE.find((mission) => mission.slug === waitingReview.missionSlug) ?? null
     : null;
 
   const electoralRollMission = ranked.find((item) => item.mission.slug === "register-electoral-roll");
@@ -193,14 +216,11 @@ export default async function DashboardPage() {
 
   if (recoveryJourney) {
     try {
-      const [plan, openAttempts] = await Promise.all([
-        projectRecoveryForUser({
-          recoveryJourneyId: recoveryJourney.id,
-          userId: user.id,
-          now,
-        }),
-        listOpenActionAttempts(supabase, user.id),
-      ]);
+      const plan = await projectRecoveryForUser({
+        recoveryJourneyId: recoveryJourney.id,
+        userId: user.id,
+        now,
+      });
 
       const evidence = buildRecoveryEvidence({
         profile: effectiveProfile,
@@ -461,6 +481,7 @@ export default async function DashboardPage() {
                   missionSlug={waitingReview.missionSlug}
                   missionTitle={waitingReview.missionTitle}
                   nextReviewAt={waitingReview.nextReviewAt}
+                  reviewCount={waitingReviewItems.length}
                 />
               ) : (
                 <div className="flex flex-1 flex-col justify-center">
