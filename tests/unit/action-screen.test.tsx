@@ -3,11 +3,19 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import ActionPage from "@/app/actions/[missionInstanceId]/page";
 import { ActionScreen } from "@/components/actions/action-screen";
 
+const { routerReplace } = vi.hoisted(() => ({ routerReplace: vi.fn() }));
+
+vi.mock("next/navigation", () => ({
+  redirect: vi.fn(),
+  useRouter: () => ({ replace: routerReplace }),
+}));
+
 void ActionPage;
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
+  routerReplace.mockReset();
 });
 
 describe("ActionScreen", () => {
@@ -76,6 +84,7 @@ describe("ActionScreen", () => {
 
     await waitFor(() => {
       expect(replace).toHaveBeenCalledWith("https://www.gov.uk/register-to-vote");
+      expect(routerReplace).toHaveBeenCalledWith("/dashboard");
     });
     expect(close).not.toHaveBeenCalled();
   });
@@ -103,7 +112,8 @@ describe("ActionScreen", () => {
     fireEvent.click(screen.getByRole("button", { name: /continue to GOV\.UK/i }));
 
     expect(fetchMock).not.toHaveBeenCalled();
-    expect(await screen.findByRole("alert")).toHaveTextContent(/blocked the new tab/i);
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent).toMatch(/blocked the new tab/i);
   });
 
   it("provides a protected mission action page", () => {
