@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { AccountsClient } from "@/components/accounts/accounts-client";
 import { CustomerShell } from "@/components/customer/customer-shell";
+import { SignOutButton } from "@/components/customer/sign-out-button";
 import { SupportNeedsProfile } from "@/components/recovery/support-needs-profile";
 import type { ProviderDefinition, UserAccount } from "@/lib/domain/types";
 import type { SupportNeedCode } from "@/lib/recovery/types";
@@ -80,6 +81,16 @@ export default async function AccountsPage() {
         <div className="mt-8 border-t border-white/8 pt-8">
           <SupportNeedsProfile initialNeeds={supportNeeds} demo={!supabaseEnv} />
         </div>
+
+        {supabaseEnv ? (
+          <section className="cq-panel mt-8 flex items-center justify-between gap-4 rounded-[1.5rem] p-5">
+            <div>
+              <p className="text-sm font-black text-white">Account session</p>
+              <p className="mt-1 text-xs leading-5 text-slate-500">Log out of Credit Quest on this device.</p>
+            </div>
+            <SignOutButton />
+          </section>
+        ) : null}
       </main>
     </CustomerShell>
   );

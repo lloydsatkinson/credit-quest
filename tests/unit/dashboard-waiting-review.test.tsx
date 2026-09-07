@@ -12,6 +12,7 @@ describe("standard Quest waiting review state", () => {
         missionSlug="register-electoral-roll"
         missionTitle="Get on the electoral roll"
         nextReviewAt="2026-10-07T11:42:58.064Z"
+        reviewCount={1}
       />,
     );
 
@@ -20,11 +21,28 @@ describe("standard Quest waiting review state", () => {
     expect(screen.queryByText(/up to date for now/i)).toBeNull();
   });
 
-  it("uses the waiting review card in the normal seven-card Quest Feed", () => {
+  it("keeps the most recently submitted mission visible when more than one item is in review", () => {
+    render(
+      <WaitingReviewCard
+        missionSlug="build-revolving-history"
+        missionTitle="Consider building revolving credit history"
+        nextReviewAt="2026-10-07T14:13:16.007Z"
+        reviewCount={2}
+      />,
+    );
+
+    expect(screen.getByText(/revolving-credit update is in review/i)).not.toBeNull();
+    expect(screen.getByText(/2 items currently in review/i)).not.toBeNull();
+    expect(screen.getByText(/7 October 2026/i)).not.toBeNull();
+  });
+
+  it("uses open action attempts to keep the latest submitted review visible in the normal seven-card Quest Feed", () => {
     const source = readFileSync("app/dashboard/page.tsx", "utf8");
 
     expect(source).toContain("WaitingReviewCard");
-    expect(source).toContain("waitingReview");
+    expect(source).toContain("waitingReviewItems");
+    expect(source).toContain("listOpenActionAttempts");
+    expect(source).toContain("reviewCount={waitingReviewItems.length}");
   });
 
   it("does not expose a Passport restart link while the electoral-roll mission is in review", () => {

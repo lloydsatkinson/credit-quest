@@ -14,6 +14,9 @@ function reviewHeadline(missionSlug: string, missionTitle: string): string {
   if (missionSlug === "register-electoral-roll") {
     return "Your electoral-roll registration is in review.";
   }
+  if (missionSlug === "build-revolving-history") {
+    return "Your revolving-credit update is in review.";
+  }
 
   return `${missionTitle} is in review.`;
 }
@@ -22,10 +25,12 @@ export function WaitingReviewCard({
   missionSlug,
   missionTitle,
   nextReviewAt,
+  reviewCount,
 }: {
   missionSlug: string;
   missionTitle: string;
   nextReviewAt: string;
+  reviewCount: number;
 }) {
   const reviewDate = formatReviewDate(nextReviewAt);
 
@@ -37,6 +42,9 @@ export function WaitingReviewCard({
       <h2 className="mt-5 text-4xl font-black tracking-tight">
         {reviewHeadline(missionSlug, missionTitle)}
       </h2>
+      {reviewCount > 1 ? (
+        <p className="mt-3 text-sm font-black text-amber-100">{reviewCount} items currently in review</p>
+      ) : null}
       <p className="mt-4 max-w-xl text-base leading-7 text-slate-300">
         We’ve recorded your update. Some real-world changes take time to appear, so Credit Quest is keeping this mission open rather than treating it as complete too early.
       </p>
