@@ -36,8 +36,15 @@ describe("ActionScreen", () => {
     expect(screen.getByRole("button", { name: /continue to GOV\.UK/i })).not.toBeNull();
   });
 
-  it("opens an external action in a new tab so Credit Quest stays available for the return flow", async () => {
-    const open = vi.fn();
+  it("opens a placeholder tab synchronously, then sends that tab to the server-owned destination", async () => {
+    const replace = vi.fn();
+    const close = vi.fn();
+    const externalTab = {
+      opener: window,
+      location: { replace },
+      close,
+    };
+    const open = vi.fn(() => externalTab);
     vi.stubGlobal("open", open);
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
       ok: true,
@@ -64,13 +71,39 @@ describe("ActionScreen", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /continue to GOV\.UK/i }));
 
+    expect(open).toHaveBeenCalledWith("about:blank", "_blank");
+    expect(externalTab.opener).toBeNull();
+
     await waitFor(() => {
-      expect(open).toHaveBeenCalledWith(
-        "https://www.gov.uk/register-to-vote",
-        "_blank",
-        "noopener,noreferrer",
-      );
+      expect(replace).toHaveBeenCalledWith("https://www.gov.uk/register-to-vote");
     });
+    expect(close).not.toHaveBeenCalled();
+  });
+
+  it("does not start the action when the browser blocks the new tab", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("open", vi.fn(() => null));
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<ActionScreen
+      missionTitle="Get on the electoral roll"
+      rationale="Address matching can help lenders verify your identity and residence."
+      resolvedAction={{
+        actionId: "a1",
+        mode: "external_link",
+        providerName: "GOV.UK",
+        destinationUrl: "https://www.gov.uk/register-to-vote",
+        instructions: "Use the official service to submit your registration.",
+        verificationMode: "self_confirm_review",
+        fallbackUsed: false,
+      }}
+      missionInstanceId="mi1"
+    />);
+
+    fireEvent.click(screen.getByRole("button", { name: /continue to GOV\.UK/i }));
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(await screen.findByRole("alert")).toHaveTextContent(/blocked the new tab/i);
   });
 
   it("provides a protected mission action page", () => {
