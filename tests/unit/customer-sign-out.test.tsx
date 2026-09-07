@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SignOutButton } from "@/components/customer/sign-out-button";
@@ -34,5 +35,13 @@ describe("customer sign out", () => {
     await waitFor(() => expect(signOut).toHaveBeenCalledTimes(1));
     expect(replace).toHaveBeenCalledWith("/login");
     expect(refresh).toHaveBeenCalledTimes(1);
+  });
+
+  it("makes logout available in the shared customer header and explicitly on Profile", () => {
+    const shellSource = readFileSync("components/customer/customer-shell.tsx", "utf8");
+    const profileSource = readFileSync("app/accounts/page.tsx", "utf8");
+
+    expect(shellSource).toContain("SignOutButton");
+    expect(profileSource).toContain("SignOutButton");
   });
 });
