@@ -7,6 +7,7 @@ import { DashboardClient } from "@/components/dashboard/dashboard-client";
 import { NextMissionCard } from "@/components/dashboard/next-mission-card";
 import { ProgressStrip } from "@/components/dashboard/progress-strip";
 import { QuestFeed, QuestFeedCard } from "@/components/dashboard/quest-feed";
+import { WaitingReviewCard } from "@/components/dashboard/waiting-review-card";
 import { EmailReminderPreference } from "@/components/journey/email-reminder-preference";
 import { InAppReminders } from "@/components/journey/in-app-reminders";
 import { JourneyStatusCard } from "@/components/journey/journey-status-card";
@@ -102,6 +103,25 @@ export default async function DashboardPage() {
   const instances = await syncMissionInstances(supabase, effectiveProfile, accounts, now);
   const ranked = rankMissionInstances(effectiveProfile, instances, accounts, now);
   const next = ranked[0] ?? null;
+
+  const waitingReviewInstance = instances
+    .filter((instance) => {
+      if (instance.state !== "in_review" || !instance.nextReviewAt) return false;
+      const reviewAt = new Date(instance.nextReviewAt).getTime();
+      return Number.isFinite(reviewAt) && reviewAt > now.getTime();
+    })
+    .sort((a, b) => new Date(a.nextReviewAt!).getTime() - new Date(b.nextReviewAt!).getTime())[0] ?? null;
+  const waitingReviewMission = waitingReviewInstance
+    ? MISSION_CATALOGUE.find((mission) => mission.slug === waitingReviewInstance.missionSlug) ?? null
+    : null;
+  const waitingReview = waitingReviewInstance?.nextReviewAt && waitingReviewMission
+    ? {
+        missionSlug: waitingReviewMission.slug,
+        missionTitle: waitingReviewMission.title,
+        nextReviewAt: waitingReviewInstance.nextReviewAt,
+      }
+    : null;
+
   const electoralRollMission = ranked.find((item) => item.mission.slug === "register-electoral-roll");
   const identityActionHref = electoralRollMission ? `/actions/${electoralRollMission.instance.id}` : undefined;
   const pendingAttempts = await listPendingActionAttempts(supabase, user.id, now);
@@ -113,7 +133,7 @@ export default async function DashboardPage() {
   const readiness = assessApplicationReadiness(effectiveProfile, safety, ageMode);
   const passport = buildCreditPassport(effectiveProfile, readiness);
   const completed = instances.filter((instance) => instance.state === "completed").length;
-  const stage: JourneyStage = next?.mission.stage ?? "maintain";
+  const stage: JourneyStage = next?.mission.stage ?? waitingReviewMission?.stage ?? "maintain";
   const nextReview = nextReviewLabel(instances, now);
   const hasTrackedCreditCard = accounts.some((account) => account.accountType === "credit_card");
   const needsAccountSetup = !hasTrackedCreditCard && effectiveProfile.hasRevolvingCredit === true;
@@ -433,6 +453,12 @@ export default async function DashboardPage() {
                   reviewTiming={next.mission.reviewPeriodDays ? `around ${next.mission.reviewPeriodDays} days` : undefined}
                   embedded
                 />
+              ) : waitingReview ? (
+                <WaitingReviewCard
+                  missionSlug={waitingReview.missionSlug}
+                  missionTitle={waitingReview.missionTitle}
+                  nextReviewAt={waitingReview.nextReviewAt}
+                />
               ) : (
                 <div className="flex flex-1 flex-col justify-center">
                   <h2 className="text-4xl font-black tracking-tight">You’re up to date for now.</h2>
@@ -445,10 +471,16 @@ export default async function DashboardPage() {
               <div className="flex flex-1 flex-col justify-center">
                 <p className="text-sm font-black uppercase tracking-[0.18em] text-fuchsia-300">Why it is ranked first</p>
                 <h2 className="mt-4 text-3xl font-black tracking-tight sm:text-4xl">
-                  {next ? next.mission.rationale : "Your plan changes when your information changes."}
+                  {next
+                    ? next.mission.rationale
+                    : waitingReview
+                      ? "Some real-world changes need time before they can be reassessed."
+                      : "Your plan changes when your information changes."}
                 </h2>
                 {next?.reasons[0] ? (
                   <p className="mt-6 max-w-xl text-base font-semibold leading-7 text-slate-300">{next.reasons[0]}</p>
+                ) : waitingReview ? (
+                  <p className="mt-6 max-w-xl text-base leading-7 text-slate-300">Credit Quest keeps the mission open until its genuine review point rather than treating a submitted external step as proof that the change has taken effect.</p>
                 ) : (
                   <p className="mt-6 max-w-xl text-base leading-7 text-slate-300">Credit Quest only surfaces an action when the deterministic mission rules say it is relevant.</p>
                 )}
