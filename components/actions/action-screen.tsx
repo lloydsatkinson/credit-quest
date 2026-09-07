@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 import type { ResolvedAction } from "@/lib/domain/types";
 
@@ -32,14 +33,25 @@ export function ActionScreen({
   missionInstanceId: string;
   targetLabel?: string | null;
 }) {
+  const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const external = resolvedAction.mode === "external_link";
   const providerLabel = resolvedAction.providerName ?? "the external provider";
 
   async function startAction() {
-    setBusy(true);
     setError("");
+
+    // Open a blank tab synchronously while the click still has browser user
+    // activation. This avoids popup blockers after the async start request.
+    const externalTab = external ? window.open("about:blank", "_blank") : null;
+    if (external && !externalTab) {
+      setError("Your browser blocked the new tab. Allow pop-ups for Credit Quest and try again.");
+      return;
+    }
+    if (externalTab) externalTab.opener = null;
+
+    setBusy(true);
     try {
       const response = await fetch("/api/actions/start", {
         method: "POST",
@@ -48,6 +60,7 @@ export function ActionScreen({
       });
       const data = await response.json();
       if (!response.ok) {
+        externalTab?.close();
         setError(data.error ?? "We could not start this action.");
         return;
       }
@@ -55,11 +68,20 @@ export function ActionScreen({
         localStorage.setItem("creditquest-pending-action-attempt", String(data.attemptId));
       }
       if (typeof data.destinationUrl === "string" && data.destinationUrl) {
+        if (externalTab) {
+          externalTab.location.replace(data.destinationUrl);
+          // Keep the Credit Quest tab on the follow-up surface while the
+          // provider opens separately. The dashboard owns the return prompt.
+          router.replace("/dashboard");
+          return;
+        }
         window.location.assign(data.destinationUrl);
         return;
       }
+      externalTab?.close();
       setError("This action does not currently have a safe destination. Please return to your dashboard.");
     } catch {
+      externalTab?.close();
       setError("We could not start this action. Please try again.");
     } finally {
       setBusy(false);
