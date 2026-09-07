@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 import type { ResolvedAction } from "@/lib/domain/types";
 
@@ -32,6 +33,7 @@ export function ActionScreen({
   missionInstanceId: string;
   targetLabel?: string | null;
 }) {
+  const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const external = resolvedAction.mode === "external_link";
@@ -70,7 +72,7 @@ export function ActionScreen({
           externalTab.location.replace(data.destinationUrl);
           // Keep the Credit Quest tab on the follow-up surface while the
           // provider opens separately. The dashboard owns the return prompt.
-          window.location.assign("/dashboard");
+          router.replace("/dashboard");
           return;
         }
         window.location.assign(data.destinationUrl);
