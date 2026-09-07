@@ -6,15 +6,16 @@ import { WaitingReviewCard } from "@/components/dashboard/waiting-review-card";
 afterEach(cleanup);
 
 describe("standard Quest waiting review state", () => {
-  it("explains that a submitted mission is waiting for review instead of saying the user is up to date", () => {
+  it("explains that a submitted electoral-roll mission is waiting for review instead of saying the user is up to date", () => {
     render(
       <WaitingReviewCard
+        missionSlug="register-electoral-roll"
         missionTitle="Get on the electoral roll"
         nextReviewAt="2026-10-07T11:42:58.064Z"
       />,
     );
 
-    expect(screen.getByText(/registration is in review/i)).not.toBeNull();
+    expect(screen.getByText(/electoral-roll registration is in review/i)).not.toBeNull();
     expect(screen.getByText(/7 October 2026/i)).not.toBeNull();
     expect(screen.queryByText(/up to date for now/i)).toBeNull();
   });
