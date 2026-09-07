@@ -123,7 +123,10 @@ export default async function DashboardPage() {
     : null;
 
   const electoralRollMission = ranked.find((item) => item.mission.slug === "register-electoral-roll");
-  const identityActionHref = electoralRollMission ? `/actions/${electoralRollMission.instance.id}` : undefined;
+  const identityActionHref = electoralRollMission
+    && electoralRollMission.instance.state !== "in_review"
+      ? `/actions/${electoralRollMission.instance.id}`
+      : undefined;
   const pendingAttempts = await listPendingActionAttempts(supabase, user.id, now);
   const pendingAttempt = pendingAttempts[0] ?? null;
   const score = calculateQuestScore(effectiveProfile);
