@@ -1,40 +1,26 @@
 import { readFileSync } from "node:fs";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { cleanup, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it } from "vitest";
 import { SignOutButton } from "@/components/customer/sign-out-button";
-
-const signOut = vi.fn();
-const replace = vi.fn();
-const refresh = vi.fn();
-
-vi.mock("next/navigation", () => ({
-  useRouter: () => ({ replace, refresh }),
-}));
-
-vi.mock("@/lib/supabase/client", () => ({
-  createBrowserSupabaseClient: () => ({
-    auth: { signOut },
-  }),
-}));
 
 afterEach(cleanup);
 
 describe("customer sign out", () => {
-  beforeEach(() => {
-    signOut.mockReset();
-    replace.mockReset();
-    refresh.mockReset();
-    signOut.mockResolvedValue({ error: null });
-  });
-
-  it("signs out through Supabase and returns the customer to login", async () => {
+  it("posts logout to the server-side Supabase sign-out route", () => {
     render(<SignOutButton />);
 
-    fireEvent.click(screen.getByRole("button", { name: /log out/i }));
+    const button = screen.getByRole("button", { name: /log out/i });
+    const form = button.closest("form");
 
-    await waitFor(() => expect(signOut).toHaveBeenCalledTimes(1));
-    expect(replace).toHaveBeenCalledWith("/login");
-    expect(refresh).toHaveBeenCalledTimes(1);
+    expect(form?.getAttribute("action")).toBe("/auth/signout");
+    expect(form?.getAttribute("method")?.toLowerCase()).toBe("post");
+  });
+
+  it("clears the Supabase session server-side and returns the customer to login", () => {
+    const routeSource = readFileSync("app/auth/signout/route.ts", "utf8");
+
+    expect(routeSource).toContain("supabase.auth.signOut()");
+    expect(routeSource).toContain('new URL("/login"');
   });
 
   it("makes logout available in the shared customer header and explicitly on Profile", () => {
