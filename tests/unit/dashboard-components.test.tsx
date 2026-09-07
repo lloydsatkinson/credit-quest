@@ -54,6 +54,21 @@ describe("NextMissionCard", () => {
     expect(screen.queryByRole("button", { name: "Mark complete" })).toBeNull();
   });
 
+  it("does not offer a fresh Take action CTA when an in-review mission is due for follow-up", () => {
+    render(<NextMissionCard
+      rankedMission={rankedMission}
+      progress={{
+        state: "in_review",
+        nextReviewAt: "2026-09-07T12:42:47.228Z",
+      }}
+      actionHref="/actions/11111111-1111-4111-8111-111111111111"
+    />);
+
+    expect(screen.queryByRole("link", { name: /start this mission/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /start this mission/i })).toBeNull();
+    expect(screen.getByText(/complete the follow-up above/i)).not.toBeNull();
+  });
+
   it("renders partner disclosure when an offer exists", () => {
     render(<NextMissionCard rankedMission={rankedMission} offer={{ id: "o1", provider: "Demo", productName: "Demo Card", category: "credit_builder_card", affiliateUrl: "https://example.com", disclosure: "Partner link — Credit Quest may earn a commission.", minAge: 18, active: true }} />);
     expect(screen.getByText(/may earn a commission/i)).not.toBeNull();
