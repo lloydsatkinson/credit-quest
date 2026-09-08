@@ -30,6 +30,8 @@ export type ReturnOriginGatewayErrorCode = ReturnGateReason
   | "invalid_destination"
   | "configuration_unavailable";
 
+export const LIVE_RETURN_TO_ORIGIN_ALLOWED = false;
+
 export type ReturnOriginAvailability =
   | {
       status: "unavailable";
@@ -317,7 +319,7 @@ function createProductionReturnOriginGateway() {
       isReturnSuppressionClear(admin, userId, recoveryJourneyId, now),
     appendReturnAttempt: (input) => appendReturnAttempt(admin, input),
     // V2.0d deliberately hard-locks live Return-to-Origin off.
-    liveAllowed: false,
+    liveAllowed: LIVE_RETURN_TO_ORIGIN_ALLOWED,
   });
 }
 
