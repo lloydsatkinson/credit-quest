@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import type { RecoveryPolicyDraftInput } from "@/lib/recovery/decline-policy";
 import { requireAdminUser } from "@/lib/server/admin-auth";
 import { saveRecoveryPolicyDraft } from "@/lib/server/decline-policy-repository";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
@@ -102,7 +103,10 @@ export async function POST(request: Request) {
   const parsed = recoveryPolicyDraftSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "Invalid recovery policy draft" }, { status: 400 });
   try {
-    const id = await saveRecoveryPolicyDraft(createAdminSupabaseClient(), adminUser.id, parsed.data);
+    // The recursive AST schema is runtime-strict, but Zod's lazy inference loses
+    // required-field precision. Restore the already-validated domain type here.
+    const input = parsed.data as RecoveryPolicyDraftInput;
+    const id = await saveRecoveryPolicyDraft(createAdminSupabaseClient(), adminUser.id, input);
     return NextResponse.json({ id });
   } catch (error) {
     if (error instanceof Error && /draft_only|not_found/.test(error.message)) {

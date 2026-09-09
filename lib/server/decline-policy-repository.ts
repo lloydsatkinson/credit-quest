@@ -356,10 +356,12 @@ export async function listRecoveryPolicyAdminRows(admin: SupabaseClient): Promis
   ];
   const result: RecoveryPolicyAdminRow[] = [];
   for (const [kind, table, keyColumn] of specs) {
-    const { data, error } = await admin.from(table).select(`id,${keyColumn},canonical_code,version,lifecycle`).order("created_at", { ascending: false }).limit(50);
+    // Static `*` selection keeps Supabase's generated query parser type-safe;
+    // the admin response is normalised immediately and never returned raw.
+    const { data, error } = await admin.from(table).select("*").order("created_at", { ascending: false }).limit(50);
     if (error) throw error;
     for (const row of data ?? []) {
-      const value = row as Record<string, unknown>;
+      const value = row as unknown as Record<string, unknown>;
       result.push({
         id: String(value.id), kind, key: String(value[keyColumn] ?? ""),
         canonicalCode: String(value.canonical_code ?? ""), version: Number(value.version),
@@ -371,7 +373,10 @@ export async function listRecoveryPolicyAdminRows(admin: SupabaseClient): Promis
 }
 
 export async function listDeclinePartnersForPolicyAdmin(admin: SupabaseClient) {
-  const { data, error } = await admin.from("decline_partners").select("id,partner_key,display_name,enabled,sandbox_enabled,live_enabled").order("partner_key", { ascending: true });
+  const { data, error } = await admin
+    .from("decline_partners")
+    .select("id,partner_key,display_name,enabled,sandbox_enabled,live_enabled")
+    .order("partner_key", { ascending: true });
   if (error) throw error;
   return (data ?? []).map((row) => ({
     id: String(row.id),
