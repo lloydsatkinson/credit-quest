@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => ({
   consumePartnerIntakeSession: vi.fn(),
   redeemPartnerHandoffAtomically: vi.fn(),
   createPartnerRecoveryJourney: vi.fn(),
+  resolveRecoveryPolicyForActivation: vi.fn(),
 }));
 
 vi.mock("@/lib/supabase/admin", () => ({
@@ -35,6 +36,9 @@ vi.mock("@/lib/server/partner-intake-repository", () => ({
 }));
 vi.mock("@/lib/server/recovery-repository", () => ({
   createPartnerRecoveryJourney: mocks.createPartnerRecoveryJourney,
+}));
+vi.mock("@/lib/server/recovery-policy-service", () => ({
+  resolveRecoveryPolicyForActivation: mocks.resolveRecoveryPolicyForActivation,
 }));
 
 import { POST, redeemHandoffSchema } from "@/app/api/recovery/handoff/redeem/route";
@@ -91,6 +95,7 @@ describe("one-time partner handoff redemption", () => {
     mocks.getPartnerIntakeFeatureEnabled.mockResolvedValue(true);
     mocks.getPartnerHandoffByTokenHash.mockResolvedValue(session);
     mocks.redeemPartnerHandoffAtomically.mockResolvedValue(recovery);
+    mocks.resolveRecoveryPolicyForActivation.mockResolvedValue({ schemaVersion: 1 });
   });
 
   afterEach(() => cleanup());
