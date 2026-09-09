@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   consumePartnerIntakeSession: vi.fn(),
   redeemPartnerHandoffAtomically: vi.fn(),
   createPartnerRecoveryJourney: vi.fn(),
+  resolveRecoveryPolicyForActivation: vi.fn(),
 }));
 
 vi.mock("@/lib/supabase/admin", () => ({
@@ -30,6 +31,10 @@ vi.mock("@/lib/server/partner-intake-repository", () => ({
 
 vi.mock("@/lib/server/recovery-repository", () => ({
   createPartnerRecoveryJourney: mocks.createPartnerRecoveryJourney,
+}));
+
+vi.mock("@/lib/server/recovery-policy-service", () => ({
+  resolveRecoveryPolicyForActivation: mocks.resolveRecoveryPolicyForActivation,
 }));
 
 import { redeemPartnerHandoff } from "@/lib/server/partner-intake-service";
@@ -62,7 +67,7 @@ const session = {
 };
 
 describe("atomic partner handoff redemption", () => {
-  it("creates the recovery journey and consumes the one-time session in one repository operation", async () => {
+  it("creates the recovery journey, consumes the one-time session, and binds an immutable policy snapshot", async () => {
     vi.clearAllMocks();
     mocks.createAdminSupabaseClient.mockReturnValue({ kind: "admin" });
     mocks.getPartnerIntakeFeatureEnabled.mockResolvedValue(true);
@@ -76,6 +81,7 @@ describe("atomic partner handoff redemption", () => {
       declineReasonSource: "partner",
       contextConfirmation: "confirmed",
     });
+    mocks.resolveRecoveryPolicyForActivation.mockResolvedValue({ schemaVersion: 1 });
 
     const result = await redeemPartnerHandoff({
       token: TOKEN,
@@ -93,6 +99,18 @@ describe("atomic partner handoff redemption", () => {
         declineReasonCode: "partner_reason_affordability",
         declineReasonSource: "partner",
         contextConfirmation: "confirmed",
+        now: NOW,
+      }),
+    );
+    expect(mocks.resolveRecoveryPolicyForActivation).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        recoveryJourneyId: "44444444-4444-4444-8444-444444444444",
+        intakeSessionId: SESSION_ID,
+        partnerId: session.partnerId,
+        productCategory: "credit_card",
+        contextConfirmation: "confirmed",
+        customerCorrectionCode: null,
         now: NOW,
       }),
     );
