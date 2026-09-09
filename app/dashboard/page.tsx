@@ -248,6 +248,7 @@ export default async function DashboardPage() {
             status: "available",
             reason: null,
             partnerLabel: availability.partnerDisplayName,
+            routeType: availability.routeType ?? "original",
           };
         } else if (availability.status === "blocked") {
           returnState = {
@@ -454,6 +455,7 @@ export default async function DashboardPage() {
                   <ReturnToOriginCard
                     recoveryJourneyId={recoveryExperience.recoveryJourneyId}
                     partnerDisplayName={recoveryExperience.returnState.partnerLabel}
+                    routeType={recoveryExperience.returnState.routeType}
                   />
                 ) : (
                   <RecoveryNextCard projection={recoveryExperience} />
