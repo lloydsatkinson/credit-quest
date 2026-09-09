@@ -1,4 +1,4 @@
--- V2.3 recovery policy persistence, privilege and immutability checks.
+-- V2.3 recovery policy persistence, privilege, publication and retirement checks.
 begin;
 
 do $$
@@ -39,6 +39,12 @@ begin
     raise exception 'Recovery policy publish RPC must be service-role-only';
   end if;
 
+  if has_function_privilege('anon', 'public.admin_retire_recovery_policy_version(uuid,uuid)', 'EXECUTE')
+     or has_function_privilege('authenticated', 'public.admin_retire_recovery_policy_version(uuid,uuid)', 'EXECUTE')
+     or not has_function_privilege('service_role', 'public.admin_retire_recovery_policy_version(uuid,uuid)', 'EXECUTE') then
+    raise exception 'Recovery policy retire RPC must be service-role-only';
+  end if;
+
   if not exists (
     select 1 from public.canonical_decline_reasons
     where canonical_code = 'NEGATIVE_DISPOSABLE_INCOME'
@@ -72,6 +78,27 @@ begin
     set customer_language_key = 'must_not_change'
     where canonical_code = 'THIN_FILE' and lifecycle = 'published';
     raise exception 'Published recovery policy row was unexpectedly mutable';
+  exception
+    when sqlstate '55000' then
+      null;
+  end;
+
+  update public.canonical_decline_reasons
+  set lifecycle = 'retired'
+  where canonical_code = 'THIN_FILE' and lifecycle = 'published';
+
+  if not exists (
+    select 1 from public.canonical_decline_reasons
+    where canonical_code = 'THIN_FILE' and lifecycle = 'retired'
+  ) then
+    raise exception 'Published recovery policy row could not transition to retired';
+  end if;
+
+  begin
+    update public.canonical_decline_reasons
+    set customer_language_key = 'must_still_not_change'
+    where canonical_code = 'THIN_FILE' and lifecycle = 'retired';
+    raise exception 'Retired recovery policy row was unexpectedly mutable';
   exception
     when sqlstate '55000' then
       null;
