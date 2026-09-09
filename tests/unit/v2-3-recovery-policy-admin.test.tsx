@@ -3,6 +3,7 @@ import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { recoveryPolicyDraftSchema } from "@/app/api/admin/recovery/policies/route";
 import { recoveryPolicyPublishSchema } from "@/app/api/admin/recovery/policies/publish/route";
+import { recoveryPolicyRetireSchema } from "@/app/api/admin/recovery/policies/retire/route";
 import {
   assertRecoveryPolicyDraftMutable,
   validateRecoveryPolicyDraftForPublish,
@@ -49,6 +50,12 @@ describe("V2.3 recovery Journey Builder admin boundary", () => {
     expect(recoveryPolicyPublishSchema.safeParse({ draftId, lifecycle: "published" }).success).toBe(false);
   });
 
+  it("keeps retirement input limited to the published policy id", () => {
+    expect(recoveryPolicyRetireSchema.safeParse({ policyId: draftId }).success).toBe(true);
+    expect(recoveryPolicyRetireSchema.safeParse({ policyId: draftId, partnerId }).success).toBe(false);
+    expect(recoveryPolicyRetireSchema.safeParse({ policyId: draftId, lifecycle: "retired" }).success).toBe(false);
+  });
+
   it("allows edits only while a policy record is still draft", () => {
     expect(() => assertRecoveryPolicyDraftMutable("draft")).not.toThrow();
     expect(() => assertRecoveryPolicyDraftMutable("tested")).toThrow(/draft_only/i);
@@ -89,6 +96,7 @@ describe("V2.3 recovery Journey Builder admin boundary", () => {
       "app/admin/recovery/simulator/page.tsx",
       "app/api/admin/recovery/policies/route.ts",
       "app/api/admin/recovery/policies/publish/route.ts",
+      "app/api/admin/recovery/policies/retire/route.ts",
       "app/api/admin/recovery/simulate/route.ts",
       "components/admin/recovery-policy-form.tsx",
       "components/admin/recovery-simulator-form.tsx",
@@ -100,5 +108,14 @@ describe("V2.3 recovery Journey Builder admin boundary", () => {
       const source = readFileSync(resolve(process.cwd(), path), "utf8");
       expect(source).toContain("requireAdminUser");
     }
+  });
+
+  it("supports an audited published-to-retired lifecycle without mutating published policy content", () => {
+    const migration = readFileSync(resolve(process.cwd(), "supabase/migrations/017_v2_3_decline_policy.sql"), "utf8");
+    expect(migration).toContain("admin_retire_recovery_policy_version");
+    expect(migration).toMatch(/new\.lifecycle\s*=\s*'retired'/i);
+    expect(migration).toContain("to_jsonb(new)");
+    expect(migration).toContain("to_jsonb(old)");
+    expect(migration).toContain("'retire'");
   });
 });
