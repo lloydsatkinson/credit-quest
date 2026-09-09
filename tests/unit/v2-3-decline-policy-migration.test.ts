@@ -40,6 +40,24 @@ describe("V2.3 decline policy migration", () => {
     expect(sql).toContain("grant all on public.alternative_route_policies to service_role");
   });
 
+  it("seeds the canonical table with every approved V2.3 reason family code", () => {
+    for (const code of [
+      "ACTIVE_DAS",
+      "RETURNED_PAYMENT_RECENT",
+      "RECURRING_ACCOUNT_SHORTFALL",
+      "UNARRANGED_OVERDRAFT_FREQUENT",
+      "BUREAU_ASSOCIATION_DATA_REVIEW",
+      "RISK_SCORE_BELOW_CUTOFF",
+      "INTERNAL_SCORE_BELOW_CUTOFF",
+      "AFFORDABILITY_SCORE_BELOW_CUTOFF",
+      "SCORE_DECLINE_UNEXPLAINED",
+      "RESIDENCY_POLICY_NOT_MET",
+      "PRODUCT_AGE_POLICY_NOT_MET",
+    ]) {
+      expect(sql, code).toContain(`('${code}'`);
+    }
+  });
+
   it("publishes through the existing admin trust boundary", () => {
     expect(sql).toContain("create or replace function public.admin_publish_recovery_policy_version");
     expect(sql).toContain("perform public.assert_credit_quest_admin(p_admin_user_id)");
