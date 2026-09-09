@@ -70,6 +70,28 @@ describe("V2.3 lender pilot analytics", () => {
     expect(result.rates.endToEndYield).toBe(1);
   });
 
+  it("defines Return Rate as voluntary returns divided by historical Ready-to-Check", () => {
+    const base = input();
+    const third = {
+      ...base.assignments[1],
+      journeyId: "j3",
+      handoffAt: "2026-09-03T09:00:00.000Z",
+      activatedAt: "2026-09-03T09:05:00.000Z",
+      journeyStartedAt: "2026-09-03T09:05:00.000Z",
+      firstReadyToCheckAt: "2026-09-05T09:05:00.000Z",
+      currentReadiness: "ready_to_check",
+    };
+    const result = aggregateLenderPilotAnalytics(scope, input({
+      assignments: [base.assignments[0], base.assignments[1], third],
+      returns: [base.returns[0]],
+    }));
+
+    expect(result.totals.activated).toBe(3);
+    expect(result.totals.readyToCheck).toBe(2);
+    expect(result.totals.voluntaryReturns).toBe(1);
+    expect(result.rates.return).toBe(0.5);
+  });
+
   it("never lets another partner or unscoped pilot leak into aggregates", () => {
     const result = aggregateLenderPilotAnalytics(scope, input());
     expect(result.totals.handoffs).toBe(2);
