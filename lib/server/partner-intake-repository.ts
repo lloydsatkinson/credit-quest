@@ -1,5 +1,6 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import type { RecoveryPolicySnapshot } from "@/lib/recovery/policy-snapshot";
 
 export interface PartnerCredentialConfig {
   credentialId: string;
@@ -79,6 +80,7 @@ export interface AtomicPartnerHandoffInput {
   declineReasonCode: string | null;
   declineReasonSource: "partner" | "customer" | "unknown";
   contextConfirmation: "confirmed" | "corrected" | "unknown" | "optional_use_declined";
+  policySnapshot: RecoveryPolicySnapshot;
   now: Date;
 }
 
@@ -223,10 +225,15 @@ export async function consumePartnerIntakeSession(admin: SupabaseClient, session
 }
 
 export async function redeemPartnerHandoffAtomically(admin: SupabaseClient, input: AtomicPartnerHandoffInput): Promise<AtomicPartnerHandoffResult> {
-  const { data, error } = await admin.rpc("redeem_partner_handoff_atomic", {
-    p_session_id: input.sessionId, p_user_id: input.userId, p_decline_reason_known: input.declineReasonKnown,
-    p_decline_reason_code: input.declineReasonCode, p_decline_reason_source: input.declineReasonSource,
-    p_context_confirmation: input.contextConfirmation, p_now: input.now.toISOString(),
+  const { data, error } = await admin.rpc("redeem_partner_handoff_with_policy_snapshot_atomic", {
+    p_session_id: input.sessionId,
+    p_user_id: input.userId,
+    p_decline_reason_known: input.declineReasonKnown,
+    p_decline_reason_code: input.declineReasonCode,
+    p_decline_reason_source: input.declineReasonSource,
+    p_context_confirmation: input.contextConfirmation,
+    p_policy_snapshot: input.policySnapshot,
+    p_now: input.now.toISOString(),
   });
   if (error) throw error;
   const row = Array.isArray(data) ? data[0] : data;
