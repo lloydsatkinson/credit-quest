@@ -171,7 +171,7 @@ export function aggregateLenderPilotAnalytics(
       activation: ratio(activated, handoffs),
       action: ratio(startedRecovery, activated),
       recovery: ratio(readyToCheck, activated),
-      return: ratio(voluntaryReturns, activated),
+      return: ratio(voluntaryReturns, readyToCheck),
       endToEndYield: ratio(voluntaryReturns, handoffs),
     },
     medianTimeToFirstActionHours: input.actionSourceAvailable ? median(firstActionDurations) : null,
