@@ -111,6 +111,18 @@ export function RecoveryPolicyForm({ partners, rows }: { partners: PartnerOption
     if (response.ok) window.location.reload();
   }
 
+  async function retire(policyId: string) {
+    setStatus("Retiring published version…");
+    const response = await fetch("/api/admin/recovery/policies/retire", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ policyId }),
+    });
+    const data = await response.json().catch(() => ({}));
+    setStatus(response.ok ? "Policy version retired." : data.error ?? "Could not retire policy.");
+    if (response.ok) window.location.reload();
+  }
+
   return (
     <div className="grid gap-6">
       <div className="grid gap-6 lg:grid-cols-2">
@@ -178,7 +190,7 @@ export function RecoveryPolicyForm({ partners, rows }: { partners: PartnerOption
         <div className="mt-4 overflow-x-auto">
           <table className="w-full min-w-[720px] text-left text-sm">
             <thead className="text-xs uppercase tracking-wide text-slate-500"><tr><th className="pb-3">Type</th><th className="pb-3">Key</th><th className="pb-3">Canonical reason</th><th className="pb-3">Version</th><th className="pb-3">Status</th><th className="pb-3">Action</th></tr></thead>
-            <tbody>{rows.map((row) => <tr key={`${row.kind}-${row.id}`} className="border-t border-slate-100"><td className="py-3 font-bold">{row.kind}</td><td className="py-3">{row.key}</td><td className="py-3 font-mono text-xs">{row.canonicalCode}</td><td className="py-3">{row.version}</td><td className="py-3">{row.lifecycle}</td><td className="py-3">{row.lifecycle === "draft" || row.lifecycle === "tested" ? <button type="button" onClick={() => publish(row.id)} className="rounded-lg bg-slate-950 px-3 py-2 text-xs font-black text-white">Validate + publish</button> : <span className="text-xs text-slate-500">Immutable</span>}</td></tr>)}</tbody>
+            <tbody>{rows.map((row) => <tr key={`${row.kind}-${row.id}`} className="border-t border-slate-100"><td className="py-3 font-bold">{row.kind}</td><td className="py-3">{row.key}</td><td className="py-3 font-mono text-xs">{row.canonicalCode}</td><td className="py-3">{row.version}</td><td className="py-3">{row.lifecycle}</td><td className="py-3">{row.lifecycle === "draft" || row.lifecycle === "tested" ? <button type="button" onClick={() => publish(row.id)} className="rounded-lg bg-slate-950 px-3 py-2 text-xs font-black text-white">Validate + publish</button> : row.lifecycle === "published" ? <button type="button" onClick={() => retire(row.id)} className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-black text-slate-700">Retire version</button> : <span className="text-xs text-slate-500">Immutable</span>}</td></tr>)}</tbody>
           </table>
           {!rows.length ? <p className="py-4 text-sm text-slate-600">No recovery policy versions yet.</p> : null}
         </div>
