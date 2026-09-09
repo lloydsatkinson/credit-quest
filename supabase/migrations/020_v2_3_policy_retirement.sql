@@ -1,5 +1,6 @@
 -- Credit Quest V2.3 policy retirement hardening.
 -- Published policy content remains immutable; only lifecycle published -> retired is permitted.
+-- Retired versions remain immutable history.
 
 create or replace function public.reject_published_recovery_policy_mutation()
 returns trigger
@@ -15,6 +16,10 @@ begin
       end if;
     end if;
     raise exception 'published_recovery_policy_is_immutable' using errcode = '55000';
+  end if;
+
+  if old.lifecycle = 'retired' then
+    raise exception 'retired_recovery_policy_is_immutable' using errcode = '55000';
   end if;
 
   if tg_op = 'DELETE' then
