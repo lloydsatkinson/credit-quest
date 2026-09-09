@@ -59,6 +59,7 @@ export interface RecoveryExperienceProjection {
   state: RecoveryExperienceState;
   headline: string;
   summary: string;
+  policyContext?: RecoveryPlanProjection["policyContext"];
   nextAction: {
     missionInstanceId: string | null;
     missionSlug: string | null;
@@ -109,7 +110,16 @@ function isFuture(value: string | null | undefined, now: Date): boolean {
   return Number.isFinite(time) && time > now.getTime();
 }
 
+function isRestricted(input: RecoveryExperienceInput): boolean {
+  return input.plan.policyContext?.treatment === "restricted";
+}
+
 function stateFor(input: RecoveryExperienceInput): RecoveryExperienceState {
+  // Restricted fraud/AML/security decisions are deliberately kept outside the
+  // normal recovery mission chain even when the independent mission engine has
+  // a generally useful mission available for the customer.
+  if (isRestricted(input)) return "not_ready";
+
   if (input.readiness.state === "green" && input.plan.stage === "ready_to_check") {
     return "ready_to_check";
   }
@@ -194,10 +204,30 @@ function copyFor(
   }
 }
 
+function emptyAction(title: string, rationale: string, missionSlug: string | null = null): RecoveryExperienceProjection["nextAction"] {
+  return {
+    missionInstanceId: null,
+    missionSlug,
+    title,
+    rationale,
+    actionHref: null,
+    impactLabel: null,
+    effortLabel: null,
+    reviewTimingLabel: null,
+  };
+}
+
 function nextActionFor(
   state: RecoveryExperienceState,
   input: RecoveryExperienceInput,
 ): RecoveryExperienceProjection["nextAction"] {
+  if (isRestricted(input)) {
+    return emptyAction(
+      input.plan.nextSafeAction.title,
+      input.plan.policyContext?.customerHeadline ?? "This decision is outside the normal Credit Quest recovery route.",
+    );
+  }
+
   if (state === "action_required" && input.nextMission) {
     const { mission, instance } = input.nextMission;
     return {
@@ -215,28 +245,17 @@ function nextActionFor(
   }
 
   if (state === "reassessment_due") {
-    return {
-      missionInstanceId: null,
-      missionSlug: null,
-      title: "Reassess your Credit Quest position",
-      rationale: "The evidence-based review point has arrived.",
-      actionHref: null,
-      impactLabel: null,
-      effortLabel: null,
-      reviewTimingLabel: null,
-    };
+    return emptyAction(
+      "Reassess your Credit Quest position",
+      "The evidence-based review point has arrived.",
+    );
   }
 
-  return {
-    missionInstanceId: null,
-    missionSlug: input.plan.nextSafeAction.missionSlug,
-    title: input.plan.nextSafeAction.title,
-    rationale: firstReason(input),
-    actionHref: null,
-    impactLabel: null,
-    effortLabel: null,
-    reviewTimingLabel: null,
-  };
+  return emptyAction(
+    input.plan.nextSafeAction.title,
+    firstReason(input),
+    input.plan.nextSafeAction.missionSlug,
+  );
 }
 
 function validIso(value: string | null | undefined): string | null {
@@ -288,6 +307,7 @@ export function buildRecoveryExperienceProjection(
     stage: input.plan.stage,
     state,
     ...copy,
+    policyContext: input.plan.policyContext,
     nextAction: nextActionFor(state, input),
     evidence: input.evidence,
     timeline: timelineFor(state),

@@ -82,6 +82,17 @@ export function RecoveryHero({
           {projection.summary}
         </p>
 
+        {projection.policyContext ? (
+          <div className="mt-5 rounded-[1.35rem] border border-cyan-300/12 bg-cyan-300/[0.045] p-4">
+            <p className="text-[10px] font-black uppercase tracking-[0.16em] text-cyan-300">
+              What the decline context means
+            </p>
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-300">
+              {projection.policyContext.customerHeadline}
+            </p>
+          </div>
+        ) : null}
+
         <div className="mt-6 rounded-[1.5rem] border border-white/8 bg-white/[0.035] p-4 sm:p-5">
           <p className="text-[10px] font-black uppercase tracking-[0.17em] text-slate-500">
             {projection.state === "action_required" ? "Do this now" : "Current position"}
