@@ -359,14 +359,45 @@ export async function appendReturnAttempt(
   return { id: String(data.id) };
 }
 
-// V2.0d has no separate suppression store yet. Safety, readiness, evidence and
-// dated cooldown gates remain authoritative; this hook exists as the explicit
-// extension point for a later independently modelled suppression source.
+// V2.3 keeps lender policy out of Application Readiness, but restricted
+// fraud/AML/security decisions must never flow through a normal lender return.
+// The immutable activation snapshot is the route-suppression authority here.
 export async function isReturnSuppressionClear(
-  _admin: SupabaseClient,
-  _userId: string,
-  _recoveryJourneyId: string,
-  _now: Date,
+  admin: SupabaseClient,
+  userId: string,
+  recoveryJourneyId: string,
+  now: Date,
 ): Promise<boolean> {
-  return true;
+  void userId;
+  void now;
+
+  const { data, error } = await admin
+    .from("recovery_policy_snapshots")
+    .select("policy_snapshot")
+    .eq("recovery_journey_id", recoveryJourneyId)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data?.policy_snapshot) return true;
+
+  const rawSnapshot = data.policy_snapshot;
+  if (!rawSnapshot || typeof rawSnapshot !== "object" || Array.isArray(rawSnapshot)) {
+    throw new Error("invalid_recovery_policy_snapshot");
+  }
+
+  const snapshot = rawSnapshot as Partial<RecoveryPolicySnapshot>;
+  if (snapshot.schemaVersion !== 1 || !Array.isArray(snapshot.partnerReasons)) {
+    throw new Error("invalid_recovery_policy_snapshot");
+  }
+
+  for (const reason of snapshot.partnerReasons) {
+    if (!reason || typeof reason !== "object") {
+      throw new Error("invalid_recovery_policy_snapshot");
+    }
+  }
+
+  return !snapshot.partnerReasons.some((reason) => (
+    reason.restricted === true
+    || reason.treatment === "restricted"
+    || reason.solveability === "restricted"
+  ));
 }
