@@ -1,4 +1,4 @@
--- V2.3 recovery policy persistence, privilege, publication and retirement checks.
+-- V2.3 recovery policy persistence, privilege, publication, retirement and activation checks.
 begin;
 
 do $$
@@ -43,6 +43,24 @@ begin
      or has_function_privilege('authenticated', 'public.admin_retire_recovery_policy_version(uuid,uuid)', 'EXECUTE')
      or not has_function_privilege('service_role', 'public.admin_retire_recovery_policy_version(uuid,uuid)', 'EXECUTE') then
     raise exception 'Recovery policy retire RPC must be service-role-only';
+  end if;
+
+  if has_function_privilege(
+       'anon',
+       'public.redeem_partner_handoff_with_policy_snapshot_atomic(uuid,uuid,boolean,text,text,text,jsonb,timestamptz)',
+       'EXECUTE'
+     )
+     or has_function_privilege(
+       'authenticated',
+       'public.redeem_partner_handoff_with_policy_snapshot_atomic(uuid,uuid,boolean,text,text,text,jsonb,timestamptz)',
+       'EXECUTE'
+     )
+     or not has_function_privilege(
+       'service_role',
+       'public.redeem_partner_handoff_with_policy_snapshot_atomic(uuid,uuid,boolean,text,text,text,jsonb,timestamptz)',
+       'EXECUTE'
+     ) then
+    raise exception 'Atomic recovery activation RPC must be service-role-only';
   end if;
 
   if not exists (
