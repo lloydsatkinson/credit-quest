@@ -6,6 +6,16 @@ export interface LenderPilotScope {
   pilotIds: string[];
 }
 
+export interface LenderPilotContextItem {
+  id: string;
+  displayName: string;
+  pilotType: "synthetic" | "sandbox" | "live";
+  productCategory: string | null;
+  startsAt: string;
+  endsAt: string | null;
+  enabled: boolean;
+}
+
 export interface LenderPilotAnalyticsAssignment {
   partnerId: string;
   pilotId: string;
@@ -310,4 +320,30 @@ export async function getLenderPilotAnalytics(
     windowDays,
     analytics: aggregateLenderPilotAnalytics(scope, { assignments, returns, actionSourceAvailable }),
   };
+}
+
+export async function getLenderPilotContext(
+  admin: SupabaseClient,
+  scope: LenderPilotScope,
+): Promise<LenderPilotContextItem[]> {
+  const pilotIds = [...new Set(scope.pilotIds.filter(Boolean))];
+  if (!scope.partnerId || pilotIds.length === 0) return [];
+
+  const { data, error } = await admin
+    .from("recovery_pilots")
+    .select("id,partner_id,display_name,pilot_type,product_category,starts_at,ends_at,enabled")
+    .eq("partner_id", scope.partnerId)
+    .in("id", pilotIds)
+    .order("starts_at", { ascending: false });
+  if (error) throw error;
+
+  return (data ?? []).map((row) => ({
+    id: String(row.id),
+    displayName: String(row.display_name),
+    pilotType: row.pilot_type === "synthetic" ? "synthetic" : row.pilot_type === "live" ? "live" : "sandbox",
+    productCategory: row.product_category ? String(row.product_category) : null,
+    startsAt: String(row.starts_at),
+    endsAt: row.ends_at ? String(row.ends_at) : null,
+    enabled: row.enabled === true,
+  }));
 }
