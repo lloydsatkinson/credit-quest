@@ -111,11 +111,15 @@ describe("V2.3 recovery Journey Builder admin boundary", () => {
   });
 
   it("supports an audited published-to-retired lifecycle without mutating published policy content", () => {
-    const migration = readFileSync(resolve(process.cwd(), "supabase/migrations/017_v2_3_decline_policy.sql"), "utf8");
+    const migration = readFileSync(resolve(process.cwd(), "supabase/migrations/020_v2_3_policy_retirement.sql"), "utf8");
     expect(migration).toContain("admin_retire_recovery_policy_version");
     expect(migration).toMatch(/new\.lifecycle\s*=\s*'retired'/i);
     expect(migration).toContain("to_jsonb(new)");
     expect(migration).toContain("to_jsonb(old)");
     expect(migration).toContain("'retire'");
+
+    const form = readFileSync(resolve(process.cwd(), "components/admin/recovery-policy-form.tsx"), "utf8");
+    expect(form).toContain("Retire version");
+    expect(form).toContain("/api/admin/recovery/policies/retire");
   });
 });
