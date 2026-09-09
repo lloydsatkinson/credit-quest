@@ -44,6 +44,7 @@ function snapshot(
   treatment: RecoveryPolicySnapshot["partnerReasons"][number]["treatment"],
   solveability: RecoveryPolicySnapshot["partnerReasons"][number]["solveability"],
   alternativeRoutePolicyIds: string[] = [],
+  restricted = false,
 ): RecoveryPolicySnapshot {
   return {
     schemaVersion: 1,
@@ -60,7 +61,7 @@ function snapshot(
       canonicalCode,
       treatment,
       solveability,
-      restricted: false,
+      restricted,
       parameters: {},
       templateId: null,
       templateVersion: null,
@@ -152,5 +153,22 @@ describe("V2.3 configured treatment in the existing Recovery Experience", () => 
     });
     expect(plan.policyContext?.customerHeadline.toLowerCase()).toMatch(/more information|need more/);
     expect(JSON.stringify(plan.policyContext).toLowerCase()).not.toContain("affordability");
+  });
+
+  it("keeps restricted fraud/security decisions outside a normal recovery mission chain", () => {
+    const plan = planFor(snapshot(
+      "FRAUD_SECURITY_DECISION",
+      "restricted",
+      "restricted",
+      ["alternative-policy-should-never-run"],
+      true,
+    ));
+
+    expect(plan.policyContext).toMatchObject({
+      treatment: "restricted",
+      alternativeRoutePotential: false,
+    });
+    expect(plan.nextSafeAction.kind).not.toBe("mission");
+    expect(plan.nextSafeAction.title.toLowerCase()).toMatch(/outside|cannot|can’t|security/);
   });
 });
