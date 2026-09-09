@@ -4,6 +4,7 @@ import { resolveRecoveryBarriers } from "@/lib/recovery/multi-barrier-resolver";
 import {
   buildRecoveryPlan,
   buildRecoveryPolicyContext,
+  type RecoveryMissionSummary,
 } from "@/lib/recovery/plan";
 import type { RecoveryPolicySnapshot } from "@/lib/recovery/policy-snapshot";
 
@@ -76,7 +77,11 @@ function snapshot(
 function planFor(
   policySnapshot: RecoveryPolicySnapshot,
   state: ApplicationReadiness["state"] = "amber",
-  nextMission = { slug: "electoral-roll", title: "Confirm your electoral-roll details", nextReviewAt: null },
+  nextMission: RecoveryMissionSummary | null = {
+    slug: "electoral-roll",
+    title: "Confirm your electoral-roll details",
+    nextReviewAt: null,
+  },
 ) {
   const reasonCodes = policySnapshot.partnerReasons.map((reason) => reason.canonicalCode ?? reason.externalCode);
   const resolution = resolveRecoveryBarriers({ reasonCodes });
