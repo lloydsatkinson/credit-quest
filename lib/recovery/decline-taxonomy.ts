@@ -78,11 +78,12 @@ const PUBLIC_ADVERSE: CanonicalDeclineReasonDefinition[] = [
   reason("RECENT_BANKRUPTCY", "public_adverse", "wait_and_rebuild", "time_bound", "recent_adverse"),
   reason("ACTIVE_DRO", "public_adverse", "longer_term_recovery", "structural_long_horizon", "longer_term"),
   reason("RECENT_INSOLVENCY", "public_adverse", "wait_and_rebuild", "time_bound", "recent_adverse"),
+  reason("ACTIVE_PROTECTED_TRUST_DEED", "public_adverse", "longer_term_recovery", "structural_long_horizon", "longer_term"),
+  reason("ACTIVE_SEQUESTRATION", "public_adverse", "longer_term_recovery", "structural_long_horizon", "longer_term"),
+  reason("ACTIVE_DAS", "public_adverse", "longer_term_recovery", "structural_long_horizon", "longer_term"),
   reason("ACTIVE_DMP", "public_adverse", "longer_term_recovery", "structural_long_horizon", "longer_term"),
   reason("ARRANGEMENT_TO_PAY_ACTIVE", "public_adverse", "longer_term_recovery", "structural_long_horizon", "longer_term"),
-  reason("ACTIVE_PROTECTED_TRUST_DEED", "public_adverse", "longer_term_recovery", "structural_long_horizon", "longer_term"),
   reason("RECENT_PROTECTED_TRUST_DEED", "public_adverse", "wait_and_rebuild", "time_bound", "recent_adverse"),
-  reason("ACTIVE_SEQUESTRATION", "public_adverse", "longer_term_recovery", "structural_long_horizon", "longer_term"),
   reason("RECENT_SEQUESTRATION", "public_adverse", "wait_and_rebuild", "time_bound", "recent_adverse"),
   reason("ACTIVE_MINIMAL_ASSET_PROCESS", "public_adverse", "longer_term_recovery", "structural_long_horizon", "longer_term"),
 ];
@@ -94,6 +95,7 @@ const DELINQUENCY: CanonicalDeclineReasonDefinition[] = [
   reason("CAIS_3_6_RECENT", "delinquency", "stabilise", "stabilise_first", "stabilise"),
   reason("DETERIORATING_EXTERNAL_PERFORMANCE", "delinquency", "stabilise", "stabilise_first", "stabilise"),
   reason("INTERNAL_ARREARS", "delinquency", "stabilise", "stabilise_first", "stabilise"),
+  reason("RETURNED_PAYMENT_RECENT", "delinquency", "stabilise", "stabilise_first", "stabilise"),
 ];
 
 const CREDIT_SEEKING: CanonicalDeclineReasonDefinition[] = [
@@ -118,6 +120,7 @@ const AFFORDABILITY: CanonicalDeclineReasonDefinition[] = [
   reason("INCOME_MISMATCH", "affordability", "fix", "fix_now", "data_check"),
   reason("INCOME_INSTABILITY", "affordability", "create_headroom", "stabilise_first", "create_headroom"),
   reason("EMPLOYMENT_INSTABILITY", "affordability", "create_headroom", "stabilise_first", "create_headroom"),
+  reason("RECURRING_ACCOUNT_SHORTFALL", "affordability", "create_headroom", "stabilise_first", "create_headroom"),
 ];
 
 const INDEBTEDNESS: CanonicalDeclineReasonDefinition[] = [
@@ -126,6 +129,7 @@ const INDEBTEDNESS: CanonicalDeclineReasonDefinition[] = [
   reason("UTILISATION_HIGH", "indebtedness", "stabilise", "stabilise_first", "stabilise"),
   reason("REVOLVING_BALANCE_HIGH", "indebtedness", "stabilise", "stabilise_first", "stabilise"),
   reason("PERSISTENT_OVERDRAFT_USE", "indebtedness", "stabilise", "stabilise_first", "stabilise"),
+  reason("UNARRANGED_OVERDRAFT_FREQUENT", "indebtedness", "stabilise", "stabilise_first", "stabilise"),
   reason("OVERLIMIT_BEHAVIOUR", "indebtedness", "stabilise", "stabilise_first", "stabilise"),
   reason("CASH_ADVANCE_BEHAVIOUR", "indebtedness", "stabilise", "stabilise_first", "stabilise"),
   reason("EXISTING_CUSTOMER_EXPOSURE_LIMIT", "indebtedness", "create_headroom", "stabilise_first", "create_headroom"),
@@ -149,6 +153,7 @@ const DATA_INTEGRITY: CanonicalDeclineReasonDefinition[] = [
   reason("IDENTITY_FILE_MISMATCH", "data_integrity", "fix", "fix_now", "data_check"),
   reason("ELECTORAL_ROLL_EVIDENCE_GAP", "data_integrity", "fix", "fix_now", "data_check"),
   reason("CII_EXCLUSION_OR_FILE_SUPPRESSION", "data_integrity", "fix", "fix_now", "data_check"),
+  reason("BUREAU_ASSOCIATION_DATA_REVIEW", "data_integrity", "fix", "fix_now", "data_check"),
 ];
 
 const INTERNAL_PERFORMANCE: CanonicalDeclineReasonDefinition[] = [
@@ -168,9 +173,15 @@ const PRODUCT_FIT: CanonicalDeclineReasonDefinition[] = [
   reason("TOTAL_EXPOSURE_PRODUCT_LIMIT", "product_fit", "find_a_better_fit", "product_routeable", "better_fit", { alternativeCreditPermittedByDefault: true }),
   reason("PRODUCT_POLICY_MISMATCH", "product_fit", "find_a_better_fit", "product_routeable", "better_fit", { alternativeCreditPermittedByDefault: true }),
   reason("LENDER_POLICY_EXCLUSION", "product_fit", "needs_evidence", "unknown_or_unmapped", "need_more_information", { inferRootCause: false }),
+  reason("RESIDENCY_POLICY_NOT_MET", "product_fit", "needs_evidence", "unknown_or_unmapped", "eligibility_policy", { inferRootCause: false }),
+  reason("PRODUCT_AGE_POLICY_NOT_MET", "product_fit", "needs_evidence", "unknown_or_unmapped", "eligibility_policy", { inferRootCause: false }),
 ];
 
 const POLICY_OR_SCORE: CanonicalDeclineReasonDefinition[] = [
+  reason("RISK_SCORE_BELOW_CUTOFF", "policy_or_score", "needs_evidence", "unknown_or_unmapped", "need_more_information", { inferRootCause: false }),
+  reason("INTERNAL_SCORE_BELOW_CUTOFF", "policy_or_score", "needs_evidence", "unknown_or_unmapped", "need_more_information", { inferRootCause: false }),
+  reason("AFFORDABILITY_SCORE_BELOW_CUTOFF", "policy_or_score", "needs_evidence", "unknown_or_unmapped", "need_more_information", { inferRootCause: false }),
+  reason("SCORE_DECLINE_UNEXPLAINED", "policy_or_score", "needs_evidence", "unknown_or_unmapped", "need_more_information", { inferRootCause: false }),
   reason("SCORE_CUTOFF", "policy_or_score", "needs_evidence", "unknown_or_unmapped", "need_more_information", { inferRootCause: false }),
   reason("CREDIT_RISK_SCORE_CUTOFF", "policy_or_score", "needs_evidence", "unknown_or_unmapped", "need_more_information", { inferRootCause: false }),
   reason("AFFORDABILITY_SCORE_CUTOFF", "policy_or_score", "needs_evidence", "unknown_or_unmapped", "need_more_information", { inferRootCause: false }),
