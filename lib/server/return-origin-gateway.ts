@@ -4,17 +4,25 @@ import type { CommercialDisclosure } from "@/lib/commercial/types";
 import { getAgeMode } from "@/lib/domain/age-gate";
 import { assessSafety } from "@/lib/domain/safety";
 import type { ApplicationReadiness, CreditProfile } from "@/lib/domain/types";
+import {
+  evaluateAlternativeRoutePolicy,
+  type AlternativeRouteBlockReason,
+} from "@/lib/recovery/alternative-route";
 import { evaluateReturnToOriginGate } from "@/lib/recovery/return-gate";
 import { toRecoveryReadinessState } from "@/lib/recovery/readiness";
+import type { RecoveryFactValue } from "@/lib/recovery/condition-language";
 import type { ReturnGateReason } from "@/lib/recovery/types";
 import { getPublishedCommercialDisclosure } from "@/lib/server/commercial-repository";
 import { getCreditGuidanceForUser } from "@/lib/server/credit-guidance-service";
 import {
   appendReturnAttempt,
+  getAlternativeRouteContext,
   getReturnContract,
   getReturnRecoveryJourney,
   getReturnToOriginFeatureEnabled,
   isReturnSuppressionClear,
+  type AlternativeRouteContext,
+  type AlternativeRouteContextInput,
   type AppendReturnAttemptInput,
   type ReturnContractConfig,
   type ReturnRecoveryJourney,
@@ -23,6 +31,7 @@ import { isSandboxPilot } from "@/lib/server/sandbox-pilot-repository";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 
 export type ReturnOriginGatewayErrorCode = ReturnGateReason
+  | AlternativeRouteBlockReason
   | "pilot_required"
   | "recovery_unavailable"
   | "contract_unavailable"
@@ -45,6 +54,7 @@ export type ReturnOriginAvailability =
       status: "available";
       reason: null;
       partnerDisplayName: string;
+      routeType?: "original" | "alternative";
     };
 
 export class ReturnOriginGatewayError extends Error {
@@ -64,6 +74,7 @@ export interface ReturnOriginGatewayDependencies {
   getRecoveryJourney(userId: string, recoveryJourneyId: string): Promise<ReturnRecoveryJourney | null>;
   getReturnContract(contractId: string): Promise<ReturnContractConfig | null>;
   getDisclosure(disclosureKey: string): Promise<CommercialDisclosure | null>;
+  getAlternativeRouteContext?(input: AlternativeRouteContextInput): Promise<AlternativeRouteContext | null>;
   isGatewayEnabled(): Promise<boolean>;
   isSandboxPilot(userId: string): Promise<boolean>;
   isSuppressionClear(userId: string, recoveryJourneyId: string, now: Date): Promise<boolean>;
@@ -75,6 +86,9 @@ interface ReturnEvaluationSuccess {
   permitted: true;
   journey: ReturnRecoveryJourney;
   contract: ReturnContractConfig;
+  routeType: "original" | "alternative";
+  destinationProductKey: string | null;
+  reportRouteType: boolean;
 }
 
 interface ReturnEvaluationFailure {
@@ -108,6 +122,14 @@ function assertContractMatchesJourney(
   ) {
     throw new ReturnOriginGatewayError("contract_mismatch");
   }
+}
+
+function alternativeContractMatchesJourney(
+  journey: ReturnRecoveryJourney,
+  contract: ReturnContractConfig,
+): boolean {
+  return journey.partnerId === contract.partnerId
+    && journey.productCategory === contract.productCategory;
 }
 
 function assertValidDestination(contract: ReturnContractConfig): void {
@@ -162,13 +184,74 @@ async function evaluateReturnContext(
       return { permitted: false, code: "recovery_unavailable", partnerDisplayName: null };
     }
 
-    const contract = await deps.getReturnContract(journey.returnContractId);
-    if (!contract) {
+    const originalContract = await deps.getReturnContract(journey.returnContractId);
+    if (!originalContract) {
       return { permitted: false, code: "contract_unavailable", partnerDisplayName: null };
     }
-    partnerDisplayName = contract.partnerDisplayName;
+    partnerDisplayName = originalContract.partnerDisplayName;
+    assertContractMatchesJourney(journey, originalContract);
 
-    assertContractMatchesJourney(journey, contract);
+    const ageMode = getAgeMode(guidance.profile.dateOfBirth, input.now);
+    const safetyMode = assessSafety(guidance.profile).mode;
+    const evidenceComplete = hasRequiredCommercialEvidence(guidance.profile);
+    const readinessState = toRecoveryReadinessState(guidance.readiness.state);
+
+    let contract = originalContract;
+    let routeType: "original" | "alternative" = "original";
+    let destinationProductKey: string | null = null;
+    const reportRouteType = Boolean(deps.getAlternativeRouteContext);
+
+    if (deps.getAlternativeRouteContext) {
+      const facts: Record<string, RecoveryFactValue> = {
+        adult: ageMode === "adult",
+        safe: safetyMode !== "safe_mode",
+        evidenceComplete,
+        readinessReady: readinessState === "ready_to_check",
+      };
+      const alternative = await deps.getAlternativeRouteContext({
+        recoveryJourneyId: journey.id,
+        partnerId: journey.partnerId,
+        productCategory: journey.productCategory,
+        declinedAt: journey.declinedAt ?? null,
+        now: input.now,
+        facts,
+      });
+
+      if (alternative) {
+        const alternativeContract = alternative.policy?.returnContractId
+          ? await deps.getReturnContract(alternative.policy.returnContractId)
+          : null;
+        if (alternativeContract && !alternativeContractMatchesJourney(journey, alternativeContract)) {
+          return { permitted: false, code: "alternative_contract_mismatch", partnerDisplayName };
+        }
+
+        const decision = evaluateAlternativeRoutePolicy({
+          policy: alternative.policy,
+          barrierResolution: alternative.barrierResolution,
+          ageMode,
+          safetyMode,
+          evidenceComplete,
+          readinessState,
+          // This function evaluates whether the route may be offered. The actual
+          // createReturn path below still requires the customer's explicit choice.
+          customerChoice: "continue",
+          contract: alternativeContract
+            ? { id: alternativeContract.id, enabled: alternativeContract.enabled, expiresAt: alternativeContract.expiresAt }
+            : null,
+          now: input.now,
+        });
+        if (!decision.permitted) {
+          return { permitted: false, code: decision.reason, partnerDisplayName };
+        }
+        if (!alternativeContract) {
+          return { permitted: false, code: "alternative_contract_unavailable", partnerDisplayName };
+        }
+        contract = alternativeContract;
+        partnerDisplayName = alternativeContract.partnerDisplayName;
+        routeType = "alternative";
+        destinationProductKey = decision.destinationProductKey;
+      }
+    }
 
     if (contract.environment === "sandbox" && !(await deps.isSandboxPilot(input.userId))) {
       return { permitted: false, code: "pilot_required", partnerDisplayName };
@@ -189,15 +272,13 @@ async function evaluateReturnContext(
       enabled: gatewayEnabled,
       liveAllowed: deps.liveAllowed,
       environment: contract.environment,
-      ageMode: getAgeMode(guidance.profile.dateOfBirth, input.now),
-      safetyMode: assessSafety(guidance.profile).mode,
-      evidenceComplete: hasRequiredCommercialEvidence(guidance.profile),
-      readinessState: toRecoveryReadinessState(guidance.readiness.state),
+      ageMode,
+      safetyMode,
+      evidenceComplete,
+      readinessState,
       cooldownComplete: cooldownComplete(journey, input.now),
       suppressionClear,
       disclosureCurrent,
-      // Availability evaluates whether the customer could be offered the choice.
-      // The actual createReturn path still requires an explicit continue/decline.
       customerChoseReturn: true,
       partnerEnabled: contract.partnerEnabled,
       partnerEnvironmentEnabled: partnerEnvironmentEnabled(contract),
@@ -217,6 +298,9 @@ async function evaluateReturnContext(
       permitted: true,
       journey,
       contract,
+      routeType,
+      destinationProductKey,
+      reportRouteType,
     };
   } catch (error) {
     if (error instanceof ReturnOriginGatewayError) {
@@ -240,6 +324,7 @@ export function createReturnOriginGateway(deps: ReturnOriginGatewayDependencies)
           status: "available",
           reason: null,
           partnerDisplayName: evaluation.contract.partnerDisplayName,
+          ...(evaluation.reportRouteType ? { routeType: evaluation.routeType } : {}),
         };
       }
 
@@ -283,6 +368,7 @@ export function createReturnOriginGateway(deps: ReturnOriginGatewayDependencies)
           customerChoice: input.customerChoice,
           outcome: input.customerChoice === "continue" ? "redirected" : "declined",
           callbackStatus: "not_applicable",
+          ...(evaluation.reportRouteType ? { routeType: evaluation.routeType } : {}),
         });
 
         if (input.customerChoice === "decline") {
@@ -294,6 +380,8 @@ export function createReturnOriginGateway(deps: ReturnOriginGatewayDependencies)
           returnAttemptId: attempt.id,
           destinationUrl: contract.destinationUrl,
           partnerDisplayName: contract.partnerDisplayName,
+          ...(evaluation.reportRouteType ? { routeType: evaluation.routeType } : {}),
+          ...(evaluation.destinationProductKey ? { destinationProductKey: evaluation.destinationProductKey } : {}),
         };
       } catch (error) {
         if (error instanceof ReturnOriginGatewayError) throw error;
@@ -311,12 +399,13 @@ function createProductionReturnOriginGateway() {
       getReturnRecoveryJourney(admin, userId, recoveryJourneyId),
     getReturnContract: (contractId) => getReturnContract(admin, contractId),
     getDisclosure: (disclosureKey) => getPublishedCommercialDisclosure(admin, disclosureKey),
+    getAlternativeRouteContext: (input) => getAlternativeRouteContext(admin, input),
     isGatewayEnabled: () => getReturnToOriginFeatureEnabled(admin),
     isSandboxPilot: (userId) => isSandboxPilot(admin, userId),
     isSuppressionClear: (userId, recoveryJourneyId, now) =>
       isReturnSuppressionClear(admin, userId, recoveryJourneyId, now),
     appendReturnAttempt: (input) => appendReturnAttempt(admin, input),
-    // V2.0d deliberately hard-locks live Return-to-Origin off.
+    // V2.3 retains the existing live hard-lock. Alternative routes cannot enable live traffic.
     liveAllowed: false,
   });
 }

@@ -7,19 +7,24 @@ interface ReturnResponse {
   returnAttemptId?: string;
   destinationUrl?: string;
   partnerDisplayName?: string;
+  routeType?: "original" | "alternative";
+  destinationProductKey?: string;
   error?: string;
 }
 
 export function ReturnToOriginCard({
   recoveryJourneyId,
   partnerDisplayName,
+  routeType = "original",
 }: {
   recoveryJourneyId: string;
   partnerDisplayName: string;
+  routeType?: "original" | "alternative";
 }) {
   const [submitting, setSubmitting] = useState<"continue" | "decline" | null>(null);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const alternative = routeType === "alternative";
 
   async function choose(customerChoice: "continue" | "decline") {
     if (submitting) return;
@@ -65,7 +70,7 @@ export function ReturnToOriginCard({
   }
 
   return (
-    <section className="cq-panel mb-4 rounded-[1.75rem] p-5 text-white" aria-label="Return to original partner">
+    <section className="cq-panel mb-4 rounded-[1.75rem] p-5 text-white" aria-label={alternative ? "Alternative eligibility check" : "Return to original partner"}>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="cq-kicker">Optional next step</p>
         <span className="rounded-full border border-lime-300/20 bg-lime-300/10 px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.15em] text-lime-200">
@@ -82,7 +87,9 @@ export function ReturnToOriginCard({
 
       <div className="mt-4 rounded-2xl border border-white/8 bg-white/[0.035] p-4">
         <p className="text-sm font-bold leading-6 text-slate-200">
-          You can choose to continue with {partnerDisplayName}. This does not mean {partnerDisplayName} will approve you, and the partner still makes its own eligibility, affordability and lending decision.
+          {alternative
+            ? `You can choose to check eligibility for another option with ${partnerDisplayName}. This is an eligibility check only; ${partnerDisplayName} still makes its own affordability and lending decision.`
+            : `You can choose to continue with ${partnerDisplayName}. This does not mean ${partnerDisplayName} will approve you, and the partner still makes its own eligibility, affordability and lending decision.`}
         </p>
       </div>
 
@@ -93,7 +100,11 @@ export function ReturnToOriginCard({
           onClick={() => void choose("continue")}
           className="rounded-2xl bg-lime-300 px-4 py-3 text-sm font-black text-slate-950 shadow-[0_10px_32px_rgba(200,255,56,0.12)] transition hover:bg-lime-200 disabled:cursor-not-allowed disabled:opacity-40"
         >
-          {submitting === "continue" ? "Checking route…" : `Continue with ${partnerDisplayName}`}
+          {submitting === "continue"
+            ? "Checking route…"
+            : alternative
+              ? "Check eligibility for another option"
+              : `Continue with ${partnerDisplayName}`}
         </button>
         <button
           type="button"
