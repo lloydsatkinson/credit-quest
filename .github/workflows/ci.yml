@@ -49,7 +49,8 @@ jobs:
             -f supabase/tests/recovery_rls.sql \
             -f supabase/tests/recovery_atomic.sql \
             -f supabase/tests/recovery_privileges.sql \
-            -f supabase/tests/v2_3_decline_policy.sql
+            -f supabase/tests/v2_3_decline_policy.sql \
+            -f supabase/tests/v2_3_lender_portal.sql
       - name: Stop local Supabase
         if: always()
         env:
