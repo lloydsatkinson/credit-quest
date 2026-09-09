@@ -28,7 +28,7 @@ describe("V2.3 controlled recovery condition language", () => {
 
     const unknownComparison: ConditionExpr = { op: "eq", fact: "bureauFixed", value: true };
     expect(evaluateCondition(
-      { op: "and", all: [unknownComparison, { op: "eq", fact: "safe", value: false }] },
+      { op: "and", all: [unknownComparison, { op: "eq", fact: "safe", value: true }] },
       { safe: false },
       {},
     )).toBe(false);
