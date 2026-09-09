@@ -102,6 +102,19 @@ RECOVERY TREATMENT          PRODUCT-FIT / ROUTE POLICY
 
 The taxonomy must be precise enough for a Credit Risk team but reusable across lenders. Lender-specific codes map to canonical Credit Quest reasons plus parameters.
 
+Every canonical reason also carries a **solveability class** separate from severity:
+
+- `fix_now` — information or evidence can be corrected/verified;
+- `evidence_build` — more reliable history/evidence is needed;
+- `time_bound` — real recency/seasoning matters;
+- `affordability` — sustainable headroom must improve;
+- `structural` — formal or serious state makes near-term borrowing inappropriate;
+- `product_fit` — decline may be specific to product/amount/limit/policy;
+- `restricted` — fraud/AML/security decision outside normal recovery;
+- `unknown` — insufficient information to claim a root cause.
+
+Severity, recovery horizon and solveability are related but not interchangeable.
+
 ### 4.1 Public adverse / insolvency
 
 Representative canonical reasons:
@@ -117,10 +130,13 @@ Representative canonical reasons:
 - `RECENT_BANKRUPTCY`
 - `ACTIVE_DRO`
 - `RECENT_INSOLVENCY`
+- `ACTIVE_PROTECTED_TRUST_DEED`
+- `ACTIVE_SEQUESTRATION`
+- `ACTIVE_DAS`
 - `ACTIVE_DMP`
 - `ARRANGEMENT_TO_PAY_ACTIVE`
 
-Risk interpretation: material adverse performance, formal insolvency or structured debt-management state.
+Risk interpretation: material adverse performance, formal insolvency or structured debt-management state. UK jurisdictional variants must be represented without pretending one legal regime applies everywhere.
 
 Typical treatment: WAIT & REBUILD or LONGER-TERM RECOVERY. Active insolvency or serious debt-management states normally suppress new-credit alternatives unless a separately governed non-credit route exists.
 
@@ -134,6 +150,7 @@ Representative canonical reasons:
 - `CAIS_3_6_RECENT`
 - `DETERIORATING_EXTERNAL_PERFORMANCE`
 - `INTERNAL_ARREARS`
+- `RETURNED_PAYMENT_RECENT`
 
 Risk interpretation: current or emerging payment instability with heightened near-term loss risk.
 
@@ -170,12 +187,15 @@ Representative canonical reasons:
 - `INCOME_MISMATCH`
 - `INCOME_INSTABILITY`
 - `EMPLOYMENT_INSTABILITY`
+- `RECURRING_ACCOUNT_SHORTFALL`
 
 Risk interpretation: insufficient sustainable headroom or insufficiently reliable affordability evidence.
 
 Typical treatment: CREATE HEADROOM or FIX where the issue is evidence/verification rather than genuine pressure.
 
 A negative disposable-income state is materially different from a product-limit mismatch. V2.3 must not route a genuinely unaffordable applicant to another borrowing product merely because a smaller product exists.
+
+Where a lender passes an Open Banking-derived decline code, Credit Quest may use that structured reason as partner provenance. V2.3 does not imply that Credit Quest itself has live Open Banking access.
 
 ### 4.5 Indebtedness / exposure
 
@@ -186,6 +206,7 @@ Representative canonical reasons:
 - `UTILISATION_HIGH`
 - `REVOLVING_BALANCE_HIGH`
 - `PERSISTENT_OVERDRAFT_USE`
+- `UNARRANGED_OVERDRAFT_FREQUENT`
 - `OVERLIMIT_BEHAVIOUR`
 - `CASH_ADVANCE_BEHAVIOUR`
 - `EXISTING_CUSTOMER_EXPOSURE_LIMIT`
@@ -221,6 +242,7 @@ Representative canonical reasons:
 - `IDENTITY_FILE_MISMATCH`
 - `ELECTORAL_ROLL_EVIDENCE_GAP`
 - `CII_EXCLUSION_OR_FILE_SUPPRESSION`
+- `BUREAU_ASSOCIATION_DATA_REVIEW`
 
 Risk interpretation: decision input may be incomplete, inconsistent, duplicated, excluded or under dispute.
 
@@ -240,7 +262,22 @@ Risk interpretation: lender-specific historic performance that another lender ma
 
 Typical treatment: lender-configured WAIT & REBUILD or LONGER-TERM RECOVERY. Credit Quest must preserve provenance and must not claim this is a universal market-wide exclusion.
 
-### 4.9 Product / exposure fit
+### 4.9 Risk / affordability score cutoffs
+
+Representative canonical reasons:
+
+- `RISK_SCORE_BELOW_CUTOFF`
+- `INTERNAL_SCORE_BELOW_CUTOFF`
+- `AFFORDABILITY_SCORE_BELOW_CUTOFF`
+- `SCORE_DECLINE_UNEXPLAINED`
+
+Risk interpretation: the lender has supplied a score/cutoff outcome, not necessarily a causal diagnosis.
+
+A score-only decline **must not be decomposed into invented reasons**. If the lender does not supply contributing reason codes that can be safely mapped, Credit Quest preserves the lender decline as score-based/unknown and uses its own independent evidence, Passport and barrier diagnosis to determine useful next actions.
+
+Customer treatment is therefore not “improve your score until you pass”. It is “we were not given enough detail to claim one cause; here is what your current evidence shows is useful to work on.”
+
+### 4.10 Product / exposure / eligibility fit
 
 Representative canonical reasons:
 
@@ -252,23 +289,26 @@ Representative canonical reasons:
 - `TOTAL_EXPOSURE_PRODUCT_LIMIT`
 - `PRODUCT_POLICY_MISMATCH`
 - `LENDER_POLICY_EXCLUSION`
+- `RESIDENCY_POLICY_NOT_MET`
+- `PRODUCT_AGE_POLICY_NOT_MET`
 
-Risk interpretation: failure may relate to this particular product, amount, limit or lender policy rather than a universal inability to borrow.
+Risk interpretation: failure may relate to this particular product, amount, limit or lender eligibility policy rather than a universal inability to borrow.
 
-Typical treatment: FIND A BETTER FIT **only where independent affordability/safety and lender route policy permit a fresh eligibility check**.
+Typical treatment: FIND A BETTER FIT **only where independent affordability/safety and lender route policy permit a fresh eligibility check**. Pure eligibility rules that are not credit-risk problems should not be presented as damaged credit.
 
-### 4.10 Restricted / non-recovery decisions
+### 4.11 Restricted / non-recovery decisions
 
 Representative categories:
 
 - fraud/security decision;
 - AML/financial-crime control;
 - sanctions/KYC restrictions;
+- CIFAS/fraud-prevention decision where the lender cannot disclose detail;
 - other restricted security decisions.
 
 These must remain separate from normal credit recovery. Credit Quest may provide a neutral message or identity-data correction route where appropriate, but must not explain how to circumvent fraud/AML/security controls and must not create a normal “recover this decline” mission chain.
 
-### 4.11 Composite declines
+### 4.12 Composite declines
 
 An applicant may receive multiple decline reasons. V2.3 must never present them as competing independent checklists.
 
@@ -369,7 +409,7 @@ Typical sequence:
 
 `PROTECT STABILITY -> RESOLVE / COMPLETE UNDERLYING STATE -> BUILD POSITIVE EVIDENCE WHERE APPROPRIATE -> REASSESS`
 
-Examples: active IVA, active bankruptcy, active DRO, serious debt-management state.
+Examples: active IVA, active bankruptcy, active DRO, protected trust deed/sequestration or serious debt-management state.
 
 ### 5.7 FIND A BETTER FIT
 
@@ -380,6 +420,16 @@ Customer proposition:
 > “The original product isn’t available, but there may be another option worth checking.”
 
 This is never automatic approval or a Credit Quest suitability recommendation.
+
+### 5.8 Score-only / insufficient-reason handling
+
+A score cutoff without mapped causal reason codes does not become a fake recovery diagnosis.
+
+Customer proposition:
+
+> “We weren’t given enough detail to say there was one specific cause. We can still show what your current evidence suggests is worth working on.”
+
+The journey then uses the normal Credit Quest barrier, Passport, Mission and readiness engines.
 
 ## 6. Lender-configurable policy model
 
@@ -395,6 +445,7 @@ Canonical reason: CCJ_RECENT
 Parameters:
   lookback_months = 24
 Severity: high
+Solveability: time_bound
 Treatment: WAIT_AND_REBUILD
 Original product: blocked until rule satisfied
 Alternative credit routes: none
@@ -418,6 +469,20 @@ Parameters may include controlled values such as:
 - minimum wait/reassessment point where genuine lender policy supplies one.
 
 The configuration system must not permit arbitrary SQL, JavaScript or executable expressions.
+
+### 6.1 No policy-gaming design
+
+Lender thresholds exist to evaluate policy, not to become a customer-facing recipe for getting just under a cutoff.
+
+Unless a lender explicitly approves a transparent parameter for disclosure, Credit Quest should not display private thresholds such as:
+
+- “get DSR below 50%”;
+- “wait exactly until this lender’s score rule passes”;
+- “reduce exposure by £X solely to clear rule Y”.
+
+Customer journeys should focus on genuine improvements such as sustainable headroom, stable payments, corrected data, matured evidence and reduced unnecessary credit-seeking.
+
+The simulator/admin view may show the exact configured policy condition to authorised operators. The customer view normally uses controlled plain-English treatment language.
 
 ## 7. Controlled condition language
 
@@ -464,10 +529,12 @@ Core properties:
 - risk family;
 - default severity;
 - default recovery horizon;
+- solveability class;
 - permitted treatment classes;
 - whether routeable alternatives can ever be considered;
 - customer-language category;
-- restricted/non-recovery flag where applicable.
+- restricted/non-recovery flag where applicable;
+- jurisdiction scope where relevant.
 
 ### 8.2 `partner_decline_mappings`
 
@@ -493,6 +560,7 @@ Core properties:
 - treatment class;
 - eligible canonical reasons;
 - severity/horizon;
+- solveability class;
 - customer headline/explanation;
 - step ordering policy;
 - default reassessment behaviour;
@@ -562,6 +630,7 @@ When an applicant enters recovery, Credit Quest stores an immutable **Recovery P
 - mapping/template/reassessment/route versions;
 - primary/secondary/parallel barrier resolution;
 - effective treatment class;
+- solveability class;
 - original-product route state;
 - alternative-route policy version.
 
@@ -582,7 +651,8 @@ Default precedence concept:
 7. material indebtedness/exposure;
 8. data correction where it is not the primary cause but can run in parallel;
 9. thin-file/evidence building;
-10. product-fit / routeable mismatch.
+10. score-only/unknown reason handled through independent Credit Quest diagnosis;
+11. product-fit / routeable mismatch.
 
 This is not a simple numeric sort. Some tasks may run safely in parallel.
 
@@ -675,6 +745,7 @@ Inputs include:
 Output includes:
 
 - canonical reasons;
+- solveability class;
 - primary/secondary/parallel barrier resolution;
 - customer treatment class;
 - NOW/NEXT/THEN/LATER journey;
@@ -702,6 +773,7 @@ They must not be able to:
 - browse customer-level PII;
 - see support/vulnerability detail;
 - inspect Credit Quest safety/readiness thresholds;
+- inspect confidential lender policy cutoffs unless separately agreed for that role;
 - change return destinations or commercial controls.
 
 ### 14.2 Overview
@@ -725,12 +797,13 @@ Headline rates:
 Aggregate recovery performance by:
 
 - canonical decline family/reason;
+- solveability class;
 - partner product/product family;
 - pilot cohort/time period;
 - single vs composite decline;
 - treatment class.
 
-This allows a lender to learn which decline populations are highly recoverable, time-bound, structurally blocked or primarily product-fit related.
+This allows a lender to learn which decline populations are highly recoverable, time-bound, structurally blocked, affordability-led or primarily product-fit related.
 
 No customer-level surveillance is required in V2.3.
 
@@ -818,11 +891,14 @@ The system must distinguish:
 - **fundamentally inappropriate for further borrowing now** — e.g. negative disposable income / active insolvency;
 - **time-bound risk** — e.g. recent credit-seeking;
 - **insufficient evidence** — e.g. thin file;
-- **product/exposure mismatch** — e.g. requested limit too high.
+- **product/exposure mismatch** — e.g. requested limit too high;
+- **score-only unknown cause** — do not infer suitability from the score outcome alone.
 
 A route can be shown only when all independent safety/evidence/readiness/disclosure/runtime gates pass.
 
 Customer wording must use “check eligibility” or equivalent controlled language, never “suitable”, “approved”, “pre-approved” or “guaranteed”.
+
+The router must never optimise a customer to the edge of a lender cutoff. It evaluates current genuine evidence against governed conditions at reassessment time.
 
 ## 19. Marketing-friendly language layer
 
@@ -838,6 +914,8 @@ Examples:
 | recent adverse event | “Some things improve with time as well as action.” |
 | data discrepancy | “There may be information to check before you try again.” |
 | product mismatch | “The original product isn’t available, but another option may be worth checking.” |
+| score cutoff without causal reason | “We weren’t given enough detail to say there was one specific cause.” |
+| pure eligibility/policy mismatch | “This product’s criteria were not met; that does not automatically mean your credit is poor.” |
 
 Marketing copy must stay constructive without hiding material blockers.
 
@@ -848,6 +926,7 @@ V2.3 must fail closed where configuration or provenance is incomplete.
 Examples:
 
 - unknown lender code -> preserve as unknown / unmapped; do not invent a canonical diagnosis;
+- score-only decline without causal codes -> preserve score-based/unknown provenance and use independent Credit Quest diagnosis;
 - ambiguous mapping -> no route/published treatment until resolved;
 - missing policy version -> do not silently use “latest” for an existing applicant snapshot;
 - unsupported condition -> configuration cannot publish;
@@ -871,6 +950,7 @@ Do not expose:
 - support/vulnerability information;
 - health data;
 - Credit Quest internal strategy thresholds;
+- confidential lender thresholds outside authorised operational roles;
 - affiliate/commercial economics;
 - arbitrary customer-level browsing.
 
@@ -882,7 +962,7 @@ V2.3 must support a controlled synthetic 100-customer demonstration covering rep
 
 - recent CCJ;
 - active IVA;
-- bankruptcy;
+- bankruptcy / Scottish insolvency equivalent;
 - CAIS 8/9;
 - early delinquency;
 - recent STL activity;
@@ -891,6 +971,7 @@ V2.3 must support a controlled synthetic 100-customer demonstration covering rep
 - NOC/data issue;
 - high DSR;
 - negative disposable income;
+- score-cutoff-only decline;
 - product/limit mismatch;
 - multiple combined declines.
 
@@ -925,9 +1006,13 @@ Implementation plan must require TDD and explicit architecture regression covera
 
 Minimum test themes:
 
-- every canonical reason maps to an allowed risk family/treatment set;
+- every canonical reason maps to an allowed risk family, solveability class and treatment set;
 - lender parameters are versioned and scoped by partner/product;
+- UK jurisdictional insolvency mappings remain explicit;
 - unknown/unmapped reasons stay unknown;
+- score-cutoff-only declines do not invent causal reasons;
+- customer surfaces do not expose confidential policy thresholds by default;
+- journeys improve genuine evidence rather than coach customers to game cutoffs;
 - active structural/affordability blockers suppress inappropriate alternative routes;
 - product-fit-only cases can expose a permitted eligibility-check route only after all gates pass;
 - multiple declines resolve deterministically to primary/secondary/parallel treatment;
@@ -962,6 +1047,7 @@ Do not add:
 - a second Passport/readiness/mission engine;
 - unlimited lender self-service production policy changes;
 - a fraud/AML circumvention journey;
+- customer-facing coaching designed to reverse-engineer or game lender cutoffs;
 - dozens of new generic missions simply to make the app look larger.
 
 ## 26. Success criteria
@@ -970,14 +1056,16 @@ V2.3 is successful when a completely synthetic lender can:
 
 1. configure a product and a set of decline codes;
 2. map those codes into a governed Credit Risk/Affordability taxonomy;
-3. configure policy parameters, treatment and reassessment rules;
-4. simulate single and multiple-decline applicants;
-5. hand off synthetic declined customers to Credit Quest;
-6. give each customer one coherent evidence-led recovery journey using the existing Passport, Quest Feed, Academy, Actions and readiness engines;
-7. distinguish fixable, buildable, affordability, time-bound, structural and product-fit populations;
-8. permit an alternative fresh eligibility check only where independent safety/readiness/evidence and lender route rules permit it;
-9. view the aggregate recovery funnel and decline intelligence in a partner-scoped read-only lender console;
-10. explain, months later, exactly why a customer received a particular recovery journey using immutable policy/version provenance.
+3. classify each reason by severity, solveability and treatment without confusing those concepts;
+4. configure policy parameters, treatment and reassessment rules;
+5. simulate single and multiple-decline applicants;
+6. hand off synthetic declined customers to Credit Quest;
+7. give each customer one coherent evidence-led recovery journey using the existing Passport, Quest Feed, Academy, Actions and readiness engines;
+8. distinguish fixable, buildable, affordability, time-bound, structural, product-fit, restricted and genuinely unknown populations;
+9. preserve score-only declines as non-causal unless real reason codes exist;
+10. permit an alternative fresh eligibility check only where independent safety/readiness/evidence and lender route rules permit it;
+11. view the aggregate recovery funnel and decline intelligence in a partner-scoped read-only lender console;
+12. explain, months later, exactly why a customer received a particular recovery journey using immutable policy/version provenance.
 
 The target sales demonstration is:
 
