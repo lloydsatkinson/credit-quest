@@ -8,6 +8,7 @@ import {
   getPartnerCredentialByKey, getPartnerHandoffByTokenHash, getPartnerIntakeFeatureEnabled, getVaultPartnerSecret,
   insertPartnerIntakeSession, redeemPartnerHandoffAtomically, type PartnerHandoffSession,
 } from "@/lib/server/partner-intake-repository";
+import { resolveRecoveryPolicyForActivation } from "@/lib/server/recovery-policy-service";
 import type { PartnerContextReviewResult } from "@/lib/server/recovery-repository";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 
@@ -84,7 +85,19 @@ export async function redeemPartnerHandoff(input: { token: string; userId: strin
   const now = input.now ?? new Date(); const admin = createAdminSupabaseClient(); const session = await loadUsablePartnerHandoff(admin, input.token, now);
   if (!session) throw new PartnerHandoffError("handoff_unavailable", 410);
   const reviewedContext = reviewResult(session, input.review);
-  try { return await redeemPartnerHandoffAtomically(admin, { sessionId: session.id, userId: input.userId, ...reviewedContext, now }); }
+  try {
+    const journey = await redeemPartnerHandoffAtomically(admin, { sessionId: session.id, userId: input.userId, ...reviewedContext, now });
+    await resolveRecoveryPolicyForActivation(admin, {
+      recoveryJourneyId: journey.id,
+      intakeSessionId: session.id,
+      partnerId: session.partnerId,
+      productCategory: session.productCategory,
+      contextConfirmation: reviewedContext.contextConfirmation,
+      customerCorrectionCode: reviewedContext.contextConfirmation === "corrected" ? reviewedContext.declineReasonCode : null,
+      now,
+    });
+    return journey;
+  }
   catch (error) { if (isAtomicHandoffUnavailable(error)) throw new PartnerHandoffError("handoff_unavailable", 410); throw error; }
 }
 
