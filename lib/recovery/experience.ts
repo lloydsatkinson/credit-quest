@@ -43,7 +43,12 @@ export interface RecoveryTimelineItem {
 export type RecoveryReturnState =
   | { status: "unavailable"; reason: string; partnerLabel: string | null }
   | { status: "blocked"; reason: string; partnerLabel: string | null }
-  | { status: "available"; reason: null; partnerLabel: string };
+  | {
+      status: "available";
+      reason: null;
+      partnerLabel: string;
+      routeType: "original" | "alternative";
+    };
 
 export interface RecoveryOpenAttempt {
   missionInstanceId: string;
