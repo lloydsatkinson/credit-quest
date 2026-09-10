@@ -29,6 +29,20 @@ describe("V2.3 final tranche documentation and preservation contract", () => {
     expect(readme).toMatch(/multi-reason.*snapshot/i);
   });
 
+  it("documents the complete V2.3 persistence hardening chain", () => {
+    for (const migration of [
+      "017_v2_3_decline_policy.sql",
+      "018_v2_3_multi_reason_snapshots.sql",
+      "019_v2_3_lender_pilot_reporting.sql",
+      "020_v2_3_policy_retirement.sql",
+      "021_v2_3_atomic_policy_snapshot_binding.sql",
+    ]) {
+      expect(readme).toContain(migration);
+    }
+    expect(readme).toMatch(/published.*retired|retire.*published/i);
+    expect(readme).toMatch(/atomic.*snapshot|snapshot.*atomic/i);
+  });
+
   it("documents V2.3 dark defaults as remaining off", () => {
     for (const marker of [
       "partner_decline_intake_enabled=false",
