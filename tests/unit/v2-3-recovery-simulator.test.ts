@@ -87,6 +87,22 @@ describe("V2.3 production-equivalent recovery simulator", () => {
     expect(result.treatment).toBe("needs_evidence");
   });
 
+  it("keeps an unmapped lender code unknown even when its text matches a CQ canonical code", () => {
+    const result = runRecoverySimulation(input(["THIN_FILE"]), policy);
+
+    expect(result.canonicalMappings[0]).toMatchObject({
+      externalCode: "THIN_FILE",
+      canonicalCode: null,
+      version: null,
+    });
+    expect(result.barrierResolution.primary).toMatchObject({
+      canonicalCode: null,
+      treatment: "needs_evidence",
+      solveability: "unknown_or_unmapped",
+    });
+    expect(result.treatment).toBe("needs_evidence");
+  });
+
   it("uses the shared three-valued condition evaluator and groups configured steps by phase", () => {
     const unknown = runRecoverySimulation(input(["THIN"]), policy);
     expect(unknown.reassessment?.result).toBe("unknown");
