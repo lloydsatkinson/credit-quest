@@ -35,13 +35,24 @@ export interface RecoveryPolicySnapshot {
 const UNMAPPED_REASON_PREFIX = "__UNMAPPED_LENDER_REASON__:";
 
 /**
+ * Produces one barrier-resolver code while preserving the distinction between
+ * an approved canonical mapping and an unmapped lender-supplied string.
+ */
+export function recoveryBarrierReasonCode(
+  canonicalCode: string | null,
+  externalCode: string,
+): string {
+  return canonicalCode ?? `${UNMAPPED_REASON_PREFIX}${externalCode}`;
+}
+
+/**
  * Converts a frozen policy snapshot into the resolver input without allowing an
  * unmapped lender code to masquerade as one of Credit Quest's canonical codes.
  * The snapshot's canonicalCode field is the sole authority for a known reason.
  */
 export function recoverySnapshotBarrierReasonCodes(snapshot: RecoveryPolicySnapshot): string[] {
   return snapshot.partnerReasons.map((reason) => (
-    reason.canonicalCode ?? `${UNMAPPED_REASON_PREFIX}${reason.externalCode}`
+    recoveryBarrierReasonCode(reason.canonicalCode, reason.externalCode)
   ));
 }
 
