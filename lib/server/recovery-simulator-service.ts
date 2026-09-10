@@ -8,6 +8,7 @@ import {
 } from "@/lib/recovery/condition-language";
 import { getCanonicalDeclineReason, type RecoveryTreatmentClass } from "@/lib/recovery/decline-taxonomy";
 import { resolveRecoveryBarriers, type BarrierResolution } from "@/lib/recovery/multi-barrier-resolver";
+import { recoveryBarrierReasonCode } from "@/lib/recovery/policy-snapshot";
 import type { RecoveryProductCategory } from "@/lib/recovery/types";
 import { listPublishedMappings } from "@/lib/server/decline-policy-repository";
 
@@ -96,7 +97,9 @@ export function runRecoverySimulation(
     };
   });
 
-  const reasonCodes = canonicalMappings.map((mapping) => mapping.canonicalCode ?? mapping.externalCode);
+  const reasonCodes = canonicalMappings.map((mapping) => (
+    recoveryBarrierReasonCode(mapping.canonicalCode, mapping.externalCode)
+  ));
   const barrierResolution = resolveRecoveryBarriers({ reasonCodes });
   const selectedCanonicalCodes = new Set(canonicalMappings.flatMap((mapping) => mapping.canonicalCode ? [mapping.canonicalCode] : []));
 
