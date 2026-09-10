@@ -15,6 +15,10 @@ import type { ReturnGateReason } from "@/lib/recovery/types";
 import { getPublishedCommercialDisclosure } from "@/lib/server/commercial-repository";
 import { getCreditGuidanceForUser } from "@/lib/server/credit-guidance-service";
 import {
+  isOriginalReturnPolicySatisfied,
+  type OriginalReturnPolicyInput,
+} from "@/lib/server/original-return-policy";
+import {
   appendReturnAttempt,
   getAlternativeRouteContext,
   getReturnContract,
@@ -37,6 +41,7 @@ export type ReturnOriginGatewayErrorCode = ReturnGateReason
   | "contract_unavailable"
   | "contract_mismatch"
   | "invalid_destination"
+  | "lender_reassessment_not_satisfied"
   | "configuration_unavailable";
 
 export type ReturnOriginAvailability =
@@ -75,6 +80,7 @@ export interface ReturnOriginGatewayDependencies {
   getReturnContract(contractId: string): Promise<ReturnContractConfig | null>;
   getDisclosure(disclosureKey: string): Promise<CommercialDisclosure | null>;
   getAlternativeRouteContext?(input: AlternativeRouteContextInput): Promise<AlternativeRouteContext | null>;
+  isOriginalPolicySatisfied?(input: OriginalReturnPolicyInput): Promise<boolean>;
   isGatewayEnabled(): Promise<boolean>;
   isSandboxPilot(userId: string): Promise<boolean>;
   isSuppressionClear(userId: string, recoveryJourneyId: string, now: Date): Promise<boolean>;
@@ -195,6 +201,18 @@ async function evaluateReturnContext(
     const safetyMode = assessSafety(guidance.profile).mode;
     const evidenceComplete = hasRequiredCommercialEvidence(guidance.profile);
     const readinessState = toRecoveryReadinessState(guidance.readiness.state);
+    const facts: Record<string, RecoveryFactValue> = {
+      adult: ageMode === "adult",
+      safe: safetyMode !== "safe_mode",
+      evidenceComplete,
+      readinessReady: readinessState === "ready_to_check",
+      electoralRoll: guidance.profile.electoralRoll,
+      utilisationPct: guidance.profile.utilisationPct,
+      missedPaymentsLast12m: guidance.profile.missedPaymentsLast12m,
+      hardApplicationsLast6m: guidance.profile.hardApplicationsLast6m,
+      hasRevolvingCredit: guidance.profile.hasRevolvingCredit,
+      hasDirectDebitForCredit: guidance.profile.hasDirectDebitForCredit,
+    };
 
     let contract = originalContract;
     let routeType: "original" | "alternative" = "original";
@@ -202,12 +220,6 @@ async function evaluateReturnContext(
     const reportRouteType = Boolean(deps.getAlternativeRouteContext);
 
     if (deps.getAlternativeRouteContext) {
-      const facts: Record<string, RecoveryFactValue> = {
-        adult: ageMode === "adult",
-        safe: safetyMode !== "safe_mode",
-        evidenceComplete,
-        readinessReady: readinessState === "ready_to_check",
-      };
       const alternative = await deps.getAlternativeRouteContext({
         recoveryJourneyId: journey.id,
         partnerId: journey.partnerId,
@@ -250,6 +262,20 @@ async function evaluateReturnContext(
         partnerDisplayName = alternativeContract.partnerDisplayName;
         routeType = "alternative";
         destinationProductKey = decision.destinationProductKey;
+      }
+    }
+
+    if (routeType === "original" && deps.isOriginalPolicySatisfied) {
+      const originalPolicySatisfied = await deps.isOriginalPolicySatisfied({
+        recoveryJourneyId: journey.id,
+        partnerId: journey.partnerId,
+        productCategory: journey.productCategory,
+        declinedAt: journey.declinedAt ?? null,
+        now: input.now,
+        facts,
+      });
+      if (!originalPolicySatisfied) {
+        return { permitted: false, code: "lender_reassessment_not_satisfied", partnerDisplayName };
       }
     }
 
@@ -400,6 +426,7 @@ function createProductionReturnOriginGateway() {
     getReturnContract: (contractId) => getReturnContract(admin, contractId),
     getDisclosure: (disclosureKey) => getPublishedCommercialDisclosure(admin, disclosureKey),
     getAlternativeRouteContext: (input) => getAlternativeRouteContext(admin, input),
+    isOriginalPolicySatisfied: (input) => isOriginalReturnPolicySatisfied(admin, input),
     isGatewayEnabled: () => getReturnToOriginFeatureEnabled(admin),
     isSandboxPilot: (userId) => isSandboxPilot(admin, userId),
     isSuppressionClear: (userId, recoveryJourneyId, now) =>
