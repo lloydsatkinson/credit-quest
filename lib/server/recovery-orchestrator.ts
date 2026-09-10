@@ -9,7 +9,10 @@ import {
   type RecoveryMissionSummary,
   type RecoveryPlanProjection,
 } from "@/lib/recovery/plan";
-import type { RecoveryPolicySnapshot } from "@/lib/recovery/policy-snapshot";
+import {
+  recoverySnapshotBarrierReasonCodes,
+  type RecoveryPolicySnapshot,
+} from "@/lib/recovery/policy-snapshot";
 import { listUserAccounts } from "@/lib/server/account-repository";
 import {
   getCreditGuidanceForUser,
@@ -40,7 +43,7 @@ export interface RecoveryOrchestratorDeps {
 
 function policyContextFromSnapshot(snapshot: RecoveryPolicySnapshot | null) {
   if (!snapshot || !snapshot.usePartnerReasonsForTreatment) return null;
-  const reasonCodes = snapshot.partnerReasons.map((reason) => reason.canonicalCode ?? reason.externalCode);
+  const reasonCodes = recoverySnapshotBarrierReasonCodes(snapshot);
   const resolution = resolveRecoveryBarriers({ reasonCodes });
   return buildRecoveryPolicyContext(snapshot, resolution);
 }
