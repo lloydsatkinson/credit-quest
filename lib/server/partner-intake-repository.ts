@@ -1,5 +1,6 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import type { RecoveryPolicySnapshot } from "@/lib/recovery/policy-snapshot";
 
 export interface PartnerCredentialConfig {
   credentialId: string;
@@ -25,20 +26,8 @@ interface PartnerCredentialRow {
   expires_at: string | null;
   partner_id: string;
   decline_partners:
-    | {
-      partner_key: string;
-      display_name: string;
-      enabled: boolean;
-      sandbox_enabled: boolean;
-      live_enabled: boolean;
-    }
-    | Array<{
-      partner_key: string;
-      display_name: string;
-      enabled: boolean;
-      sandbox_enabled: boolean;
-      live_enabled: boolean;
-    }>;
+    | { partner_key: string; display_name: string; enabled: boolean; sandbox_enabled: boolean; live_enabled: boolean }
+    | Array<{ partner_key: string; display_name: string; enabled: boolean; sandbox_enabled: boolean; live_enabled: boolean }>;
 }
 
 export interface PartnerHandoffSession {
@@ -80,18 +69,8 @@ interface PartnerHandoffRow {
   consumed_at: string | null;
   bound_user_id: string | null;
   decline_partners:
-    | {
-      display_name: string;
-      enabled: boolean;
-      sandbox_enabled: boolean;
-      live_enabled: boolean;
-    }
-    | Array<{
-      display_name: string;
-      enabled: boolean;
-      sandbox_enabled: boolean;
-      live_enabled: boolean;
-    }>;
+    | { display_name: string; enabled: boolean; sandbox_enabled: boolean; live_enabled: boolean }
+    | Array<{ display_name: string; enabled: boolean; sandbox_enabled: boolean; live_enabled: boolean }>;
 }
 
 export interface AtomicPartnerHandoffInput {
@@ -101,6 +80,7 @@ export interface AtomicPartnerHandoffInput {
   declineReasonCode: string | null;
   declineReasonSource: "partner" | "customer" | "unknown";
   contextConfirmation: "confirmed" | "corrected" | "unknown" | "optional_use_declined";
+  policySnapshot: RecoveryPolicySnapshot;
   now: Date;
 }
 
@@ -115,123 +95,54 @@ export interface AtomicPartnerHandoffResult {
 }
 
 export async function getPartnerIntakeFeatureEnabled(admin: SupabaseClient) {
-  const { data, error } = await admin
-    .from("feature_flags")
-    .select("enabled")
-    .eq("flag_key", "partner_decline_intake_enabled")
-    .maybeSingle();
+  const { data, error } = await admin.from("feature_flags").select("enabled").eq("flag_key", "partner_decline_intake_enabled").maybeSingle();
   if (error) throw error;
   return data?.enabled === true;
 }
 
-export async function getPartnerCredentialByKey(
-  admin: SupabaseClient,
-  credentialKey: string,
-): Promise<PartnerCredentialConfig | null> {
+export async function getPartnerCredentialByKey(admin: SupabaseClient, credentialKey: string): Promise<PartnerCredentialConfig | null> {
   const { data, error } = await admin
     .from("decline_partner_credentials")
-    .select([
-      "id",
-      "credential_key",
-      "secret_reference",
-      "enabled",
-      "valid_from",
-      "expires_at",
-      "partner_id",
-      "decline_partners!inner(partner_key,display_name,enabled,sandbox_enabled,live_enabled)",
-    ].join(","))
+    .select("id,credential_key,secret_reference,enabled,valid_from,expires_at,partner_id,decline_partners!inner(partner_key,display_name,enabled,sandbox_enabled,live_enabled)")
     .eq("credential_key", credentialKey)
     .maybeSingle();
   if (error) throw error;
   if (!data) return null;
-
   const row = data as unknown as PartnerCredentialRow;
-  const partner = Array.isArray(row.decline_partners)
-    ? row.decline_partners[0]
-    : row.decline_partners;
+  const partner = Array.isArray(row.decline_partners) ? row.decline_partners[0] : row.decline_partners;
   if (!partner) return null;
-
   return {
-    credentialId: String(row.id),
-    credentialKey: String(row.credential_key),
-    secretReference: String(row.secret_reference),
-    credentialEnabled: row.enabled === true,
-    validFrom: String(row.valid_from),
-    expiresAt: row.expires_at ? String(row.expires_at) : null,
-    partnerId: String(row.partner_id),
-    partnerKey: String(partner.partner_key),
-    partnerDisplayName: String(partner.display_name),
-    partnerEnabled: partner.enabled === true,
-    partnerSandboxEnabled: partner.sandbox_enabled === true,
-    partnerLiveEnabled: partner.live_enabled === true,
+    credentialId: String(row.id), credentialKey: String(row.credential_key), secretReference: String(row.secret_reference),
+    credentialEnabled: row.enabled === true, validFrom: String(row.valid_from), expiresAt: row.expires_at ? String(row.expires_at) : null,
+    partnerId: String(row.partner_id), partnerKey: String(partner.partner_key), partnerDisplayName: String(partner.display_name),
+    partnerEnabled: partner.enabled === true, partnerSandboxEnabled: partner.sandbox_enabled === true, partnerLiveEnabled: partner.live_enabled === true,
   };
 }
 
 const SAFE_VAULT_SECRET_NAME = /^[A-Za-z0-9._:-]{3,160}$/;
-
-export async function getVaultPartnerSecret(
-  admin: SupabaseClient,
-  secretName: string,
-): Promise<string | null> {
+export async function getVaultPartnerSecret(admin: SupabaseClient, secretName: string): Promise<string | null> {
   if (!SAFE_VAULT_SECRET_NAME.test(secretName)) return null;
-
-  const { data, error } = await admin.rpc("get_partner_credential_vault_secret", {
-    p_secret_name: secretName,
-  });
+  const { data, error } = await admin.rpc("get_partner_credential_vault_secret", { p_secret_name: secretName });
   if (error) throw error;
   return typeof data === "string" ? data : null;
 }
 
-export async function findEligibleSandboxReturnContract(
-  admin: SupabaseClient,
-  partnerId: string,
-  productCategory: PartnerHandoffSession["productCategory"],
-  now = new Date(),
-): Promise<{ id: string } | null> {
-  const { data, error } = await admin
-    .from("return_contracts")
-    .select("id")
-    .eq("partner_id", partnerId)
-    .eq("product_category", productCategory)
-    .eq("environment", "sandbox")
-    .eq("enabled", true)
-    .eq("callback_policy", "none")
-    .is("callback_url", null)
-    .gt("expires_at", now.toISOString())
-    .limit(2);
+export async function findEligibleSandboxReturnContract(admin: SupabaseClient, partnerId: string, productCategory: PartnerHandoffSession["productCategory"], now = new Date()): Promise<{ id: string } | null> {
+  const { data, error } = await admin.from("return_contracts").select("id").eq("partner_id", partnerId).eq("product_category", productCategory)
+    .eq("environment", "sandbox").eq("enabled", true).eq("callback_policy", "none").is("callback_url", null).gt("expires_at", now.toISOString()).limit(2);
   if (error) throw error;
-
   const rows = Array.isArray(data) ? data : [];
-  if (rows.length !== 1) return null;
-  return { id: String(rows[0].id) };
+  return rows.length === 1 ? { id: String(rows[0].id) } : null;
 }
 
-export async function findPartnerIntakeByNonce(
-  admin: SupabaseClient,
-  partnerId: string,
-  nonce: string,
-) {
-  const { data, error } = await admin
-    .from("decline_intake_sessions")
-    .select("id")
-    .eq("partner_id", partnerId)
-    .eq("nonce", nonce)
-    .maybeSingle();
+export async function findPartnerIntakeByNonce(admin: SupabaseClient, partnerId: string, nonce: string) {
+  const { data, error } = await admin.from("decline_intake_sessions").select("id").eq("partner_id", partnerId).eq("nonce", nonce).maybeSingle();
   if (error) throw error;
   return data ? { id: String(data.id) } : null;
 }
 
-export async function findPartnerIntakeByIdempotency(
-  admin: SupabaseClient,
-  partnerId: string,
-  idempotencyKey: string,
-) {
-  const { data, error } = await admin
-    .from("decline_intake_sessions")
-    .select("id")
-    .eq("partner_id", partnerId)
-    .eq("idempotency_key", idempotencyKey)
-    .maybeSingle();
+export async function findPartnerIntakeByIdempotency(admin: SupabaseClient, partnerId: string, idempotencyKey: string) {
+  const { data, error } = await admin.from("decline_intake_sessions").select("id").eq("partner_id", partnerId).eq("idempotency_key", idempotencyKey).maybeSingle();
   if (error) throw error;
   return data ? { id: String(data.id) } : null;
 }
@@ -242,9 +153,10 @@ export interface InsertPartnerIntakeInput {
   returnContractId: string | null;
   environment: "sandbox";
   originReference: string;
-  productCategory: "credit_card" | "loan" | "overdraft" | "mortgage" | "other";
+  productCategory: PartnerHandoffSession["productCategory"];
   declinedAt: string;
   declineReasonCode: string | null;
+  declineReasonCodes: string[];
   declineReasonSource: "partner" | "unknown";
   attributionKey: string | null;
   additionalSupportMayBeNeeded: boolean | null;
@@ -257,145 +169,78 @@ export interface InsertPartnerIntakeInput {
   tokenExpiresAt: string;
 }
 
-export async function insertPartnerIntakeSession(
-  admin: SupabaseClient,
-  input: InsertPartnerIntakeInput,
-) {
-  const { data, error } = await admin
-    .from("decline_intake_sessions")
-    .insert({
-      partner_id: input.partnerId,
-      credential_id: input.credentialId,
-      return_contract_id: input.returnContractId,
-      environment: input.environment,
-      origin_reference: input.originReference,
-      product_category: input.productCategory,
-      declined_at: input.declinedAt,
-      decline_reason_code: input.declineReasonCode,
-      decline_reason_source: input.declineReasonSource,
-      attribution_key: input.attributionKey,
-      additional_support_may_be_needed: input.additionalSupportMayBeNeeded,
-      disclosure_version: input.disclosureVersion,
-      consent_version: input.consentVersion,
-      idempotency_key: input.idempotencyKey,
-      nonce: input.nonce,
-      request_timestamp: input.requestTimestamp,
-      token_hash: input.tokenHash,
-      token_expires_at: input.tokenExpiresAt,
-    })
-    .select("id")
-    .single();
+export async function insertPartnerIntakeSession(admin: SupabaseClient, input: InsertPartnerIntakeInput) {
+  const { data, error } = await admin.rpc("create_partner_intake_with_reasons_atomic", {
+    p_partner_id: input.partnerId,
+    p_credential_id: input.credentialId,
+    p_return_contract_id: input.returnContractId,
+    p_environment: input.environment,
+    p_origin_reference: input.originReference,
+    p_product_category: input.productCategory,
+    p_declined_at: input.declinedAt,
+    p_decline_reason_code: input.declineReasonCode,
+    p_decline_reason_codes: input.declineReasonCodes,
+    p_decline_reason_source: input.declineReasonSource,
+    p_attribution_key: input.attributionKey,
+    p_additional_support_may_be_needed: input.additionalSupportMayBeNeeded,
+    p_disclosure_version: input.disclosureVersion,
+    p_consent_version: input.consentVersion,
+    p_idempotency_key: input.idempotencyKey,
+    p_nonce: input.nonce,
+    p_request_timestamp: input.requestTimestamp,
+    p_token_hash: input.tokenHash,
+    p_token_expires_at: input.tokenExpiresAt,
+  });
   if (error) throw error;
-  return { id: String(data.id) };
+  return { id: String(data) };
 }
 
-export async function getPartnerHandoffByTokenHash(
-  admin: SupabaseClient,
-  tokenHash: string,
-): Promise<PartnerHandoffSession | null> {
-  const { data, error } = await admin
-    .from("decline_intake_sessions")
-    .select([
-      "id",
-      "partner_id",
-      "environment",
-      "origin_reference",
-      "product_category",
-      "declined_at",
-      "decline_reason_code",
-      "decline_reason_source",
-      "attribution_key",
-      "additional_support_may_be_needed",
-      "disclosure_version",
-      "consent_version",
-      "token_expires_at",
-      "consumed_at",
-      "bound_user_id",
-      "decline_partners!inner(display_name,enabled,sandbox_enabled,live_enabled)",
-    ].join(","))
-    .eq("token_hash", tokenHash)
-    .maybeSingle();
+export async function getPartnerHandoffByTokenHash(admin: SupabaseClient, tokenHash: string): Promise<PartnerHandoffSession | null> {
+  const { data, error } = await admin.from("decline_intake_sessions")
+    .select("id,partner_id,environment,origin_reference,product_category,declined_at,decline_reason_code,decline_reason_source,attribution_key,additional_support_may_be_needed,disclosure_version,consent_version,token_expires_at,consumed_at,bound_user_id,decline_partners!inner(display_name,enabled,sandbox_enabled,live_enabled)")
+    .eq("token_hash", tokenHash).maybeSingle();
   if (error) throw error;
   if (!data) return null;
-
   const row = data as unknown as PartnerHandoffRow;
-  const partner = Array.isArray(row.decline_partners)
-    ? row.decline_partners[0]
-    : row.decline_partners;
+  const partner = Array.isArray(row.decline_partners) ? row.decline_partners[0] : row.decline_partners;
   if (!partner) return null;
-
   return {
-    id: String(row.id),
-    partnerId: String(row.partner_id),
-    environment: row.environment,
-    originReference: String(row.origin_reference),
-    productCategory: row.product_category,
-    declinedAt: String(row.declined_at),
-    declineReasonCode: row.decline_reason_code ? String(row.decline_reason_code) : null,
-    declineReasonSource: row.decline_reason_source,
-    attributionKey: row.attribution_key ? String(row.attribution_key) : null,
-    additionalSupportMayBeNeeded: row.additional_support_may_be_needed,
-    disclosureVersion: row.disclosure_version ? String(row.disclosure_version) : null,
-    consentVersion: row.consent_version ? String(row.consent_version) : null,
-    tokenExpiresAt: String(row.token_expires_at),
-    consumedAt: row.consumed_at ? String(row.consumed_at) : null,
-    boundUserId: row.bound_user_id ? String(row.bound_user_id) : null,
-    partnerDisplayName: String(partner.display_name),
-    partnerEnabled: partner.enabled === true,
-    partnerSandboxEnabled: partner.sandbox_enabled === true,
-    partnerLiveEnabled: partner.live_enabled === true,
+    id: String(row.id), partnerId: String(row.partner_id), environment: row.environment, originReference: String(row.origin_reference),
+    productCategory: row.product_category, declinedAt: String(row.declined_at), declineReasonCode: row.decline_reason_code ? String(row.decline_reason_code) : null,
+    declineReasonSource: row.decline_reason_source, attributionKey: row.attribution_key ? String(row.attribution_key) : null,
+    additionalSupportMayBeNeeded: row.additional_support_may_be_needed, disclosureVersion: row.disclosure_version ? String(row.disclosure_version) : null,
+    consentVersion: row.consent_version ? String(row.consent_version) : null, tokenExpiresAt: String(row.token_expires_at),
+    consumedAt: row.consumed_at ? String(row.consumed_at) : null, boundUserId: row.bound_user_id ? String(row.bound_user_id) : null,
+    partnerDisplayName: String(partner.display_name), partnerEnabled: partner.enabled === true,
+    partnerSandboxEnabled: partner.sandbox_enabled === true, partnerLiveEnabled: partner.live_enabled === true,
   };
 }
 
-export async function consumePartnerIntakeSession(
-  admin: SupabaseClient,
-  sessionId: string,
-  userId: string,
-  now = new Date(),
-) {
+export async function consumePartnerIntakeSession(admin: SupabaseClient, sessionId: string, userId: string, now = new Date()) {
   const nowIso = now.toISOString();
-  const { data, error } = await admin
-    .from("decline_intake_sessions")
-    .update({
-      bound_user_id: userId,
-      consumed_at: nowIso,
-    })
-    .eq("id", sessionId)
-    .eq("environment", "sandbox")
-    .is("consumed_at", null)
-    .is("bound_user_id", null)
-    .gt("token_expires_at", nowIso)
-    .select("id")
-    .maybeSingle();
+  const { data, error } = await admin.from("decline_intake_sessions").update({ bound_user_id: userId, consumed_at: nowIso })
+    .eq("id", sessionId).eq("environment", "sandbox").is("consumed_at", null).is("bound_user_id", null).gt("token_expires_at", nowIso).select("id").maybeSingle();
   if (error) throw error;
   return Boolean(data);
 }
 
-export async function redeemPartnerHandoffAtomically(
-  admin: SupabaseClient,
-  input: AtomicPartnerHandoffInput,
-): Promise<AtomicPartnerHandoffResult> {
-  const { data, error } = await admin.rpc("redeem_partner_handoff_atomic", {
+export async function redeemPartnerHandoffAtomically(admin: SupabaseClient, input: AtomicPartnerHandoffInput): Promise<AtomicPartnerHandoffResult> {
+  const { data, error } = await admin.rpc("redeem_partner_handoff_with_policy_snapshot_atomic", {
     p_session_id: input.sessionId,
     p_user_id: input.userId,
     p_decline_reason_known: input.declineReasonKnown,
     p_decline_reason_code: input.declineReasonCode,
     p_decline_reason_source: input.declineReasonSource,
     p_context_confirmation: input.contextConfirmation,
+    p_policy_snapshot: input.policySnapshot,
     p_now: input.now.toISOString(),
   });
   if (error) throw error;
-
   const row = Array.isArray(data) ? data[0] : data;
-  if (!row || typeof row !== "object") {
-    throw new Error("handoff_unavailable");
-  }
+  if (!row || typeof row !== "object") throw new Error("handoff_unavailable");
   const record = row as Record<string, unknown>;
-
   return {
-    id: String(record.id),
-    origin: "partner",
-    productCategory: record.product_category as AtomicPartnerHandoffResult["productCategory"],
+    id: String(record.id), origin: "partner", productCategory: record.product_category as AtomicPartnerHandoffResult["productCategory"],
     declineReasonKnown: record.decline_reason_known === true,
     declineReasonCode: record.decline_reason_code ? String(record.decline_reason_code) : null,
     declineReasonSource: record.decline_reason_source as AtomicPartnerHandoffResult["declineReasonSource"],

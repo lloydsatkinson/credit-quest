@@ -1,6 +1,18 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import {
+  evaluateCondition,
+  type ConditionExpr,
+  type ConditionResult,
+  type RecoveryFactValue,
+} from "@/lib/recovery/condition-language";
+import {
+  recoverySnapshotBarrierReasonCodes,
+  type RecoveryPolicySnapshot,
+} from "@/lib/recovery/policy-snapshot";
+import { resolveRecoveryBarriers, type BarrierResolution } from "@/lib/recovery/multi-barrier-resolver";
 import type { RecoveryEnvironment, RecoveryProductCategory } from "@/lib/recovery/types";
+import type { AlternativeRouteGatePolicy } from "@/lib/recovery/alternative-route";
 
 export interface ReturnRecoveryJourney {
   id: string;
@@ -11,6 +23,7 @@ export interface ReturnRecoveryJourney {
   returnContractId: string | null;
   originReference: string;
   nextReassessmentAt: string | null;
+  declinedAt?: string;
 }
 
 export interface ReturnContractConfig {
@@ -44,6 +57,21 @@ export interface AppendReturnAttemptInput {
   customerChoice: "continue" | "decline";
   outcome: "redirected" | "declined";
   callbackStatus: "not_applicable";
+  routeType?: "original" | "alternative";
+}
+
+export interface AlternativeRouteContext {
+  policy: AlternativeRouteGatePolicy | null;
+  barrierResolution: BarrierResolution;
+}
+
+export interface AlternativeRouteContextInput {
+  recoveryJourneyId: string;
+  partnerId: string;
+  productCategory: RecoveryProductCategory;
+  declinedAt: string | null;
+  now: Date;
+  facts: Record<string, RecoveryFactValue>;
 }
 
 interface ReturnJourneyRow {
@@ -51,6 +79,7 @@ interface ReturnJourneyRow {
   user_id: string;
   origin: "partner" | "direct";
   product_category: RecoveryProductCategory;
+  declined_at: string;
   next_reassessment_at: string | null;
   decline_intake_sessions:
     | {
@@ -94,6 +123,28 @@ interface ReturnContractRow {
     }>;
 }
 
+function record(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
+}
+
+function activeAt(row: Record<string, unknown>, now: Date): boolean {
+  const from = Date.parse(String(row.effective_from ?? ""));
+  const to = row.effective_to ? Date.parse(String(row.effective_to)) : null;
+  return String(row.lifecycle) === "published"
+    && Number.isFinite(from)
+    && from <= now.getTime()
+    && (to === null || (Number.isFinite(to) && now.getTime() < to));
+}
+
+function daysSince(value: string | null, now: Date): number | null {
+  if (!value) return null;
+  const time = Date.parse(value);
+  if (!Number.isFinite(time) || time > now.getTime()) return null;
+  return Math.floor((now.getTime() - time) / 86_400_000);
+}
+
 export async function getReturnToOriginFeatureEnabled(admin: SupabaseClient): Promise<boolean> {
   const { data, error } = await admin
     .from("feature_flags")
@@ -116,6 +167,7 @@ export async function getReturnRecoveryJourney(
       "user_id",
       "origin",
       "product_category",
+      "declined_at",
       "next_reassessment_at",
       "decline_intake_sessions!inner(partner_id,return_contract_id,origin_reference)",
     ].join(","))
@@ -141,6 +193,7 @@ export async function getReturnRecoveryJourney(
     returnContractId: intake.return_contract_id ? String(intake.return_contract_id) : null,
     originReference: String(intake.origin_reference),
     nextReassessmentAt: row.next_reassessment_at ? String(row.next_reassessment_at) : null,
+    declinedAt: String(row.declined_at),
   };
 }
 
@@ -196,6 +249,93 @@ export async function getReturnContract(
   };
 }
 
+export async function getAlternativeRouteContext(
+  admin: SupabaseClient,
+  input: AlternativeRouteContextInput,
+): Promise<AlternativeRouteContext | null> {
+  const { data: snapshotRow, error: snapshotError } = await admin
+    .from("recovery_policy_snapshots")
+    .select("policy_snapshot")
+    .eq("recovery_journey_id", input.recoveryJourneyId)
+    .maybeSingle();
+  if (snapshotError) throw snapshotError;
+  if (!snapshotRow?.policy_snapshot) return null;
+
+  const snapshot = snapshotRow.policy_snapshot as RecoveryPolicySnapshot;
+  if (
+    snapshot.partnerId !== input.partnerId
+    || snapshot.productCategory !== input.productCategory
+    || !snapshot.usePartnerReasonsForTreatment
+  ) return null;
+
+  const reasonCodes = recoverySnapshotBarrierReasonCodes(snapshot);
+  const barrierResolution = resolveRecoveryBarriers({ reasonCodes });
+  const routeIds = [...new Set(snapshot.partnerReasons.flatMap((reason) => reason.alternativeRoutePolicyIds))];
+  if (routeIds.length === 0) return null;
+
+  const { data, error } = await admin
+    .from("alternative_route_policies")
+    .select("*")
+    .in("id", routeIds);
+  if (error) throw error;
+
+  const pinnedByCanonical = new Map<string, Set<string>>();
+  for (const reason of snapshot.partnerReasons) {
+    if (!reason.canonicalCode) continue;
+    const set = pinnedByCanonical.get(reason.canonicalCode) ?? new Set<string>();
+    for (const id of reason.alternativeRoutePolicyIds) set.add(id);
+    pinnedByCanonical.set(reason.canonicalCode, set);
+  }
+
+  const rows = (data ?? [])
+    .map((value) => record(value))
+    .filter((row) => (
+      String(row.partner_id) === input.partnerId
+      && String(row.product_category) === input.productCategory
+      && routeIds.includes(String(row.id))
+      && pinnedByCanonical.get(String(row.canonical_code))?.has(String(row.id))
+    ))
+    .sort((left, right) => Number(left.route_priority ?? 100) - Number(right.route_priority ?? 100)
+      || String(left.id).localeCompare(String(right.id)));
+
+  const row = rows[0];
+  if (!row) return { policy: null, barrierResolution };
+
+  const declineDays = daysSince(input.declinedAt, input.now);
+  const facts: Record<string, RecoveryFactValue> = {
+    ...input.facts,
+    daysSinceDecline: declineDays,
+  };
+  let conditionResult: ConditionResult = true;
+  if (row.condition_ast !== null && row.condition_ast !== undefined) {
+    try {
+      conditionResult = evaluateCondition(row.condition_ast as ConditionExpr, facts, {});
+    } catch {
+      conditionResult = "unknown";
+    }
+  }
+
+  const minWaitDays = row.min_wait_days === null || row.min_wait_days === undefined
+    ? null
+    : Number(row.min_wait_days);
+  const minimumWaitComplete = minWaitDays === null
+    ? true
+    : declineDays !== null && Number.isFinite(minWaitDays) && declineDays >= minWaitDays;
+
+  return {
+    barrierResolution,
+    policy: {
+      id: String(row.id),
+      canonicalCode: String(row.canonical_code),
+      destinationProductKey: String(row.destination_product_key),
+      returnContractId: row.return_contract_id ? String(row.return_contract_id) : null,
+      conditionResult,
+      minimumWaitComplete,
+      active: activeAt(row, input.now),
+    },
+  };
+}
+
 export async function appendReturnAttempt(
   admin: SupabaseClient,
   input: AppendReturnAttemptInput,
@@ -214,6 +354,7 @@ export async function appendReturnAttempt(
       customer_choice: input.customerChoice,
       outcome: input.outcome,
       callback_status: input.callbackStatus,
+      route_type: input.routeType ?? "original",
     })
     .select("id")
     .single();
@@ -221,14 +362,45 @@ export async function appendReturnAttempt(
   return { id: String(data.id) };
 }
 
-// V2.0d has no separate suppression store yet. Safety, readiness, evidence and
-// dated cooldown gates remain authoritative; this hook exists as the explicit
-// extension point for a later independently modelled suppression source.
+// V2.3 keeps lender policy out of Application Readiness, but restricted
+// fraud/AML/security decisions must never flow through a normal lender return.
+// The immutable activation snapshot is the route-suppression authority here.
 export async function isReturnSuppressionClear(
-  _admin: SupabaseClient,
-  _userId: string,
-  _recoveryJourneyId: string,
-  _now: Date,
+  admin: SupabaseClient,
+  userId: string,
+  recoveryJourneyId: string,
+  now: Date,
 ): Promise<boolean> {
-  return true;
+  void userId;
+  void now;
+
+  const { data, error } = await admin
+    .from("recovery_policy_snapshots")
+    .select("policy_snapshot")
+    .eq("recovery_journey_id", recoveryJourneyId)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data?.policy_snapshot) return true;
+
+  const rawSnapshot = data.policy_snapshot;
+  if (!rawSnapshot || typeof rawSnapshot !== "object" || Array.isArray(rawSnapshot)) {
+    throw new Error("invalid_recovery_policy_snapshot");
+  }
+
+  const snapshot = rawSnapshot as Partial<RecoveryPolicySnapshot>;
+  if (snapshot.schemaVersion !== 1 || !Array.isArray(snapshot.partnerReasons)) {
+    throw new Error("invalid_recovery_policy_snapshot");
+  }
+
+  for (const reason of snapshot.partnerReasons) {
+    if (!reason || typeof reason !== "object") {
+      throw new Error("invalid_recovery_policy_snapshot");
+    }
+  }
+
+  return !snapshot.partnerReasons.some((reason) => (
+    reason.restricted === true
+    || reason.treatment === "restricted"
+    || reason.solveability === "restricted"
+  ));
 }

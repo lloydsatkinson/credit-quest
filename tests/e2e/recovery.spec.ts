@@ -37,3 +37,16 @@ test("an unusable partner handoff token fails generically without decoding conte
   await expect(page.getByText(/partner_reason|application-abc|campaign-42/i)).toHaveCount(0);
   await expect(page.getByRole("link", { name: /start recovery directly/i })).toBeVisible();
 });
+
+test("V2.3 preserves direct recovery wording alongside the seven-card Quest Feed", async ({ page }) => {
+  await page.goto("/recovery", { waitUntil: "networkidle" });
+
+  for (const forbidden of [
+    /lender cut-off/i,
+    /lender threshold/i,
+    /approval probability/i,
+    /pre-approved/i,
+  ]) {
+    await expect(page.locator("body")).not.toContainText(forbidden);
+  }
+});

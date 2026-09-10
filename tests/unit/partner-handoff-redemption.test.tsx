@@ -15,6 +15,8 @@ const mocks = vi.hoisted(() => ({
   consumePartnerIntakeSession: vi.fn(),
   redeemPartnerHandoffAtomically: vi.fn(),
   createPartnerRecoveryJourney: vi.fn(),
+  buildRecoveryPolicySnapshotForActivation: vi.fn(),
+  resolveRecoveryPolicyForActivation: vi.fn(),
 }));
 
 vi.mock("@/lib/supabase/admin", () => ({
@@ -35,6 +37,10 @@ vi.mock("@/lib/server/partner-intake-repository", () => ({
 }));
 vi.mock("@/lib/server/recovery-repository", () => ({
   createPartnerRecoveryJourney: mocks.createPartnerRecoveryJourney,
+}));
+vi.mock("@/lib/server/recovery-policy-service", () => ({
+  buildRecoveryPolicySnapshotForActivation: mocks.buildRecoveryPolicySnapshotForActivation,
+  resolveRecoveryPolicyForActivation: mocks.resolveRecoveryPolicyForActivation,
 }));
 
 import { POST, redeemHandoffSchema } from "@/app/api/recovery/handoff/redeem/route";
@@ -91,6 +97,8 @@ describe("one-time partner handoff redemption", () => {
     mocks.getPartnerIntakeFeatureEnabled.mockResolvedValue(true);
     mocks.getPartnerHandoffByTokenHash.mockResolvedValue(session);
     mocks.redeemPartnerHandoffAtomically.mockResolvedValue(recovery);
+    mocks.buildRecoveryPolicySnapshotForActivation.mockResolvedValue({ schemaVersion: 1 });
+    mocks.resolveRecoveryPolicyForActivation.mockResolvedValue({ schemaVersion: 1 });
   });
 
   afterEach(() => cleanup());
@@ -210,6 +218,7 @@ describe("one-time partner handoff redemption", () => {
         declineReasonCode: "partner_reason_affordability",
         declineReasonSource: "partner",
         contextConfirmation: "confirmed",
+        policySnapshot: expect.anything(),
         now: expect.any(Date),
       }),
     );
@@ -246,6 +255,7 @@ describe("one-time partner handoff redemption", () => {
         declineReasonCode: "customer_corrected_reason",
         declineReasonSource: "customer",
         contextConfirmation: "corrected",
+        policySnapshot: expect.anything(),
         now: NOW,
       }),
     );
@@ -278,6 +288,7 @@ describe("one-time partner handoff redemption", () => {
           declineReasonCode: null,
           declineReasonSource: "unknown",
           contextConfirmation: contextAction === "reason_unknown" ? "unknown" : "optional_use_declined",
+          policySnapshot: expect.anything(),
           now: NOW,
         }),
       );

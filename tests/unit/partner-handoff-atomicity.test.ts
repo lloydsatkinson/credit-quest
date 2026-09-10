@@ -11,6 +11,8 @@ const mocks = vi.hoisted(() => ({
   consumePartnerIntakeSession: vi.fn(),
   redeemPartnerHandoffAtomically: vi.fn(),
   createPartnerRecoveryJourney: vi.fn(),
+  buildRecoveryPolicySnapshotForActivation: vi.fn(),
+  resolveRecoveryPolicyForActivation: vi.fn(),
 }));
 
 vi.mock("@/lib/supabase/admin", () => ({
@@ -30,6 +32,11 @@ vi.mock("@/lib/server/partner-intake-repository", () => ({
 
 vi.mock("@/lib/server/recovery-repository", () => ({
   createPartnerRecoveryJourney: mocks.createPartnerRecoveryJourney,
+}));
+
+vi.mock("@/lib/server/recovery-policy-service", () => ({
+  buildRecoveryPolicySnapshotForActivation: mocks.buildRecoveryPolicySnapshotForActivation,
+  resolveRecoveryPolicyForActivation: mocks.resolveRecoveryPolicyForActivation,
 }));
 
 import { redeemPartnerHandoff } from "@/lib/server/partner-intake-service";
@@ -61,12 +68,25 @@ const session = {
   partnerLiveEnabled: false,
 };
 
+const policySnapshot = {
+  schemaVersion: 1 as const,
+  partnerId: session.partnerId,
+  productCategory: "credit_card" as const,
+  capturedAt: NOW.toISOString(),
+  contextConfirmation: "confirmed" as const,
+  customerCorrectionCode: null,
+  usePartnerReasonsForTreatment: true,
+  partnerReasons: [],
+  unmappedExternalCodes: [],
+};
+
 describe("atomic partner handoff redemption", () => {
-  it("creates the recovery journey and consumes the one-time session in one repository operation", async () => {
+  it("builds the frozen policy snapshot before redemption and binds consume + journey + snapshot through one atomic RPC", async () => {
     vi.clearAllMocks();
     mocks.createAdminSupabaseClient.mockReturnValue({ kind: "admin" });
     mocks.getPartnerIntakeFeatureEnabled.mockResolvedValue(true);
     mocks.getPartnerHandoffByTokenHash.mockResolvedValue(session);
+    mocks.buildRecoveryPolicySnapshotForActivation.mockResolvedValue(policySnapshot);
     mocks.redeemPartnerHandoffAtomically.mockResolvedValue({
       id: "44444444-4444-4444-8444-444444444444",
       origin: "partner",
@@ -84,6 +104,17 @@ describe("atomic partner handoff redemption", () => {
       now: NOW,
     });
 
+    expect(mocks.buildRecoveryPolicySnapshotForActivation).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        intakeSessionId: SESSION_ID,
+        partnerId: session.partnerId,
+        productCategory: "credit_card",
+        contextConfirmation: "confirmed",
+        customerCorrectionCode: null,
+        now: NOW,
+      }),
+    );
     expect(mocks.redeemPartnerHandoffAtomically).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
@@ -93,11 +124,31 @@ describe("atomic partner handoff redemption", () => {
         declineReasonCode: "partner_reason_affordability",
         declineReasonSource: "partner",
         contextConfirmation: "confirmed",
+        policySnapshot,
         now: NOW,
       }),
     );
+    expect(mocks.resolveRecoveryPolicyForActivation).not.toHaveBeenCalled();
     expect(mocks.createPartnerRecoveryJourney).not.toHaveBeenCalled();
     expect(mocks.consumePartnerIntakeSession).not.toHaveBeenCalled();
     expect(result.id).toBe("44444444-4444-4444-8444-444444444444");
+  });
+
+  it("does not consume the handoff if policy resolution fails before the atomic RPC", async () => {
+    vi.clearAllMocks();
+    mocks.createAdminSupabaseClient.mockReturnValue({ kind: "admin" });
+    mocks.getPartnerIntakeFeatureEnabled.mockResolvedValue(true);
+    mocks.getPartnerHandoffByTokenHash.mockResolvedValue(session);
+    mocks.buildRecoveryPolicySnapshotForActivation.mockRejectedValue(new Error("policy_snapshot_unavailable"));
+
+    await expect(redeemPartnerHandoff({
+      token: TOKEN,
+      userId: USER_ID,
+      review: { contextAction: "confirm", correctedReasonCode: null },
+      now: NOW,
+    })).rejects.toThrow(/policy_snapshot_unavailable/i);
+
+    expect(mocks.redeemPartnerHandoffAtomically).not.toHaveBeenCalled();
+    expect(mocks.resolveRecoveryPolicyForActivation).not.toHaveBeenCalled();
   });
 });

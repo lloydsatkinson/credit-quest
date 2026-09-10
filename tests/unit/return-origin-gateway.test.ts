@@ -3,7 +3,6 @@ import type { ApplicationReadiness, CreditProfile } from "@/lib/domain/types";
 import {
   buildMinimalReturnCallbackPayload,
   createReturnOriginGateway,
-  ReturnOriginGatewayError,
 } from "@/lib/server/return-origin-gateway";
 
 const routeMocks = vi.hoisted(() => ({

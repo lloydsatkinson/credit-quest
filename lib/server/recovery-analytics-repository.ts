@@ -15,6 +15,7 @@ export interface RecoveryAnalyticsJourney {
   startedAt: string;
   lastReassessedAt: string | null;
   readinessState: string | null;
+  firstReadyToCheckAt?: string | null;
 }
 
 export interface RecoveryAnalyticsActionStart {
@@ -72,6 +73,10 @@ export type RecoveryAnalyticsResult =
 function isVoluntaryReturn(row: RecoveryAnalyticsReturn): boolean {
   return row.customerChoice === "continue"
     && (row.outcome === "redirected" || row.outcome === "callback_sent");
+}
+
+function everReady(journey: RecoveryAnalyticsJourney): boolean {
+  return Boolean(journey.firstReadyToCheckAt) || journey.readinessState === "ready_to_check";
 }
 
 function firstActionForJourney(
@@ -137,9 +142,7 @@ export function aggregateRecoveryAnalytics(
     partnerDisplayName: partnerNames.get(partnerId) ?? "Unknown partner",
     handoffs: input.handoffs.filter((row) => row.partnerId === partnerId).length,
     activations: input.handoffs.filter((row) => row.partnerId === partnerId && row.consumedAt !== null).length,
-    readyToCheck: input.journeys.filter(
-      (row) => row.partnerId === partnerId && row.readinessState === "ready_to_check",
-    ).length,
+    readyToCheck: input.journeys.filter((row) => row.partnerId === partnerId && everReady(row)).length,
     voluntaryReturns: voluntaryReturns.filter((row) => row.partnerId === partnerId).length,
   })).sort((a, b) => a.partnerDisplayName.localeCompare(b.partnerDisplayName));
 
@@ -149,7 +152,7 @@ export function aggregateRecoveryAnalytics(
       activations: input.handoffs.filter((row) => row.consumedAt !== null).length,
       firstActions,
       reassessments: input.journeys.filter((row) => row.lastReassessedAt !== null).length,
-      readyToCheck: input.journeys.filter((row) => row.readinessState === "ready_to_check").length,
+      readyToCheck: input.journeys.filter(everReady).length,
       voluntaryReturns: voluntaryReturns.length,
     },
     averageTimeToFirstActionHours,
@@ -196,7 +199,7 @@ async function readJourneys(
 ): Promise<RecoveryAnalyticsJourney[]> {
   const { data, error } = await admin
     .from("decline_recovery_journeys")
-    .select("id,user_id,started_at,last_reassessed_at,readiness_snapshot,decline_intake_sessions(partner_id)")
+    .select("id,user_id,started_at,last_reassessed_at,readiness_snapshot,first_ready_to_check_at,decline_intake_sessions(partner_id)")
     .gte("started_at", fromIso);
   if (error) throw error;
 
@@ -210,6 +213,7 @@ async function readJourneys(
       startedAt: String(row.started_at),
       lastReassessedAt: row.last_reassessed_at ? String(row.last_reassessed_at) : null,
       readinessState: row.readiness_snapshot ? String(row.readiness_snapshot) : null,
+      firstReadyToCheckAt: row.first_ready_to_check_at ? String(row.first_ready_to_check_at) : null,
     };
   });
 }

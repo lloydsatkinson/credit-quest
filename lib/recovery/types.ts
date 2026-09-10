@@ -1,5 +1,9 @@
 import type { AgeMode } from "@/lib/domain/types";
 import type { SafetyMode } from "@/lib/domain/safety";
+import type {
+  RecoveryTreatmentClass,
+  SolveabilityClass,
+} from "@/lib/recovery/decline-taxonomy";
 
 export type RecoveryEnvironment = "sandbox" | "live";
 
@@ -33,6 +37,15 @@ export type RecoveryReadinessState =
   | "getting_closer"
   | "ready_to_check"
   | "unknown";
+
+export interface RecoveryPolicyContext {
+  treatment: RecoveryTreatmentClass;
+  solveability: SolveabilityClass;
+  primaryReasonCode: string | null;
+  customerHeadline: string;
+  originalProductBlocked: boolean;
+  alternativeRoutePotential: boolean;
+}
 
 export type SupportNeedCode =
   | "simpler_explanations"

@@ -29,6 +29,7 @@ const plan: RecoveryPlanProjection = {
   },
   evidenceGaps: ["Electoral roll status is not yet confirmed."],
   nextReassessmentAt: null,
+  policyContext: null,
 };
 
 const journeyState: JourneyState = {
