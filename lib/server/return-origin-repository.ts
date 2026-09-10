@@ -6,7 +6,10 @@ import {
   type ConditionResult,
   type RecoveryFactValue,
 } from "@/lib/recovery/condition-language";
-import type { RecoveryPolicySnapshot } from "@/lib/recovery/policy-snapshot";
+import {
+  recoverySnapshotBarrierReasonCodes,
+  type RecoveryPolicySnapshot,
+} from "@/lib/recovery/policy-snapshot";
 import { resolveRecoveryBarriers, type BarrierResolution } from "@/lib/recovery/multi-barrier-resolver";
 import type { RecoveryEnvironment, RecoveryProductCategory } from "@/lib/recovery/types";
 import type { AlternativeRouteGatePolicy } from "@/lib/recovery/alternative-route";
@@ -265,7 +268,7 @@ export async function getAlternativeRouteContext(
     || !snapshot.usePartnerReasonsForTreatment
   ) return null;
 
-  const reasonCodes = snapshot.partnerReasons.map((reason) => reason.canonicalCode ?? reason.externalCode);
+  const reasonCodes = recoverySnapshotBarrierReasonCodes(snapshot);
   const barrierResolution = resolveRecoveryBarriers({ reasonCodes });
   const routeIds = [...new Set(snapshot.partnerReasons.flatMap((reason) => reason.alternativeRoutePolicyIds))];
   if (routeIds.length === 0) return null;
