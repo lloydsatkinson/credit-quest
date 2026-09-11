@@ -73,8 +73,8 @@ describe("Login magic-link flow", () => {
     fireEvent.click(screen.getByRole("button", { name: "Email me a sign-in link" }));
     await waitFor(() => expect(signInWithOtp).toHaveBeenCalledTimes(1));
 
-    const waitingButton = screen.getByRole("button", { name: /check your inbox/i });
-    expect(waitingButton).toBeDisabled();
+    const waitingButton = screen.getByRole("button", { name: /check your inbox/i }) as HTMLButtonElement;
+    expect(waitingButton.disabled).toBe(true);
     fireEvent.click(waitingButton);
     expect(signInWithOtp).toHaveBeenCalledTimes(1);
   });
