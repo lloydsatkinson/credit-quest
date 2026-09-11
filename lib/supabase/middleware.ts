@@ -2,7 +2,7 @@ import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { getSupabasePublicEnv } from "@/lib/supabase/env";
 
-const PROTECTED_PREFIXES = ["/dashboard", "/onboarding", "/offers", "/accounts", "/actions"];
+const PROTECTED_PREFIXES = ["/dashboard", "/onboarding", "/offers", "/accounts", "/actions", "/admin", "/lender"];
 type CookieToSet = { name: string; value: string; options: CookieOptions };
 
 export async function updateSession(request: NextRequest) {

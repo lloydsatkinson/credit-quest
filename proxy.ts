@@ -12,5 +12,7 @@ export const config = {
     "/offers/:path*",
     "/accounts/:path*",
     "/actions/:path*",
+    "/admin/:path*",
+    "/lender/:path*",
   ],
 };
