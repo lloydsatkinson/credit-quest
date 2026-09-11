@@ -6,6 +6,7 @@ import LoginPage from "@/app/(auth)/login/page";
 
 const signInWithOtp = vi.fn();
 const exchangeCodeForSession = vi.fn();
+const getUser = vi.fn();
 const replace = vi.fn();
 
 vi.mock("next/navigation", () => ({
@@ -14,7 +15,7 @@ vi.mock("next/navigation", () => ({
 
 vi.mock("@/lib/supabase/client", () => ({
   createBrowserSupabaseClient: () => ({
-    auth: { signInWithOtp, exchangeCodeForSession },
+    auth: { signInWithOtp, exchangeCodeForSession, getUser },
   }),
 }));
 
@@ -24,9 +25,11 @@ describe("Login magic-link flow", () => {
   beforeEach(() => {
     signInWithOtp.mockReset();
     exchangeCodeForSession.mockReset();
+    getUser.mockReset();
     replace.mockReset();
     signInWithOtp.mockResolvedValue({ error: null });
     exchangeCodeForSession.mockResolvedValue({ error: null });
+    getUser.mockResolvedValue({ data: { user: null }, error: null });
     window.history.replaceState(null, "", "/login");
   });
 
@@ -59,6 +62,38 @@ describe("Login magic-link flow", () => {
 
     const call = signInWithOtp.mock.calls[0][0];
     expect(new URL(call.options.emailRedirectTo).searchParams.get("next")).toBe(handoff);
+  });
+
+  it("prevents immediate repeated sign-in emails after a successful request", async () => {
+    render(<LoginPage />);
+    fireEvent.change(screen.getByLabelText("Email address"), {
+      target: { value: "test@example.com" },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Email me a sign-in link" }));
+    await waitFor(() => expect(signInWithOtp).toHaveBeenCalledTimes(1));
+
+    const waitingButton = screen.getByRole("button", { name: /check your inbox/i });
+    expect(waitingButton).toBeDisabled();
+    fireEvent.click(waitingButton);
+    expect(signInWithOtp).toHaveBeenCalledTimes(1);
+  });
+
+  it("re-checks the shared browser session when the user returns from email", async () => {
+    window.history.replaceState(null, "", "/login?next=%2Fadmin%2Frecovery%2Fsimulator");
+    getUser.mockResolvedValue({ data: { user: { id: "admin-user" } }, error: null });
+
+    render(<LoginPage />);
+    fireEvent.change(screen.getByLabelText("Email address"), {
+      target: { value: "admin@example.com" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Email me a sign-in link" }));
+    await waitFor(() => expect(signInWithOtp).toHaveBeenCalledTimes(1));
+
+    window.dispatchEvent(new Event("focus"));
+
+    await waitFor(() => expect(getUser).toHaveBeenCalled());
+    expect(replace).toHaveBeenCalledWith("/admin/recovery/simulator");
   });
 
   it("provides a server auth callback route", () => {
