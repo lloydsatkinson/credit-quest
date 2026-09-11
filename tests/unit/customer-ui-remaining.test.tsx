@@ -7,6 +7,10 @@ import { JourneyStatusCard } from "@/components/journey/journey-status-card";
 import type { ActionAttempt } from "@/lib/domain/types";
 import type { JourneyState } from "@/lib/journey/types";
 
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ replace: vi.fn() }),
+}));
+
 vi.mock("@/lib/events", () => ({
   trackEvent: vi.fn().mockResolvedValue(undefined),
 }));

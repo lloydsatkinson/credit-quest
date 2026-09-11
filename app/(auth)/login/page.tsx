@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useState } from "react";
+import { useRouter } from "next/navigation";
+import { FormEvent, useEffect, useState } from "react";
 import { CustomerShell } from "@/components/customer/customer-shell";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 
@@ -22,11 +23,43 @@ function safeAuthReturnPath() {
 }
 
 export default function LoginPage() {
+  const router = useRouter();
   const [email, setEmail] = useState("");
   const [message, setMessage] = useState("");
+  const [lockedLabel, setLockedLabel] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!lockedLabel) return;
+    const timer = window.setTimeout(() => setLockedLabel(null), 60_000);
+    return () => window.clearTimeout(timer);
+  }, [lockedLabel]);
+
+  useEffect(() => {
+    let active = true;
+
+    async function resumeIfSignedIn() {
+      try {
+        const supabase = createBrowserSupabaseClient();
+        const { data, error } = await supabase.auth.getUser();
+        if (active && !error && data.user) {
+          router.replace(safeAuthReturnPath());
+        }
+      } catch {
+        // Stay on the login page if the shared browser session cannot be read yet.
+      }
+    }
+
+    window.addEventListener("focus", resumeIfSignedIn);
+    return () => {
+      active = false;
+      window.removeEventListener("focus", resumeIfSignedIn);
+    };
+  }, [router]);
 
   async function submit(event: FormEvent) {
     event.preventDefault();
+    if (lockedLabel) return;
+
     try {
       const supabase = createBrowserSupabaseClient();
       const callback = new URL("/auth/callback", window.location.origin);
@@ -36,11 +69,13 @@ export default function LoginPage() {
         options: { emailRedirectTo: callback.toString() },
       });
       if (error) throw error;
-      setMessage("Check your email for your secure sign-in link.");
+      setLockedLabel("Email sent — check your inbox");
+      setMessage("Check your email for your secure sign-in link. Keep this browser open; when you return, Credit Quest will continue automatically.");
     } catch (error) {
       const authError = error as { status?: number; code?: string };
       if (authError?.status === 429 || authError?.code === "over_email_send_rate_limit") {
-        setMessage("Too many sign-in emails were requested. Please wait a little and try again.");
+        setLockedLabel("Please wait before trying again");
+        setMessage("Too many sign-in emails were requested. Email sending is temporarily limited, so please wait before trying again.");
       } else {
         setMessage("We could not send a sign-in link right now. Please try again.");
       }
@@ -81,8 +116,11 @@ export default function LoginPage() {
                     placeholder="you@example.com"
                   />
                 </label>
-                <button className="w-full rounded-2xl bg-cyan-300 px-4 py-3.5 font-black text-slate-950 shadow-[0_0_34px_rgba(31,228,255,0.10)] transition hover:bg-cyan-200">
-                  Email me a sign-in link
+                <button
+                  disabled={Boolean(lockedLabel)}
+                  className="w-full rounded-2xl bg-cyan-300 px-4 py-3.5 font-black text-slate-950 shadow-[0_0_34px_rgba(31,228,255,0.10)] transition hover:bg-cyan-200 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {lockedLabel ?? "Email me a sign-in link"}
                 </button>
               </form>
 
